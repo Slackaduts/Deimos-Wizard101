@@ -14,7 +14,7 @@ from configparser import ConfigParser
 import statistics
 from src.combat import Fighter
 from src.teleport_math import navmap_tp, calc_Distance
-# from src.SlackQuester import Quester
+# from src.questing import Quester
 from src.questing_new import Quester
 from src.sigil import Sigil
 from src.utils import is_visible_by_path, is_free, auto_potions
