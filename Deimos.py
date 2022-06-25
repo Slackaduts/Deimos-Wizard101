@@ -210,13 +210,13 @@ def config_update():
 	for i in sections:
 		if not comparison_parser.has_section(i):
 			print(f'Config file has erroneous section "{i}", removing it.')
-			comparison_parser.remove_section(i)
+			parser.remove_section(i)
 
 		options = parser.options(i)
 		for b in options:
 			if not comparison_parser.has_option(i, b):
 				print(f'Config file section "{i}" has erroneous option "{b}", removing it.')
-				comparison_parser.remove_option(i, b)
+				parser.remove_option(i, b)
 
 	with open(f'{tool_name}-config.ini', 'w') as new_config:
 		parser.write(new_config)
