@@ -2,7 +2,7 @@ import math
 
 
 def param_input(input, default):
-	# Logic for interpreting number field inputs in the SlackTool gui.
+	# Logic for interpreting number field inputs in the Deimos gui.
 	# Arguments can be chained together, always seperated by spaces.
 	# If you want to add 90 degrees, you would do "+ rad 90". This converts the 90 to radians, then adds it to the current value.
 	# These arguments can also accept numbers, like "* 2 + 5" would add 5, then multiply by 2.

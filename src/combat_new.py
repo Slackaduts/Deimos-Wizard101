@@ -22,7 +22,7 @@ total_enchant_effects = [v for _, v in enchant_effects.items()]
 
 
 
-class SlackFighter(CombatHandler):
+class Fighter(CombatHandler):
 	def __init__(self, client: Client, clients: list[Client]):
 		self.client = client
 		self.clients = clients
@@ -32,7 +32,7 @@ class SlackFighter(CombatHandler):
 
 	async def get_cards(self) -> List[CombatCard]:  # extended to sort by enchanted # Olaf's fix for coro graphical spell error
 			async def _inner() -> List[CombatCard]:
-				cards = await super(SlackFighter, self).get_cards()
+				cards = await super(Fighter, self).get_cards()
 				rese, res = [], []
 				for card in cards:
 					if await card.is_enchanted():

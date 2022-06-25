@@ -22,7 +22,7 @@ class Quester():
 				if await is_potion_needed(self.client) and await self.client.stats.current_mana() > 1 and await self.client.stats.current_hitpoints() > 1:
 					await collect_wisps(self.client)
 
-				await auto_potions(self.client, True, buy_potions=True)
+				await auto_potions(self.client, True, buy = True)
 				quest_xyz = await self.client.quest_position.position()
 
 				if quest_xyz != XYZ(0.0, 0.0, 0.0):
@@ -33,7 +33,8 @@ class Quester():
 						# Handles chest reroll menu, will always cancel
 						await click_window_by_path(self.client, cancel_chest_roll_path)
 
-					if await is_visible_by_path(self.client, npc_range_path):
+					current_pos = await self.client.body.position()
+					if await is_visible_by_path(self.client, npc_range_path) and calc_Distance(quest_xyz, current_pos) < 500:
 						# Handles interactables
 						if await is_visible_by_path(self.client, team_up_button_path):
 							# Handles entering sigils
@@ -116,71 +117,6 @@ class Quester():
 
 			else:
 				await self.check_entities(safe_entities, relevant_str)
-
-
-
-	async def auto_collect(self):
-		cli = SprintyClient(self.client)
-		quest_name_path =[ "WorldView", "windowHUD" , "QuestHelperHud", "ElementWindow", "" ,"txtGoalName"]
-		popup_msgtext_path =["WorldView", "NPCRangeWin","imgBackground","NPCRangeTxtMessage"]
-		# popup_title_path =["WorldView", "NPCRangeWin"]
-		entity = dict()
-		entity2 = dict()
-		collect_counter = 0
-		safe_cords = await self.client.body.position()
-		completed = False
-		if result := await self.parse_quest_stuff(quest_name_path):
-			parsed_quest_info = result
-		else:
-			return
-		await self.find_quest_entites(parsed_quest_info,entity)
-		if not entity:
-			await self.find_quest_entites_fuzzywuzzy(parsed_quest_info, entity)
-		print(f"{entity=}")
-		failsafe = 0
-		for key in entity.keys():
-			while completed == False and self.client.questing_status:
-				for i in entity[key]:
-					await self.combat()
-					print(i)
-					# telports under quest items
-					print("tp under quest item " + str(key))
-					await self.client.teleport(XYZ(i.x, i.y, i.z - 350), wait_on_inuse = True)
-					# for every cord in the correct quest name item
-					await self.client.teleport(XYZ(i.x, i.y, i.z - 350), move_after=False, wait_on_inuse = True)
-					await asyncio.sleep(.5)
-					await self.client.teleport(XYZ(i.x, i.y, i.z - 350))
-					await asyncio.sleep(.5)
-					can_Teleport = await self.find_safe_entities_from(i, None , safe_distance=2600, is_mob=True) # checks if safe to collect
-					#print(can_Teleport)
-					if can_Teleport == True:
-						try:
-							await navmap_tp(self.client, i)  # teleports to the npc
-							#await asyncio.sleep(1)
-							if await is_visible_by_path(self.client, path=npc_range_path):
-								await self.client.send_key(Keycode.X, .1)
-								print('Collecting')
-								collect_counter = collect_counter + 1
-								#await asyncio.sleep(2)
-						except:
-							await asyncio.sleep(0.01)
-					await self.combat()
-					try:
-						_ , count = await self.parse_quest_stuff(quest_name_path) # breaks when collect quest format for the string under the pointer
-						count_nums = count.split(" / ")
-						print(count_nums)
-						if collect_counter >= (int(count_nums[1]) - int(count_nums[0])):
-							completed = True
-							await self.client.teleport(safe_cords, wait_on_inuse = True)
-							print("finished quest")
-							return True
-					except IndexError:
-							completed = True
-							await self.client.teleport(safe_cords, wait_on_inuse = True)
-							print("finished quest")
-							return True
-					await self.combat()
-
 
 
 	async def check_entities(self, entities: list[DynamicClientObject], relevant_str: str, pet_mode: bool = False):
