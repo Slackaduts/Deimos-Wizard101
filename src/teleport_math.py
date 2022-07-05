@@ -5,7 +5,8 @@ import math
 import struct
 from io import BytesIO
 from typing import Tuple, Union
-from src.utils import is_free
+from src.utils import is_free, get_quest_name, is_visible_by_path, get_popup_title
+from src.paths import npc_range_path
 
 type_format_dict = {
 "char": "<c",
@@ -204,18 +205,28 @@ async def calc_FrontalVector(client: Client, xyz : XYZ = None, yaw : float = Non
 	return final_xyz
 
 
-async def teleport_move_adjust(client: Client, xyz : XYZ, delay : float = 0.8, pet_mode: bool = False):
+async def teleport_move_adjust(client: Client, xyz : XYZ, delay : float = 0.7, pet_mode: bool = False):
 	# teleports the client to a given XYZ, and jitters afterward to actually update the position
+	npc_check = await is_visible_by_path(client, npc_range_path)
+	popup_str = None
+	if npc_check:
+		popup_str = await get_popup_title(client)
 	if await is_free(client):
 		try:
 			if not pet_mode:
 				await client.teleport(xyz, wait_on_inuse= True, purge_on_after_unuser_fixer= True)
 			else:
 				await client.pet_teleport(xyz, wait_on_inuse= True, purge_on_after_unuser_fixer= True)
+
+				await asyncio.sleep(0.3)
+				if not await is_visible_by_path(client, npc_range_path):
+					if popup_str and popup_str != await get_popup_title(client):
+						await client.send_key(Keycode.A, 0.05)
+						await client.send_key(Keycode.D, 0.05)
+
 		except ValueError:
 			pass
-	await client.send_key(Keycode.A, 0.05)
-	await client.send_key(Keycode.D, 0.05)
+
 	await asyncio.sleep(delay)
 
 
@@ -231,11 +242,12 @@ async def is_teleport_valid(client: Client, destination_xyz : XYZ, origin_xyz : 
 		return True
 
 
-async def auto_adjusting_teleport(client: Client):
+async def auto_adjusting_teleport(client: Client, quest_position: XYZ = None):
 	# DEPRECATED: Uses brute forcing XYZs in an alternating spiral pattern to find usable coords to port to. VERY slow.
 	original_zone_name = await client.zone_name()
 	original_position = await client.body.position()
-	quest_position = await client.quest_position.position()
+	if not quest_position:
+		quest_position = await client.quest_position.position()
 	adjusted_position = quest_position
 	mod_amount = 50
 	current_angle = 0
@@ -255,7 +267,7 @@ async def load_wad(path: str):
 
 async def get_navmap_data(client: Client, zone: str = None) -> list[XYZ]:
 	if not zone:
-		await client.zone_name()
+		zone = await client.zone_name()
 
 	wad = await load_wad(zone)
 	nav_data = await wad.get_file("zone.nav")
@@ -295,6 +307,8 @@ async def split_walk(client: Client, xyz: XYZ = None, segments: int = 5, origina
 async def navmap_tp(client: Client, xyz: XYZ = None, minimum_distance_increment: int = 250, walk_after=True, pet_mode: bool = False):
 	if await is_free(client):
 		original_zone_name = await client.zone_name()
+		original_quest_xyz = await client.quest_position.position()
+		original_quest_objective = await get_quest_name(client)
 		original_position = await client.body.position()
 		if xyz:
 			quest_pos = xyz
@@ -353,16 +367,22 @@ async def navmap_tp(client: Client, xyz: XYZ = None, minimum_distance_increment:
 						pass
 				else:
 					break
+
 		if walk_after:
 			await split_walk(client, quest_pos, original_zone=original_zone_name)
 		await asyncio.sleep(0.3)
+
 		current_pos = await client.body.position()
-		current_quest_pos = await client.quest_position.position()
+		current_quest_xyz = await client.quest_position.position()
+		current_quest_objective = await get_quest_name(client)
 		current_zone = await client.zone_name()
-		#if are_xyzs_within_threshold(xyz_1 = current_pos, xyz_2 = quest_pos, threshold = 25) == False and are_xyzs_within_threshold(xyz_1 = current_quest_pos, xyz_2 = quest_pos, threshold = 5) and current_zone == original_zone_name:
-			#await auto_adjusting_teleport(client)
-			#if walk_after:
-				#await split_walk(client, quest_pos, original_zone=original_zone_name)
+		original_stats = [original_quest_objective, original_zone_name]
+		current_stats = [current_quest_objective, current_zone]
+
+		if all([await is_free(client), not await is_visible_by_path(client, npc_range_path), are_xyzs_within_threshold(original_quest_xyz, current_quest_xyz, 50), current_stats == original_stats]):
+			await auto_adjusting_teleport(client)
+			if walk_after:
+				await split_walk(client, quest_pos, original_zone=original_zone_name)
 
 
 def align_points(input_points: list[XYZ], map_points: list[XYZ]) -> list[XYZ]:
@@ -412,235 +432,28 @@ def calc_chunks(points: list[XYZ], origin: XYZ = XYZ(x=0.0, y=0.0, z=0.0), entit
 
 	chunk_points = [origin]
 
-	while current_radius < max_radius:
-		circumference = math.pi * (current_radius ** 2)
+	iterations = math.ceil(max_radius / current_radius)
+	print(f'Iterations: {iterations}')
+	for _ in range(iterations):
+		circumference = (2.0 * math.pi) * current_radius
 		sides = math.ceil(circumference / entity_diameter)
+		print(f'Sides: {sides}')
 		angle_increment = 360 / sides
 
 		frontal_y = origin.y - current_radius
 		frontal_xyz = XYZ(origin.x, frontal_y, origin.z)
 
-		for i in range(sides):
-			if i != 0:
-				angle = angle_increment * i
+		for s in range(sides):
+			if s != 0:
+				angle = angle_increment * s
 				rotated_pos = rotate_point(origin, frontal_xyz, angle)
-				chunk_points.append(rotated_pos)
+				if calc_squareDistance(rotated_pos, origin) <= calc_squareDistance(most_point, origin):
+					chunk_points.append(rotated_pos)
 
 		current_radius += entity_diameter
 
+	print(f'chunks:{len(chunk_points)}')
 	return chunk_points
-
-
-# def calc_concave_hull(points: list[XYZ]) -> list[XYZ]:
-# 	# Algorithm for getting the concave hull of a list of points.
-
-
-# async def async_threshold_check(xyz_1: XYZ, xyz_2: XYZ, threshold: int = 25):
-# 	# Async replacement for are_xys_within_threshold()
-# 	await asyncio.sleep(0)
-# 	print('async threshold check 1')
-# 	return not (calc_Distance(xyz_1, xyz_2) > threshold)
-
-
-# async def checked_tp(client: Client, original_zone: str, xyz: XYZ):
-# 	# Teleport that checks if it succeeded. Returns True if teleport succeeded.
-# 	print('checked tp 1')
-# 	current_pos = await client.body.position()
-# 	print('checked tp 2')
-# 	await teleport_move_adjust(client, xyz)
-# 	print('checked tp 3')
-# 	after_pos = await client.body.position()
-# 	print('checked tp 4')
-# 	current_zone = await client.zone_name()
-# 	await asyncio.sleep(0)
-# 	tp_status = are_xyzs_within_threshold(current_pos, after_pos, 25) and current_zone == original_zone
-# 	tp_status ^= True
-# 	print('checked tp 5')
-# 	return tp_status
-
-
-# async def sort_points(origin_xyz: XYZ, points: list[XYZ], descending: bool = False):
-# 	# Sorts points based off (asending by default) distance to the origin_XYZ.
-# 	sorted_distances = []
-# 	sorted_points = []
-# 	print('sort points 1')
-# 	for xyz in points:
-# 		xyz_distance = calc_squareDistance(origin_xyz, xyz)
-# 		print('sort points 2')
-# 		if sorted_distances:
-# 			print('sort points 3')
-# 			for i, distance in enumerate(sorted_distances.copy()):
-# 				print('sort points 4')
-# 				await asyncio.sleep(0)
-# 				if xyz_distance > distance:
-# 					print('sort points 5')
-# 					# If distance is greater than the current iteration, add the current XYZ and distance at the current index
-# 					sorted_distances.insert(i, xyz_distance)
-# 					print('sort points 6')
-# 					sorted_points.insert(i, xyz)
-# 					print('sort points 7')
-# 					break
-# 			else:
-# 				sorted_distances.insert(0, xyz_distance)
-# 				print('sort points 8')
-# 				sorted_points.insert(0, xyz)
-# 				print('sort points 9')
-# 		else:
-# 			# First point, therefore it's just marked
-# 			sorted_distances.append(xyz_distance)
-# 			print('sort points 10')
-# 			sorted_points.append(xyz)
-# 			print('sort points 11')
-
-# 	if not descending:
-# 		print('sort points 12')
-# 		sorted_points.reverse()
-# 		print('sort points 13')
-
-# 	await asyncio.sleep(0)
-# 	print('sort points 14')
-# 	print(sorted_distances)
-# 	return sorted_points
-
-
-# async def filter_points(origin_xyz: XYZ, points: list[XYZ], min_point_distance: int = 25, maximum_point_angle: int = 270):
-# 	# Filter a list of sorted points based on criteria like distance between 2 points, etc
-# 	if points:
-# 		print('filter points 1')
-# 		previous_xyz = points[0]
-# 		print('filter points 2')
-# 		for xyz in points.copy():
-# 			print('filter points 3')
-# 			await asyncio.sleep(0)
-# 			# xyz_to_point_distance = calc_Distance(xyz, origin_xyz)
-# 			origin_to_xyz_dist = calc_Distance(origin_xyz, xyz)
-# 			print('filter points 3')
-# 			prev_to_curr_xyz_dist = calc_Distance(previous_xyz, xyz)
-# 			print('filter points 4')
-# 			if prev_to_curr_xyz_dist < min_point_distance or origin_to_xyz_dist > prev_to_curr_xyz_dist:
-# 				print('filter points 5')
-# 				points.remove(xyz)
-# 				print('filter points 6')
-# 				continue
-
-# 	print('filter points 7')
-# 	return points
-
-
-# async def tp_from_vertices(client: Client, vertices: list[XYZ], destination_xyz: XYZ, walk_after: bool = True, minimum_distance_increment: int = 250, original_zone: str = None):
-# 	# Uses provided list of vertices (navmap provided usually) to assist in teleporting to walkable coordinates.
-# 	if await is_free(client):
-# 		print('tp from vertices 1')
-# 		if not original_zone:
-# 			print('tp from vertices 2')
-# 			original_zone = await client.zone_name()
-
-# 		print('tp from vertices 3')
-# 		sorted_vertices = await sort_points(destination_xyz, vertices)
-# 		print('tp from vertices 4')
-# 		filtered_vertices = await filter_points(destination_xyz, sorted_vertices)
-# 		print('tp from vertices 5')
-
-# 		exit_tp_loop = False
-# 		minimum_vertex_distance = minimum_distance_increment
-# 		while True:
-# 			print('tp from vertices 6')
-# 			for i, xyz in enumerate(filtered_vertices):
-# 				print('tp from vertices 7')
-# 				points_to_average = [xyz]
-# 				print('tp from vertices 8')
-# 				# Get next point as well, if it exists
-# 				if (i + 1) < len(filtered_vertices):
-# 					print('tp from vertices 9')
-# 					points_to_average.append(filtered_vertices[i + 1])
-# 					print('tp from vertices 10')
-
-# 				# Also use the destination 
-# 				points_to_average.append(destination_xyz)
-# 				print('tp from vertices 11')
-# 				points_to_average.append(destination_xyz)
-# 				print('tp from vertices 12')
-
-# 				adjusted_point = calc_AveragePoint(points_to_average)
-# 				print('tp from vertices 13')
-# 				final_adjusted_point = XYZ(x=adjusted_point.x, y=adjusted_point.y, z=max([destination_xyz.z, adjusted_point.z]))
-# 				print('tp from vertices 14')
-
-# 				if await client.zone_name() == original_zone and await is_free(client):
-# 					print('tp from vertices 15')
-# 					tp_status = await checked_tp(client, original_zone, final_adjusted_point)
-# 					if not tp_status:
-# 						print('tp from vertices 16')
-# 						exit_tp_loop = True
-# 						print('tp from vertices 17')
-# 						if walk_after:
-# 							print('tp from vertices 18')
-# 							walk_to_xyz = True
-# 							print('tp from vertices 19')
-# 						break
-# 					else:
-# 						minimum_vertex_distance += minimum_distance_increment
-# 						print('tp from vertices 20')
-# 				else:
-# 					exit_tp_loop = True
-# 					print('tp from vertices 21')
-# 					break
-# 			else:
-# 				break
-
-# 			if exit_tp_loop:
-# 				print('tp from vertices 22')
-# 				break
-
-# 		current_pos = await client.body.position()
-
-# 		if await is_free(client) and walk_to_xyz:
-# 			print('tp from vertices 23')
-# 			if not are_xyzs_within_threshold(xyz, current_pos):
-# 				await split_walk(client, xyz)
-# 			print('tp from vertices 24')
-
-
-# async def navmap_tp(client: Client, destination_xyz: XYZ, walk_after: bool = True, minimum_distance_increment: int = 250, original_zone: str = None):
-# 	# Uses the navmap to assist in teleporting to walkable areas.
-# 	if await is_free(client):
-# 		print('navmap tp 1')
-# 		if not original_zone:
-# 			print('navmap tp 2')
-# 			original_zone = await client.zone_name()
-
-# 		if destination_xyz:
-# 			print('navmap tp 3')
-# 			quest_pos = destination_xyz
-# 		else:
-# 			quest_pos = await client.quest_position.position()
-		
-# 		print('navmap tp 4')
-# 		tp_status = await checked_tp(client, original_zone, destination_xyz)
-# 		if not tp_status:
-# 			print('navmap tp 5')
-# 			wad = await load_wad(original_zone)
-# 			print('navmap tp 6')
-# 			nav_data = await wad.get_file("zone.nav")
-# 			print('navmap tp 7')
-# 			vertices = []
-# 			try:
-# 				print('navmap tp 8')
-# 				vertices, _ = parse_nav_data(nav_data)
-# 				print('navmap tp 9')
-# 			except:
-# 				# If navmap does not exist for this zone, use brute force TP
-# 				print('navmap tp 10')
-# 				await auto_adjusting_teleport(client)
-# 				print('navmap tp 11')
-# 				if walk_after and await is_free(client):
-# 					print('navmap tp 12')
-# 					await split_walk(client, quest_pos, original_zone = original_zone)
-# 					print('navmap tp 13')
-# 			else:
-# 				print('navmap tp 14')
-# 				await tp_from_vertices(client, vertices, destination_xyz, walk_after, minimum_distance_increment, original_zone)
-# 				print('navmap tp 15')
 
 
 async def collision_tp(client, xyz):
