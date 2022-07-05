@@ -8,8 +8,10 @@ from src.sprinty_client import SprintyClient
 
 
 class Sigil():
-	def __init__(self, client: Client):
+	def __init__(self, client: Client, clients: list[Client], leader_pid: int):
 		self.client = client
+		self.clients = clients
+		self.leader_pid = leader_pid
 
 
 	async def record_sigil(self):
@@ -95,12 +97,7 @@ class Sigil():
 				await self.farm_sigil()
 
 
-	async def farm_sigil(self):
-		# Main loop for farming a sigil, includes setup
-		logger.debug(f'Client {self.client.title} at sigil, farming it.')
-		await self.record_sigil()
-		await self.record_quest()
-
+	async def solo_farming_logic(self):
 		while self.client.sigil_status:
 			while not await is_visible_by_path(self.client, team_up_button_path) and self.client.sigil_status:
 				await asyncio.sleep(0.1)
@@ -182,3 +179,40 @@ class Sigil():
 				await asyncio.sleep(1)
 				await self.client.teleport(self.sigil_xyz)
 				await self.client.send_key(Keycode.A, 0.1)
+
+
+	async def follower_farming_logic(self):
+
+		while self.client.sigil_status:
+			await asyncio.sleep(0.1)
+
+			while self.client.sigil_status and await is_free(self.client):
+				leader_pos = await self.leader.body.position()
+				await self.client.teleport(leader_pos)
+				await asyncio.sleep(0.05)
+
+
+	async def farm_sigil(self):
+		# Main loop for farming a sigil, includes setup
+		logger.debug(f'Client {self.client.title} at sigil, farming it.')
+		await self.record_sigil()
+		await self.record_quest()
+
+		if self.leader_pid:
+			self.leader: Client = None
+
+			# Determines what client the leader is
+			for client in self.clients:
+				if client.process_id == self.leader_pid:
+					self.leader = client
+					break
+
+			if self.leader.process_id == self.client.process_id:
+				await self.solo_farming_logic()
+
+			else:
+				# TODO: Somehow finish this function
+				await self.follower_farming_logic()
+
+		else:
+			await self.solo_farming_logic()

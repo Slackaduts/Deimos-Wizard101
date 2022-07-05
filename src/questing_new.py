@@ -9,9 +9,11 @@ from difflib import SequenceMatcher
 
 
 class Quester():
-	def __init__(self, client: Client, clients: list[Client]):
+	def __init__(self, client: Client, clients: list[Client], leader_pid: int):
 		self.client = client
 		self.clients = clients
+		self.leader_pid = leader_pid
+		# TODO: Make auto questing accept an optional XYZ param so we can have team based questing
 
 
 	async def auto_quest(self):
@@ -34,7 +36,7 @@ class Quester():
 						await click_window_by_path(self.client, cancel_chest_roll_path)
 
 					current_pos = await self.client.body.position()
-					if await is_visible_by_path(self.client, npc_range_path) and calc_Distance(quest_xyz, current_pos) < 500:
+					if await is_visible_by_path(self.client, npc_range_path) and calc_Distance(quest_xyz, current_pos) < 750.0:
 						# Handles interactables
 						if await is_visible_by_path(self.client, team_up_button_path):
 							# Handles entering sigils
@@ -90,17 +92,26 @@ class Quester():
 
 
 	async def handle_collect_quest(self):
+		print(1)
 		navmap_points = await get_navmap_data(self.client)
+		print(2)
 		current_pos = await self.client.body.position()
+		print(3)
 		adjusted_pos = XYZ(current_pos.x, current_pos.y, current_pos.z - 350)
-		chunks = calc_chunks(navmap_points, current_pos)
+		print(4)
+		chunks = calc_chunks(navmap_points, adjusted_pos)
+
+		print(5)
 		quest_objective = await get_quest_name(self.client)
+		print(6)
 
 		sprinter = SprintyClient(self.client)
 		for chunk in chunks:
 			if await is_free(self.client) and self.client.questing_status:
-				await navmap_tp(self.client, chunk)
-			await asyncio.sleep(0.1)
+				# await navmap_tp(self.client, chunk)
+				await self.client.teleport(chunk, wait_on_inuse = True)
+
+			await asyncio.sleep(1)
 
 			entities = await sprinter.get_base_entity_list()
 			safe_entities = await sprinter.find_safe_entities_from(entities, safe_distance=2600)
@@ -124,7 +135,11 @@ class Quester():
 		for entity in entities:
 			entity_pos = await entity.location()
 
-			await navmap_tp(self.client, entity_pos, pet_mode=pet_mode)
+			if not pet_mode:
+				await self.client.teleport(entity_pos)
+			else:
+				await self.client.pet_teleport(entity_pos)
+
 			await asyncio.sleep(0.25)
 
 			if await get_quest_name(self.client) != quest_objective:
@@ -162,11 +177,15 @@ class Quester():
 					display_name: str = await self.client.cache_handler.get_langcode_name(display_name_code)
 				except ValueError:
 					display_name = await object_template.object_name()
+				
+				if 'Basic' not in display_name:
+					match_ratio = SequenceMatcher(None, display_name.lower(), relevant_str.lower()).ratio()
 
-				match_ratio = SequenceMatcher(None, display_name.lower(), relevant_str.lower()).ratio()
+					if match_ratio > 0.7:
+						pass
+					else:
+						entities.remove(entity)
 
-				if match_ratio > 0.7:
-					pass
 				else:
 					entities.remove(entity)
 
