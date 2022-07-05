@@ -70,8 +70,20 @@ parser = ConfigParser()
 
 
 def read_config(config_name : str):
+	parser.read(config_name)
+
+	# Settings
+	global auto_updating
+	global speed_multiplier
+	global wiz_path
+	global use_potions
+	auto_updating = parser.getboolean('settings', 'auto_updating')
+	speed_multiplier = parser.getfloat('settings', 'speed_multiplier', fallback=5.0)
+	wiz_path = parser.get('settings', 'wiz_path', fallback=None)
+	use_potions = parser.get('settings', 'use_potions', fallback=True)
+
+	# Hotkeys
 	global x_press_key
-	# global space_press_key
 	global sync_locations_key
 	global quest_teleport_key
 	global mass_quest_teleport_key
@@ -79,32 +91,11 @@ def read_config(config_name : str):
 	global friend_teleport_key
 	global kill_tool_key
 	global toggle_auto_combat_key
-	# global up_noclip_key
-	# global forward_noclip_key
-	# global down_noclip_key
 	global toggle_auto_dialogue_key
 	global toggle_auto_sigil_key
 	global toggle_freecam_key
 	global toggle_auto_questing_key
-	global speed_multiplier
-	global auto_updating
-	global use_team_up
-	global show_gui
-	global wiz_path
-	global gui_theme
-	global gui_text_color
-	global gui_button_color
-	global boost_p1
-	global follow_p1
-	global gui_on_top
-	wiz_path = None
-	parser.read(config_name)
-	auto_updating = parser.getboolean('settings', 'auto_updating')
-	use_team_up = parser.getboolean('sigil', 'use_team_up', fallback=False)
-	boost_p1 = parser.getboolean('questing', 'boost_p1', fallback=False)
-	follow_p1 = parser.getboolean('sigil', 'follow_p1', fallback=False)
 	x_press_key = parser.get('hotkeys', 'x_press', fallback='X')
-	# space_press_key = parser.get('hotkeys', 'spacebar_press', fallback='F2')
 	sync_locations_key = parser.get('hotkeys', 'sync_client_locations', fallback='F8')
 	quest_teleport_key = parser.get('hotkeys', 'quest_teleport', fallback='F7')
 	mass_quest_teleport_key = parser.get('hotkeys', 'mass_quest_teleport', fallback='F6')
@@ -112,17 +103,34 @@ def read_config(config_name : str):
 	friend_teleport_key = parser.get('hotkeys', 'friend_teleport', fallback='EIGHT')
 	kill_tool_key = parser.get('hotkeys', 'kill_tool', fallback='F9')
 	toggle_auto_combat_key = parser.get('hotkeys', 'toggle_auto_combat', fallback='NINE')
-	speed_multiplier = parser.getfloat('settings', 'speed_multiplier', fallback=5.0)
+	toggle_auto_dialogue_key = parser.get('hotkeys', 'toggle_auto_dialogue', fallback='F4')
+	toggle_auto_sigil_key = parser.get('hotkeys', 'toggle_auto_sigil', fallback='F2')
+	toggle_freecam_key = parser.get('hotkeys', 'toggle_freecam', fallback='F1')
+	toggle_auto_questing_key = parser.get('hotkeys', 'toggle_auto_questing', fallback='F3')
+
+	# GUI Settings
+	global show_gui
+	global gui_on_top
+	global gui_theme
+	global gui_text_color
+	global gui_button_color
 	show_gui = parser.getboolean('gui', 'show_gui', fallback=True)
 	gui_on_top = parser.getboolean('gui', 'on_top', fallback=True)
 	gui_theme = parser.get('gui', 'theme', fallback='Black')
 	gui_text_color = parser.get('gui', 'text_color', fallback='white')
 	gui_button_color = parser.get('gui', 'button_color', fallback='#4a019e')
-	wiz_path = parser.get('settings', 'wiz_path')
-	toggle_auto_dialogue_key = parser.get('hotkeys', 'toggle_auto_dialogue', fallback='F4')
-	toggle_auto_questing_key = parser.get('hotkeys', 'toggle_auto_questing', fallback='F3')
-	toggle_auto_sigil_key = parser.get('hotkeys', 'toggle_auto_sigil', fallback='F2')
-	toggle_freecam_key = parser.get('hotkeys', 'toggle_freecam', fallback='F1')
+
+	# Auto Sigil Settings
+	global use_team_up
+	global buy_potions
+	global client_to_follow
+	use_team_up = parser.getboolean('sigil', 'use_team_up', fallback=False)
+	buy_potions = parser.get('settings', 'buy_potions', fallback=True)
+	client_to_follow = parser.getboolean('sigil', 'client_to_follow', fallback=None)
+
+	# Auto Questing Settings
+	global client_to_boost
+	client_to_boost = parser.getboolean('questing', 'client_to_boost', fallback=None)
 
 
 while True:
@@ -151,6 +159,8 @@ tool_status = True
 
 hotkeys_blocked = False
 
+sigil_leader_pid: int = None
+questing_leader_pid: int = None
 
 def file_len(filepath):
 	# return the number of lines in a file
@@ -763,7 +773,7 @@ async def main():
 				await asyncio.sleep(1)
 				if client in walker.clients and questing_status:
 					logger.debug(f'Client {client.title} - Handling questing.')
-					questing = Quester(client, walker.clients)
+					questing = Quester(client, walker.clients, questing_leader_pid)
 					await questing.auto_quest()
 					# TODO: Put SlackQuester's loop function here
 		#await async_questing(walker.clients[0])
@@ -776,7 +786,7 @@ async def main():
 			while True:
 				await asyncio.sleep(1)
 				if client in walker.clients and client.sigil_status and not freecam_status:
-					sigil = Sigil(client)
+					sigil = Sigil(client, walker.clients, sigil_leader_pid)
 					await sigil.wait_for_sigil()
 
 		await asyncio.gather(*[async_sigil(p) for p in walker.clients])
@@ -1178,7 +1188,8 @@ async def main():
 	# set initial speed for speed multipler so it knows what to reset to. Instead I should just have this track changes in speed multiplier per-client.
 	client_speeds = {}
 
-	for i, p in enumerate(walker.clients):
+	for p in walker.clients:
+		p: Client
 		client_speeds[p] = await p.client_object.speed_multiplier()
 		p.combat_status = False
 		p.questing_status = False
@@ -1188,29 +1199,17 @@ async def main():
 		p.mouseless_status = False
 
 		# Set follower/leader statuses for auto questing/sigil
-		if follow_p1:
-			if i == 0:
-				p.sigil_leader = True
-				p.sigil_follower = False
 
-			else:
-				p.sigil_leader = False
-				p.sigil_follower = True
-		else:
-			p.sigil_leader = None
-			p.sigil_follower = None
+		if client_to_follow:
+			if client_to_follow in p.title:
+				global sigil_leader_pid
+				sigil_leader_pid = p.process_id
 
-		if boost_p1:
-			if i == 0:
-				p.quest_leader = True
-				p.quest_follower = False
-	
-			else:
-				p.quest_leader = False
-				p.quest_follower = True
-		else:
-			p.quest_leader = None
-			p.quest_follower = None
+		if client_to_boost:
+			if client_to_boost in p.title:
+				global questing_leader_pid
+				questing_leader_pid = p.process_id
+
 
 	await listener.add_hotkey(Keycode[kill_tool_key], kill_tool_hotkey, modifiers=ModifierKeys.NOREPEAT)
 	await enable_hotkeys()
