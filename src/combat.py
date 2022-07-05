@@ -901,7 +901,7 @@ class Fighter(CombatHandler):
 			'''Draws TC equivalent to half the available free spaces in the hand. Example: 3/7 cards in hand = drawing twice'''
 			draw_path = ["WorldView", "PlanningPhase", "Alignment", "PlanningPhaseSubWindow", "SpellSelection", "ActionButtons", "Draw"]
 			num_cards = int((7 - len(self.cards)) / 2)
-			if num_cards > 0:
+			if num_cards >= 0:
 				draw_button = await get_window_from_path(self.client.root_window,draw_path)
 				if await self.is_control_grayed(draw_button) == False: 
 					for i in range(num_cards):
