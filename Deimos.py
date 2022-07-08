@@ -3,6 +3,7 @@ import requests
 import wizwalker
 from wizwalker import Keycode, HotkeyListener, ModifierKeys, utils, XYZ
 from wizwalker.client_handler import ClientHandler, Client
+from wizwalker.errors import MemoryReadError, MemoryInvalidated
 from wizwalker.extensions.scripting import teleport_to_friend_from_list
 import os
 import time
@@ -743,7 +744,15 @@ async def main():
 					if client.in_combat and combat_status and client in walker.clients:
 						logger.debug(f'Client {client.title} in combat, handling combat.')
 						battle = Fighter(client, walker.clients)
-						await battle.wait_for_combat()
+						while True:
+							try:
+								await battle.wait_for_combat()
+							except (MemoryReadError, AttributeError, ValueError):
+								continue
+							except MemoryInvalidated:
+								battle = Fighter(client, walker.clients)
+								continue
+							break
 
 		await asyncio.gather(*[async_combat(p) for p in walker.clients])
 
