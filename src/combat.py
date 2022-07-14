@@ -618,13 +618,13 @@ class Fighter(CombatHandler):
 				type = await c.type_name()
 				g_spell = await c.get_graphical_spell()
 				effects = await g_spell.spell_effects()
-				print(await c.display_name())
-				print(await c.spell_id())
-				for e in effects:
-					name = await e.effect_type()
-					print(name)
-				print(type)
-				print('-------------------------------------')
+				# print(await c.display_name())
+				# print(await c.spell_id())
+				# for e in effects:
+				# 	name = await e.effect_type()
+				# 	print(name)
+				# print(type)
+				# print('-------------------------------------')
 			self.fizzled = await self.fizzle_detection()
 			if self.cards:
 				await self.assign_card_names()

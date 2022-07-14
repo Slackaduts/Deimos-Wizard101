@@ -78,6 +78,7 @@ def read_config(config_name : str):
 	global speed_multiplier
 	global wiz_path
 	global use_potions
+	parser.read(config_name)
 	auto_updating = parser.getboolean('settings', 'auto_updating')
 	speed_multiplier = parser.getfloat('settings', 'speed_multiplier', fallback=5.0)
 	wiz_path = parser.get('settings', 'wiz_path', fallback=None)
@@ -126,27 +127,28 @@ def read_config(config_name : str):
 	global buy_potions
 	global client_to_follow
 	use_team_up = parser.getboolean('sigil', 'use_team_up', fallback=False)
-	buy_potions = parser.get('settings', 'buy_potions', fallback=True)
-	client_to_follow = parser.getboolean('sigil', 'client_to_follow', fallback=None)
+	buy_potions = parser.getboolean('settings', 'buy_potions', fallback=True)
+	client_to_follow = parser.get('sigil', 'client_to_follow', fallback=None)
 
 	# Auto Questing Settings
 	global client_to_boost
-	client_to_boost = parser.getboolean('questing', 'client_to_boost', fallback=None)
+	client_to_boost = parser.get('questing', 'client_to_boost', fallback=None)
 
 
 while True:
 	if not os.path.exists(f'{tool_name}-config.ini'):
 		download_file(f'https://raw.githubusercontent.com/Slackaduts/{repo_name}/{branch}/{tool_name}-config.ini', f'{tool_name}-config.ini')
 	time.sleep(0.1)
-	try:
-		read_config(f'{tool_name}-config.ini')
-	except:
-		logger.critical('Error found in the config. Redownloading the config to prevent further issues.')
-		# sg.Popup(f'{tool_name} Error', 'Error found in the config. Redownloading the config to prevent further issues.', non_blocking=True)
-		os.remove(f'{tool_name}-config.ini')
-		time.sleep(0.1)
-	else:
-		break
+	# try:
+	read_config(f'{tool_name}-config.ini')
+	break
+	# except:
+	# 	logger.critical('Error found in the config. Redownloading the config to prevent further issues.')
+	# 	# sg.Popup(f'{tool_name} Error', 'Error found in the config. Redownloading the config to prevent further issues.', non_blocking=True)
+	# 	os.remove(f'{tool_name}-config.ini')
+	# 	time.sleep(0.1)
+	# else:
+	# 	break
 
 
 speed_status = False
