@@ -4,6 +4,7 @@ from wizwalker.memory import Window
 from loguru import logger
 from src.paths import spiral_door_path, spiral_door_teleport_path, potion_shop_base_path, potion_fill_all_path, potion_buy_path, potion_exit_path, potion_usage_path, quit_button_path, dungeon_warning_path, play_button_path, advance_dialog_path, quest_name_path, popup_title_path
 from src.sprinty_client import SprintyClient
+from typing import List
 
 async def attempt_activate_mouseless(client: Client, sleep_time: float = 0.1):
 	# Attempts to activate mouseless, in a try block in case it's already on for this client
@@ -330,3 +331,14 @@ async def collect_wisps(client: Client):
 			wisp_xyz = await entity.location()
 			await client.teleport(wisp_xyz)
 			await asyncio.sleep(0.1)
+
+
+async def pid_to_client(clients: List[Client], pid: int) -> Client:
+	for client in clients:
+		if client.process_id == pid:
+			return client
+
+	if clients:
+		return clients[0]
+	else:
+		return None
