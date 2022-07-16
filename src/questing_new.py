@@ -1,25 +1,17 @@
 import asyncio
-import struct
 import traceback
 import math
-
 from loguru import logger
-from typing import Tuple
-from io import BytesIO
-from src.teleport_math import calc_Distance, navmap_tp, parse_nav_data, calc_chunks, get_navmap_data
-from wizwalker import XYZ, Keycode, MemoryReadError, Client, type_format_dict
-from wizwalker.extensions.scripting import teleport_to_friend_from_list
+from src.teleport_math import *
+from wizwalker import XYZ, Keycode, MemoryReadError, Client
 from wizwalker.file_readers.wad import Wad
 from wizwalker.memory import DynamicClientObject
 from src.sprinty_client import SprintyClient
-from src.utils import get_window_from_path, auto_potions, get_quest_name, click_window_by_path, is_popup_title_relevant, \
-    is_visible_by_path, is_free, is_popup_title_relevant, spiral_door_with_quest, is_potion_needed, collect_wisps, \
-    pid_to_client
-from src.paths import cancel_chest_roll_path, npc_range_path, missing_area_path, missing_area_retry_path, \
-    spiral_door_teleport_path, team_up_button_path, dungeon_warning_path, cancel_multiple_quest_menu_path
-from src.combat_new import Fighter
+from src.utils import *
+from src.paths import *
 from difflib import SequenceMatcher
-from fuzzywuzzy import fuzz
+# from fuzzywuzzy import fuzz
+
 
 
 class Quester():
@@ -30,8 +22,8 @@ class Quester():
 
     # TODO: Make auto questing accept an optional XYZ param so we can have team based questing
 
-    async def find_safe_entities_from(self, fixed_position1, fixed_position2, safe_distance: float = 700,
-                                      is_mob: bool = False):
+
+    async def find_safe_entities_from(self, fixed_position1, fixed_position2, safe_distance: float = 700, is_mob: bool = False):
         cli = SprintyClient(self.client)
         mob_positions = []
         can_Teleport = bool
@@ -61,10 +53,10 @@ class Quester():
             pass
         return can_Teleport
 
+
     async def find_quest_entites(self, parsed_quest_info: list, entity: dict, quest_name_path, safe_cords):
         collect_counter = 0
-        types_list = ['BehaviorInstance', 'ObjectStateBehavior', 'RenderBehavior', 'SelectBehavior',
-                      'CollisionBehaviorClient']
+        types_list = ['BehaviorInstance', 'ObjectStateBehavior', 'RenderBehavior', 'SelectBehavior', 'CollisionBehaviorClient']
         points = await self.Nav_Hull()
         Hull = points  # [0::2]  # TODO remove points that are close to draw distance of each other
         # teleport around the hull and collect rendered objects, add them to a dict and their location
@@ -87,7 +79,8 @@ class Quester():
 
                     print(parsed_quest_info, display_name)
 
-                    match = fuzz.ratio(display_name.lower(), str(parsed_quest_info[0]).lower())
+                    match = SequenceMatcher(None, display_name.lower(), str(parsed_quest_info[0]).lower()).ratio()
+                    # match = fuzz.ratio(display_name.lower(), str(parsed_quest_info[0]).lower())
                     # if parsed_quest_info[0].lower() == display_name.lower():
                     if match > 80:
                         duplicate = False
@@ -102,8 +95,7 @@ class Quester():
                                     duplicate = True
                             if duplicate == False:
 
-                                can_Teleport = await self.find_safe_entities_from(xyz, None, safe_distance=2600,
-                                                                                  is_mob=True)  # checks if safe to collect
+                                can_Teleport = await self.find_safe_entities_from(xyz, None, safe_distance=2600, is_mob=True)  # checks if safe to collect
                                 while not await is_free(self.client):
                                     pass
 
@@ -152,8 +144,7 @@ class Quester():
                         else:
                             # create a new array in this slot
 
-                            can_Teleport = await self.find_safe_entities_from(xyz, None, safe_distance=2600,
-                                                                              is_mob=True)  # checks if safe to collect
+                            can_Teleport = await self.find_safe_entities_from(xyz, None, safe_distance=2600, is_mob=True)  # checks if safe to collect
 
                             while not await is_free(self.client):
                                 await asyncio.sleep(0.1)
@@ -209,6 +200,7 @@ class Quester():
                     pass
 
         return entity
+
 
     async def Nav_Hull(self):
         wad = await self.load_wad(await self.client.zone_name())
@@ -289,14 +281,17 @@ class Quester():
 
         return questnameparsed, f"{amount_gotten_parsed} / {amount_to_get_parsed}"
 
+
     async def load_wad(self, path: str):
         return Wad.from_game_data(path.replace("/", "-"))
+
 
     async def combat(self):
         # battle = Fighter(self.client, self.clients)
         # while await battle.is_fighting() == True and self.client.questing_status:
         while await self.client.in_battle():
             await asyncio.sleep(0.1)
+
 
     async def auto_collect(self, collect_client):
         temp_leader_client = self.client
@@ -329,6 +324,7 @@ class Quester():
             print(traceback.format_exc())
 
         self.client = temp_leader_client
+
 
     async def handle_collect_quest(self):
         print(1)
@@ -370,8 +366,10 @@ class Quester():
             else:
                 await self.check_entities(safe_entities, relevant_str)
 
+
     async def override_quest_xyz(self, zone, quest_title):
         broken_quest_xyzs = {'example quest', ['example zone', XYZ(2.2, 3.3, 4.4)]}
+
 
     async def auto_quest_leader(self):
         while self.client.questing_status:
@@ -534,6 +532,7 @@ class Quester():
                         # finally, collect items on the leader
                         await self.auto_collect(self.client)
 
+
     async def auto_quest(self):
         while self.client.questing_status:
             await asyncio.sleep(1)
@@ -612,6 +611,7 @@ class Quester():
 
                     await asyncio.sleep(0.1)
 
+
     async def check_entities(self, entities: list[DynamicClientObject], relevant_str: str, pet_mode: bool = False):
         quest_objective = await get_quest_name(self.client)
         for entity in entities:
@@ -640,6 +640,7 @@ class Quester():
                     # await self.client.send_key(Keycode.X, 0.1)
                     await asyncio.sleep(0.25)
 
+
     async def parse_quest_objective(self) -> str:
         objective_str = await get_quest_name(self.client)
         objective_list = objective_str.split(' ')
@@ -653,6 +654,7 @@ class Quester():
                             return objective_list[i + 1]
 
             return objective_list[0]
+
 
     async def relevant_named_entities(self, entities: list[DynamicClientObject], relevant_str: str) -> list[
         DynamicClientObject]:
