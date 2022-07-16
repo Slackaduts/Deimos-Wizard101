@@ -4,7 +4,7 @@ from wizwalker.errors import ExceptionalTimeout
 from wizwalker.combat import CombatHandler, CombatCard, CombatMember
 from wizwalker.memory.memory_objects.spell_effect import DynamicSpellEffect
 from wizwalker.memory.memory_objects.enums import SpellEffects
-from combat_objects import get_school_stat, get_game_stats, get_shadow_effects, get_hanging_effects, get_aura_effects
+from src.combat_objects import get_school_stat, get_game_stats, get_shadow_effects, get_hanging_effects, get_aura_effects
 
 
 hit_enchant_effects = [SpellEffects.modify_card_damage, SpellEffects.modify_card_accuracy, SpellEffects.modify_card_armor_piercing]

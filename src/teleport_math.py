@@ -304,7 +304,7 @@ async def split_walk(client: Client, xyz: XYZ = None, segments: int = 5, origina
 		await asyncio.sleep(0)
 
 
-async def navmap_tp(client: Client, xyz: XYZ = None, minimum_distance_increment: int = 250, walk_after=True, pet_mode: bool = False):
+async def navmap_tp(client: Client, xyz: XYZ = None, minimum_distance_increment: int = 250, walk_after=True, pet_mode: bool = False, auto_quest_leader: bool = False):
 	if await is_free(client):
 		original_zone_name = await client.zone_name()
 		original_quest_xyz = await client.quest_position.position()
@@ -314,6 +314,7 @@ async def navmap_tp(client: Client, xyz: XYZ = None, minimum_distance_increment:
 			quest_pos = xyz
 		else:
 			quest_pos = await client.quest_position.position()
+
 		minimum_vertex_distance = minimum_distance_increment
 		await teleport_move_adjust(client, quest_pos, pet_mode=pet_mode)
 		while not await is_free(client):
@@ -372,17 +373,19 @@ async def navmap_tp(client: Client, xyz: XYZ = None, minimum_distance_increment:
 			await split_walk(client, quest_pos, original_zone=original_zone_name)
 		await asyncio.sleep(0.3)
 
-		current_pos = await client.body.position()
-		current_quest_xyz = await client.quest_position.position()
-		current_quest_objective = await get_quest_name(client)
-		current_zone = await client.zone_name()
-		original_stats = [original_quest_objective, original_zone_name]
-		current_stats = [current_quest_objective, current_zone]
+		# auto quest with leader needs to keep control of its follower clients, so skip walk_after
+		if not auto_quest_leader:
+			current_pos = await client.body.position()
+			current_quest_xyz = await client.quest_position.position()
+			current_quest_objective = await get_quest_name(client)
+			current_zone = await client.zone_name()
+			original_stats = [original_quest_objective, original_zone_name]
+			current_stats = [current_quest_objective, current_zone]
 
-		if all([await is_free(client), not await is_visible_by_path(client, npc_range_path), are_xyzs_within_threshold(original_quest_xyz, current_quest_xyz, 50), current_stats == original_stats]):
-			await auto_adjusting_teleport(client)
-			if walk_after:
-				await split_walk(client, quest_pos, original_zone=original_zone_name)
+			if all([await is_free(client), not await is_visible_by_path(client, npc_range_path), are_xyzs_within_threshold(original_quest_xyz, current_quest_xyz, 50), current_stats == original_stats]):
+				await auto_adjusting_teleport(client)
+				if walk_after:
+					await split_walk(client, quest_pos, original_zone=original_zone_name)
 
 
 def align_points(input_points: list[XYZ], map_points: list[XYZ]) -> list[XYZ]:

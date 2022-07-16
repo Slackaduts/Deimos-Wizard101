@@ -1,4 +1,5 @@
 import asyncio
+
 from wizwalker import Client, Keycode, XYZ
 from wizwalker.memory import Window
 from loguru import logger
@@ -229,7 +230,6 @@ async def is_potion_needed(client: Client, minimum_mana: int = 16):
 
 
 async def auto_potions(client: Client, mark: bool = False, minimum_mana: int = 16, buy: bool = True):
-	
 	if await is_potion_needed(client, minimum_mana):
 		await use_potion(client)
 
@@ -237,7 +237,7 @@ async def auto_potions(client: Client, mark: bool = False, minimum_mana: int = 1
 	if await client.stats.potion_charge() < 1.0 and buy:
 		# mark if needed
 		if mark:
-			await client.send_key(Keycode.PAGE_UP, 0.1)
+			await client.send_key(Keycode.PAGE_DOWN, 0.1)
 
 		# Navigate to commons
 		await navigate_to_commons(client)
@@ -247,6 +247,10 @@ async def auto_potions(client: Client, mark: bool = False, minimum_mana: int = 1
 
 		# Buy potions
 		await buy_potions(client)
+
+		# Teleport back
+		if mark:
+			await client.send_key(Keycode.PAGE_UP, 0.1)
 
 
 async def wait_for_window_by_path(client: Client, path: list[str], hooks: bool = False, click: bool = True):
@@ -288,9 +292,14 @@ async def get_quest_name(client: Client):
 
 async def get_popup_title(client: Client) -> str:
 	if await is_visible_by_path(client, popup_title_path):
-		popup_str = await get_window_from_path(client.root_window, popup_title_path)
-		popup_str = popup_str.replace('<center>', '')
-		popup_str = popup_str.replace('</center>', '')
+		popup_str = str(await get_window_from_path(client.root_window, popup_title_path))
+
+		try:
+			popup_str = popup_str.replace('<center>', '')
+			popup_str = popup_str.replace('</center>', '')
+		except:
+			await asyncio.sleep(0.1)
+
 		return popup_str
 
 	else:

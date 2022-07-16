@@ -1,4 +1,6 @@
 import asyncio
+import traceback
+
 import requests
 import wizwalker
 from wizwalker import Keycode, HotkeyListener, ModifierKeys, utils, XYZ
@@ -708,6 +710,7 @@ async def main():
 			if not freecam_status:
 				if speed_status:
 					await asyncio.sleep(0.1)
+					await asyncio.sleep(0.1)
 					for c in walker.clients:
 						if speed_status and await c.client_object.speed_multiplier() != modified_speed:
 							await c.client_object.write_speed_multiplier(modified_speed)
@@ -735,6 +738,7 @@ async def main():
 
 
 	async def combat_loop():
+		logger.catch()
 		# waits for combat for every client and handles them seperately.
 		async def async_combat(client: Client):
 			while True:
@@ -745,16 +749,10 @@ async def main():
 
 					if client.in_combat and combat_status and client in walker.clients:
 						logger.debug(f'Client {client.title} in combat, handling combat.')
+
+						# ORIGINAL CODE
 						battle = Fighter(client, walker.clients)
-						while True:
-							try:
-								await battle.wait_for_combat()
-							except (MemoryReadError, AttributeError, ValueError):
-								continue
-							except MemoryInvalidated:
-								battle = Fighter(client, walker.clients)
-								continue
-							break
+						await battle.wait_for_combat()
 
 		await asyncio.gather(*[async_combat(p) for p in walker.clients])
 
@@ -782,12 +780,21 @@ async def main():
 		async def async_questing(client: Client):
 			while True:
 				await asyncio.sleep(1)
+
 				if client in walker.clients and questing_status:
-					logger.debug(f'Client {client.title} - Handling questing.')
-					questing = Quester(client, walker.clients, questing_leader_pid)
-					await questing.auto_quest()
+					if questing_leader_pid is not None:
+						if client.process_id == questing_leader_pid:
+							# if follow leader is off, quest on all clients, passing through only the leader
+							logger.debug(f'Client {client.title} - Handling questing.')
+							questing = Quester(client, walker.clients, questing_leader_pid)
+							await questing.auto_quest_leader()
+					else:
+						# if follow leader is off, quest on all clients, passing through only the leader
+						logger.debug(f'Client {client.title} - Handling questing.')
+						questing = Quester(client, walker.clients, None)
+						await questing.auto_quest()
+
 					# TODO: Put SlackQuester's loop function here
-		#await async_questing(walker.clients[0])
 		await asyncio.gather(*[async_questing(p) for p in walker.clients])
 
 

@@ -40,6 +40,9 @@ npc_range_path = ['WorldView', 'NPCRangeWin']
 # Cancel Chest Roll Path
 cancel_chest_roll_path = ['WorldView', 'Container', 'background', '', 'CancelButton']
 
+# Cancel Quest Menus (For NPCs that offer multiple side quests at once)
+cancel_multiple_quest_menu_path = ['WorldView', 'NPCServicesWin', 'wndDialogMain', 'Exit']
+
 # Missing Area Menu Paths
 missing_area_path = ['MessageBoxModalWindow', 'messageBoxBG', 'messageBoxLayout', 'AdjustmentWindow']
 missing_area_retry_path = ['MessageBoxModalWindow', 'messageBoxBG', 'messageBoxLayout', 'AdjustmentWindow', 'RetryBtn']
