@@ -268,7 +268,8 @@ async def logout_and_in(client: Client):
 	if await is_visible_by_path(client, dungeon_warning_path):
 		await client.send_key(Keycode.ENTER, 0.1)
 	await wait_for_window_by_path(client, play_button_path, True)
-	await asyncio.sleep(1.5)
+	# TODO: Find a better solution to waiting for load in screen to end
+	await asyncio.sleep(4)
 	if await client.is_loading():
 		await wait_for_loading_screen(client)
 
