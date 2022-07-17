@@ -284,25 +284,6 @@ class Sigil():
 				await self.client.teleport(self.sigil_xyz)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 	async def follower_farming_logic(self):
 		while self.client.sigil_status:
 			await asyncio.sleep(0.1)
@@ -324,7 +305,7 @@ class Sigil():
 					break
 
 			if self.leader.process_id == self.client.process_id:
-				await self.solo_farming_logic()
+				await self.leader_farming_logic()
 
 			else:
 				# TODO: Somehow finish this function
