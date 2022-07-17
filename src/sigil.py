@@ -256,8 +256,8 @@ class Sigil():
 						quest_xyz = await self.client.quest_position.position()
 						if await get_quest_name(self.client) != self.original_quest:
 							try:
-								await navmap_tp(self.client, quest_xyz, auto_quest_leader=True)
-								await asyncio.gather(*[navmap_tp(p, quest_xyz, auto_quest_leader=True) for p in self.follower_clients])
+								# await navmap_tp(self.client, quest_xyz, auto_quest_leader=True)
+								await asyncio.gather(*[navmap_tp(p, quest_xyz, auto_quest_leader=True) for p in self.clients])
 							except ValueError:
 								pass
 
