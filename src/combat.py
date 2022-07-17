@@ -2,7 +2,7 @@ import asyncio
 import wizwalker
 from typing import Optional, Tuple, Union, List
 from wizwalker.combat import CombatHandler, CombatCard, CombatMember
-from wizwalker import utils, Client
+from wizwalker import utils, Client, Keycode
 from wizwalker.memory import Window, DynamicWindow
 from wizwalker.memory.memory_objects.enums import DuelPhase, SpellEffects, EffectTarget
 # from wizwalker.memory.memory_object import MemoryObject
@@ -565,6 +565,7 @@ class Fighter(CombatHandler):
 		"""
 		await utils.wait_for_value(self.is_fighting, True, sleep_time)
 		await self.handle_combat()
+		await self.client.send_key(Keycode.D, 0.1)
 
 
 	async def member_from_id(self, id: int, members: List[CombatMember] = None) -> CombatMember:
