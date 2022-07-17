@@ -196,7 +196,10 @@ class Sigil():
 				await asyncio.sleep(0.1)
 
 			# Automatically use and buy potions if needed
-			await asyncio.gather(*[auto_potions(p) for p in self.clients])
+			for client in self.clients:
+				await auto_potions(client, mark=True)
+
+			# await asyncio.gather(*[auto_potions(p) for p in self.clients])
 
 			current_pos = await self.client.body.position()
 			await asyncio.gather(*[p.teleport(current_pos) for p in self.follower_clients])
@@ -253,8 +256,8 @@ class Sigil():
 						quest_xyz = await self.client.quest_position.position()
 						if await get_quest_name(self.client) != self.original_quest:
 							try:
-								# await navmap_tp(self.client, quest_xyz, auto_quest_leader=True)
-								await asyncio.gather(*[navmap_tp(p, quest_xyz, auto_quest_leader=True) for p in self.clients])
+								await navmap_tp(self.client, quest_xyz, auto_quest_leader=True)
+								await asyncio.gather(*[navmap_tp(p, quest_xyz, auto_quest_leader=True) for p in self.follower_clients])
 							except ValueError:
 								pass
 
