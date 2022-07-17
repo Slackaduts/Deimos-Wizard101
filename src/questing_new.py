@@ -10,7 +10,7 @@ from src.sprinty_client import SprintyClient
 from src.utils import *
 from src.paths import *
 from difflib import SequenceMatcher
-# from fuzzywuzzy import fuzz
+from fuzzywuzzy import fuzz
 
 
 
@@ -79,8 +79,8 @@ class Quester():
 
                     print(parsed_quest_info, display_name)
 
-                    match = SequenceMatcher(None, display_name.lower(), str(parsed_quest_info[0]).lower()).ratio()
-                    # match = fuzz.ratio(display_name.lower(), str(parsed_quest_info[0]).lower())
+                    # match = SequenceMatcher(None, display_name.lower(), str(parsed_quest_info[0]).lower()).ratio()
+                    match = fuzz.ratio(display_name.lower(), str(parsed_quest_info[0]).lower())
                     # if parsed_quest_info[0].lower() == display_name.lower():
                     if match > 80:
                         duplicate = False
