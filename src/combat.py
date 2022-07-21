@@ -70,7 +70,7 @@ DISPELS = frozenset(['Quench', 'Melt', 'Dissipate', 'Vaporize', 'Entangle', 'Str
 
 # Heals
 SELECT_HEALS = frozenset(['Charming Pixie', 'Divine Intervention', 'Divine Spark', 'Dryad of Artemis', 'Cauterize', 'Beastmoon Brownie', 'Fairy', 'Dryad', 'Satyr', 'Guardian Spirit', 'Regenerate', 'Scion of Life', 'Minor Blessing', 'Healing Current', 'Sacrifice', 'Helping Hands', 'Availing Hands', "Grendel's Amends", 'Blessing', 'Cleansing Current', 'Gobble'])
-AOE_HEALS = frozenset(['Pixie', 'Unicorn', 'Sprite Swarm', 'Pigsie', 'Rebirth', 'Hamadryad', 'Kiss of Death', 'Helping Hands', 'Availing Hands', 'Cat Nap', 'Restoring Hands'])
+AOE_HEALS = frozenset(['Pixie', 'Unicorn', 'Sprite Swarm', 'Pigsie', 'Rebirth', 'Hamadryad', 'Kiss of Death', 'Cat Nap', 'Restoring Hands'])
 
 # Stuns
 SELECT_STUNS = frozenset(['Freeze', 'Stun', 'Decelerate'])
