@@ -265,7 +265,7 @@ async def auto_adjusting_teleport(client: Client, quest_position: XYZ = None):
 			mod_amount += 100
 			current_angle += 92
 		else:
-			await client.goto(original_position.x, original_position.y)
+			# await client.goto(original_position.x, original_position.y)
 			break
 
 
