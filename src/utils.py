@@ -293,7 +293,8 @@ async def get_quest_name(client: Client):
 
 async def get_popup_title(client: Client) -> str:
 	if await is_visible_by_path(client, popup_title_path):
-		popup_str = str(await get_window_from_path(client.root_window, popup_title_path))
+		popup_window = await get_window_from_path(client.root_window, popup_title_path)
+		popup_str = await popup_window.maybe_text()
 
 		try:
 			popup_str = popup_str.replace('<center>', '')
