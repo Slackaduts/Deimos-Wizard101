@@ -102,10 +102,10 @@ def calc_PointOn3DLine(xyz_1 : XYZ, xyz_2 : XYZ, additional_distance):
 	# distance = math.sqrt((pow(xyz_1.x - xyz_2.x, 2.0)) + (pow(xyz_1.y - xyz_2.y, 2.0)) + (pow(xyz_1.z - xyz_2.z, 2.0)))
 	# Doing a rough distance check here since XYZ's aren't always equal even if they have seemingly the same values
 	if distance < 1.0:
-		# This prevents a divide by 0 error
-		distance += 1.0
-	n = ((distance - additional_distance) / distance)
-	return XYZ(x=((xyz_2.x - xyz_1.x) * n) + xyz_1.x, y=((xyz_2.y - xyz_1.y) * n) + xyz_1.y, z=((xyz_2.z - xyz_1.z) * n) + xyz_1.z)
+		return xyz_1
+	else:
+		n = ((distance - additional_distance) / distance)
+		return XYZ(x=((xyz_2.x - xyz_1.x) * n) + xyz_1.x, y=((xyz_2.y - xyz_1.y) * n) + xyz_1.y, z=((xyz_2.z - xyz_1.z) * n) + xyz_1.z)
 
 
 def calc_multiplerPointOn3DLine(xyz_1 : XYZ, xyz_2 : XYZ, multiplier : float):
