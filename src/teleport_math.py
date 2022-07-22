@@ -258,11 +258,15 @@ async def auto_adjusting_teleport(client: Client, quest_position: XYZ = None):
 	current_angle = 0
 	await teleport_move_adjust(client, quest_position)
 	while are_xyzs_within_threshold((await client.body.position()), original_position, 50) and await client.zone_name() == original_zone_name:
-		adjusted_position = calc_PointOn3DLine(original_position, quest_position, mod_amount)
-		rotated_position = rotate_point(quest_position, adjusted_position, current_angle)
-		await teleport_move_adjust(client, rotated_position)
-		mod_amount += 100
-		current_angle += 92
+		if not are_xyzs_within_threshold(original_position, quest_position, 1):
+			adjusted_position = calc_PointOn3DLine(original_position, quest_position, mod_amount)
+			rotated_position = rotate_point(quest_position, adjusted_position, current_angle)
+			await teleport_move_adjust(client, rotated_position)
+			mod_amount += 100
+			current_angle += 92
+		else:
+			await client.goto(original_position.x, original_position.y)
+			break
 
 
 async def load_wad(path: str):
