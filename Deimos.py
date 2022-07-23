@@ -7,6 +7,7 @@ from wizwalker import Keycode, HotkeyListener, ModifierKeys, utils, XYZ
 from wizwalker.client_handler import ClientHandler, Client
 from wizwalker.errors import MemoryReadError, MemoryInvalidated
 from wizwalker.extensions.scripting import teleport_to_friend_from_list
+from wizwalker.combat import CombatMember
 import os
 import time
 import sys
@@ -15,6 +16,8 @@ from loguru import logger
 import datetime
 from configparser import ConfigParser
 import statistics
+import re
+from pypresence import AioPresence
 from src.combat import Fighter
 from src.teleport_math import navmap_tp, calc_Distance
 # from src.questing import Quester
@@ -28,7 +31,7 @@ from src.sprinty_client import SprintyClient
 from src.gui_inputs import param_input
 
 
-tool_version = '3.5.0'
+tool_version = '3.5.1'
 tool_name = 'Deimos'
 repo_name = tool_name + '-Wizard101'
 branch = 'master'
@@ -80,11 +83,13 @@ def read_config(config_name : str):
 	global speed_multiplier
 	global wiz_path
 	global use_potions
+	global rpc_status
 	parser.read(config_name)
-	auto_updating = parser.getboolean('settings', 'auto_updating')
+	auto_updating = parser.getboolean('settings', 'auto_updating', fallback=True)
 	speed_multiplier = parser.getfloat('settings', 'speed_multiplier', fallback=5.0)
 	wiz_path = parser.get('settings', 'wiz_path', fallback=None)
 	use_potions = parser.get('settings', 'use_potions', fallback=True)
+	rpc_status = parser.getboolean('settings', 'rich_presence', fallback=True)
 
 	# Hotkeys
 	global x_press_key
@@ -915,7 +920,6 @@ async def main():
 
 		window = gui.Window(title= f'{tool_name} GUI v{tool_version}', layout= layout, keep_on_top=gui_on_top, finalize=True)
 
-
 		global hotkeys_blocked
 		while True:
 			hotkeys_blocked = True
@@ -1142,6 +1146,7 @@ async def main():
 
 			await asyncio.sleep(0.5)
 
+
 	async def potion_usage_loop():
 		# Auto potion usage on a per client basis.
 		async def async_potion(client: Client):
@@ -1151,6 +1156,67 @@ async def main():
 					await auto_potions(client, buy = False)
 
 		await asyncio.gather(*[async_potion(p) for p in walker.clients])
+
+
+	async def rpc_loop():
+		if rpc_status:
+			rpc = AioPresence(1000159655357587566)
+
+			await rpc.connect()
+
+			client: Client = walker.clients[0]
+			zone_name: str = None
+			while True:
+				for c in walker.clients:
+					c: Client
+					if c.is_foreground:
+						client = c
+						break
+
+				await asyncio.sleep(1)
+				if await client.zone_name() is not None:
+					zone_name = await client.zone_name()
+					# print(zone_name)
+
+				zone_list = zone_name.split('/')
+
+				if len(zone_list) > 1:
+					status_str = zone_list[0]
+					area_list: list[str] = zone_list[-1].split('_')
+					del area_list[0]
+
+					for a in area_list.copy():
+						if any([s.isdigit() for s in a]):
+							area_list.remove(a)
+
+					seperator = ' '
+					area = seperator.join(area_list)
+					zone_word_list = re.findall('[A-Z][^A-Z]*', area)
+					if zone_word_list:
+						end_zone = f' - {seperator.join(zone_word_list)}'
+
+					else:
+						end_zone = ''
+
+				else:
+					status_str = zone_name
+					end_zone = ''
+				# print(await client.in_battle())
+				fighter = Fighter(client, walker.clients)
+				members = await fighter.get_members()
+
+				if await client.in_battle() and members:
+					await rpc.update(state=f'Fighting In {status_str}{end_zone}')
+
+				elif questing_status:
+					await rpc.update(state=f'Questing In {status_str}{end_zone}')
+
+				elif sigil_status:
+					await rpc.update(state=f'Farming In {status_str}{end_zone}')
+
+				else:
+					await rpc.update(state=f'In {status_str}{end_zone}')
+
 
 	await asyncio.sleep(0)
 	walker = ClientHandler()
@@ -1245,8 +1311,9 @@ async def main():
 		gui_task = asyncio.create_task(handle_gui())
 		questing_loop_task = asyncio.create_task(questing_loop())
 		potion_usage_loop_task = asyncio.create_task(potion_usage_loop())
+		rpc_loop_task = asyncio.create_task(rpc_loop())
 		while True:
-			await asyncio.wait([foreground_client_switching_task, speed_switching_task, combat_loop_task, assign_foreground_clients_task, dialogue_loop_task, anti_afk_loop_task, sigil_loop_task, in_combat_loop_task, questing_loop_task, gui_task, potion_usage_loop_task])
+			await asyncio.wait([foreground_client_switching_task, speed_switching_task, combat_loop_task, assign_foreground_clients_task, dialogue_loop_task, anti_afk_loop_task, sigil_loop_task, in_combat_loop_task, questing_loop_task, gui_task, potion_usage_loop_task, rpc_loop_task])
 	finally:
 		await tool_finish()
 
