@@ -477,7 +477,7 @@ class Quester():
 
 
                             # Exit NPC menus (spell menus, quest menus, etc)
-                            await asyncio.sleep(2)
+                            # await asyncio.sleep(2)
                             await asyncio.gather(*[exit_menus(c) for c in self.clients])
 
                             await asyncio.sleep(0.75)
