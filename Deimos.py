@@ -279,7 +279,7 @@ def is_version_greater(version: str, comparison_version: str) -> bool:
 	return False
 
 
-def auto_update(latest_version: str):
+def auto_update(latest_version: str = get_latest_version()):
 	remove_if_exists(f'{tool_name}-copy.exe')
 	remove_if_exists(f'{tool_name}Updater.exe')
 	time.sleep(0.1)
