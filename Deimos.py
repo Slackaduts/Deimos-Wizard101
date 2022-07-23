@@ -1,11 +1,8 @@
 import asyncio
-import traceback
-
 import requests
 import wizwalker
 from wizwalker import Keycode, HotkeyListener, ModifierKeys, utils, XYZ
 from wizwalker.client_handler import ClientHandler, Client
-from wizwalker.errors import MemoryReadError, MemoryInvalidated
 from wizwalker.extensions.scripting import teleport_to_friend_from_list
 from wizwalker.combat import CombatMember
 import os
@@ -84,7 +81,6 @@ def read_config(config_name : str):
 	global wiz_path
 	global use_potions
 	global rpc_status
-	parser.read(config_name)
 	auto_updating = parser.getboolean('settings', 'auto_updating', fallback=True)
 	speed_multiplier = parser.getfloat('settings', 'speed_multiplier', fallback=5.0)
 	wiz_path = parser.get('settings', 'wiz_path', fallback=None)
@@ -1160,10 +1156,11 @@ async def main():
 
 	async def rpc_loop():
 		if rpc_status:
+			# Connect to the discord dev app
 			rpc = AioPresence(1000159655357587566)
-
 			await rpc.connect()
 
+			# Assign foreground client locally
 			client: Client = walker.clients[0]
 			zone_name: str = None
 			while True:
@@ -1173,13 +1170,14 @@ async def main():
 						client = c
 						break
 
+				# Assign zone name of client
 				await asyncio.sleep(1)
 				if await client.zone_name() is not None:
 					zone_name = await client.zone_name()
-					# print(zone_name)
 
 				zone_list = zone_name.split('/')
 
+				# parse zone name and make it more visually appealing
 				if len(zone_list) > 1:
 					status_str = zone_list[0]
 					area_list: list[str] = zone_list[-1].split('_')
@@ -1201,21 +1199,33 @@ async def main():
 				else:
 					status_str = zone_name
 					end_zone = ''
-				# print(await client.in_battle())
+
+				# Read combat members, this check is only needed since WW combat detection breaks upon fleeing
 				fighter = Fighter(client, walker.clients)
 				members = await fighter.get_members()
 
+				# Assign current task to show in discord status
 				if await client.in_battle() and members:
-					await rpc.update(state=f'Fighting In {status_str}{end_zone}')
+					task_str = 'Fighting '
 
 				elif questing_status:
-					await rpc.update(state=f'Questing In {status_str}{end_zone}')
+					task_str = 'Questing '
 
 				elif sigil_status:
-					await rpc.update(state=f'Farming In {status_str}{end_zone}')
+					task_str = 'Farming '
 
 				else:
-					await rpc.update(state=f'In {status_str}{end_zone}')
+					task_str = ''
+
+				# Assign if a client is currently selected or not
+				if not any([client.is_foreground for client in walker.clients]):
+					details_pane = 'Idle'
+
+				else:
+					details_pane = 'Active'
+
+				# Update the discord RPC status
+				await rpc.update(state=f'{task_str}In {status_str}{end_zone}', details=details_pane)
 
 
 	await asyncio.sleep(0)
