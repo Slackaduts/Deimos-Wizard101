@@ -1176,29 +1176,68 @@ async def main():
 					zone_name = await client.zone_name()
 
 				zone_list = zone_name.split('/')
+				if len(zone_list):
+					status_str = zone_list[0]
+				else:
+					status_str = zone_name
 
 				# parse zone name and make it more visually appealing
 				if len(zone_list) > 1:
-					status_str = zone_list[0]
-					area_list: list[str] = zone_list[-1].split('_')
-					del area_list[0]
+					if 'Housing_' in zone_name:
+						status_str = status_str.replace('Housing_', '')
+						end_zone_list = zone_list[-1].split('_')
+						end_zone = f' - {end_zone_list[-1]}'
 
-					for a in area_list.copy():
-						if any([s.isdigit() for s in a]):
-							area_list.remove(a)
+					elif 'Housing' in zone_name:
+						end_zone_list = zone_list[-1].split('_')
 
-					seperator = ' '
-					area = seperator.join(area_list)
-					zone_word_list = re.findall('[A-Z][^A-Z]*', area)
-					if zone_word_list:
-						end_zone = f' - {seperator.join(zone_word_list)}'
+						if 'School' in zone_list:
+							status_str = end_zone_list[0] + 'House'
+
+						else:
+							status_str = zone_list[1]
+
+						end_zone = f' - {end_zone_list[-1]}'
 
 					else:
-						end_zone = ''
+						end_zone = None
+
+					if not end_zone:
+						area_list: list[str] = zone_list[-1].split('_')
+						del area_list[0]
+
+						for a in area_list.copy():
+							if any([s.isdigit() for s in a]):
+								area_list.remove(a)
+
+						seperator = ' '
+						area = seperator.join(area_list)
+						zone_word_list = re.findall('[A-Z][^A-Z]*', area)
+						if zone_word_list:
+							end_zone = f' - {seperator.join(zone_word_list)}'
+
+						else:
+							end_zone = ''
 
 				else:
-					status_str = zone_name
 					end_zone = ''
+
+				status_str = status_str.replace('DragonSpire', 'Dragonspyre')
+				status_list = status_str.split('_')
+				if len(status_list[0]) <= 3:
+					del status_list[0]
+
+				seperator = ' '
+				status_str = seperator.join(status_list)
+
+				status_list = re.findall('[A-Z][^A-Z]*', status_str)
+				status_str = seperator.join(status_list)
+
+				if 'ext' in end_zone.lower():
+					end_zone = ' - Outside'
+
+				elif 'int' in end_zone.lower():
+					end_zone = ' - Inside'
 
 				# Read combat members, this check is only needed since WW combat detection breaks upon fleeing
 				fighter = Fighter(client, walker.clients)
