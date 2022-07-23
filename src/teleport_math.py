@@ -1,4 +1,5 @@
 import asyncio
+
 from wizwalker import XYZ, Client, Keycode
 from wizwalker.file_readers.wad import Wad
 import math
@@ -98,9 +99,14 @@ def parse_nav_data(file_data: Union[bytes, TypedBytes]):
 
 def calc_PointOn3DLine(xyz_1 : XYZ, xyz_2 : XYZ, additional_distance):
 	# extends a point on the line created by 2 XYZs by additional_distance. xyz_1 is the origin.
-	distance = math.sqrt((pow(xyz_1.x - xyz_2.x, 2.0)) + (pow(xyz_1.y - xyz_2.y, 2.0)) + (pow(xyz_1.z - xyz_2.z, 2.0)))
-	n = ((distance - additional_distance) / distance)
-	return XYZ(x=((xyz_2.x - xyz_1.x) * n) + xyz_1.x, y=((xyz_2.y - xyz_1.y) * n) + xyz_1.y, z=((xyz_2.z - xyz_1.z) * n) + xyz_1.z)
+	distance = calc_Distance(xyz_1, xyz_2)
+	# distance = math.sqrt((pow(xyz_1.x - xyz_2.x, 2.0)) + (pow(xyz_1.y - xyz_2.y, 2.0)) + (pow(xyz_1.z - xyz_2.z, 2.0)))
+	# Doing a rough distance check here since XYZ's aren't always equal even if they have seemingly the same values
+	if distance < 1.0:
+		return xyz_1
+	else:
+		n = ((distance - additional_distance) / distance)
+		return XYZ(x=((xyz_2.x - xyz_1.x) * n) + xyz_1.x, y=((xyz_2.y - xyz_1.y) * n) + xyz_1.y, z=((xyz_2.z - xyz_1.z) * n) + xyz_1.z)
 
 
 def calc_multiplerPointOn3DLine(xyz_1 : XYZ, xyz_2 : XYZ, multiplier : float):
@@ -242,22 +248,30 @@ async def is_teleport_valid(client: Client, destination_xyz : XYZ, origin_xyz : 
 		return True
 
 
-async def auto_adjusting_teleport(client: Client, quest_position: XYZ = None):
+async def auto_adjusting_teleport(client: Client, quest_position: XYZ = None, leader_client: Client = None):
 	# DEPRECATED: Uses brute forcing XYZs in an alternating spiral pattern to find usable coords to port to. VERY slow.
 	original_zone_name = await client.zone_name()
 	original_position = await client.body.position()
 	if not quest_position:
-		quest_position = await client.quest_position.position()
+		if leader_client:
+			quest_position = await leader_client.quest_position.position()
+		else:
+			quest_position = await client.quest_position.position()
+
 	adjusted_position = quest_position
 	mod_amount = 50
 	current_angle = 0
 	await teleport_move_adjust(client, quest_position)
 	while are_xyzs_within_threshold((await client.body.position()), original_position, 50) and await client.zone_name() == original_zone_name:
-		adjusted_position = calc_PointOn3DLine(original_position, quest_position, mod_amount)
-		rotated_position = rotate_point(quest_position, adjusted_position, current_angle)
-		await teleport_move_adjust(client, rotated_position)
-		mod_amount += 100
-		current_angle += 92
+		if not are_xyzs_within_threshold(original_position, quest_position, 1):
+			adjusted_position = calc_PointOn3DLine(original_position, quest_position, mod_amount)
+			rotated_position = rotate_point(quest_position, adjusted_position, current_angle)
+			await teleport_move_adjust(client, rotated_position)
+			mod_amount += 100
+			current_angle += 92
+		else:
+			# await client.goto(original_position.x, original_position.y)
+			break
 
 
 async def load_wad(path: str):
@@ -280,12 +294,15 @@ async def get_navmap_data(client: Client, zone: str = None) -> list[XYZ]:
 	return vertices
 
 
-async def split_walk(client: Client, xyz: XYZ = None, segments: int = 5, original_zone: str = None):
+async def split_walk(client: Client, xyz: XYZ = None, segments: int = 5, original_zone: str = None, leader_client: Client = None):
 	if not original_zone:
 		original_zone = await client.zone_name()
 
 	if not xyz:
-		xyz = await client.quest_position.position()
+		if leader_client:
+			xyz = await leader_client.quest_position.position()
+		else:
+			xyz = await client.quest_position.position()
 
 	# walks to desired XYZ, only if the zone hasn't changed and if the param is enabled.
 
@@ -304,11 +321,16 @@ async def split_walk(client: Client, xyz: XYZ = None, segments: int = 5, origina
 		await asyncio.sleep(0)
 
 
-async def navmap_tp(client: Client, xyz: XYZ = None, minimum_distance_increment: int = 250, walk_after=True, pet_mode: bool = False, auto_quest_leader: bool = False):
+async def navmap_tp(client: Client, xyz: XYZ = None, minimum_distance_increment: int = 250, walk_after=True, pet_mode: bool = False, leader_client: Client = None):
 	if await is_free(client):
 		original_zone_name = await client.zone_name()
-		original_quest_xyz = await client.quest_position.position()
-		original_quest_objective = await get_quest_name(client)
+		if leader_client:
+			original_quest_xyz = await leader_client.quest_position.position()
+			original_quest_objective = await get_quest_name(leader_client)
+		else:
+			original_quest_xyz = await client.quest_position.position()
+			original_quest_objective = await get_quest_name(client)
+
 		original_position = await client.body.position()
 		if xyz:
 			quest_pos = xyz
@@ -327,10 +349,17 @@ async def navmap_tp(client: Client, xyz: XYZ = None, minimum_distance_increment:
 			vertices = []
 			vertices, _ = parse_nav_data(nav_data)
 		except:
-			await auto_adjusting_teleport(client)
+			if leader_client:
+				await auto_adjusting_teleport(client, original_quest_xyz)
+			else:
+				await auto_adjusting_teleport(client)
+
 			if walk_after:
 				navmap_errored = True
-				await split_walk(client, quest_pos, original_zone=original_zone_name)
+				if leader_client:
+					await split_walk(client, quest_pos, original_zone=original_zone_name, leader_client=leader_client)
+				else:
+					await split_walk(client, quest_pos, original_zone=original_zone_name)
 		squared_distances = [calc_squareDistance(quest_pos, n) for n in vertices]
 		sorted_distances = sorted(squared_distances)
 		while not navmap_errored:
@@ -370,21 +399,36 @@ async def navmap_tp(client: Client, xyz: XYZ = None, minimum_distance_increment:
 					break
 
 		if walk_after:
-			await split_walk(client, quest_pos, original_zone=original_zone_name)
+			if leader_client:
+				await split_walk(client, quest_pos, original_zone=original_zone_name, leader_client=leader_client)
+			else:
+				await split_walk(client, quest_pos, original_zone=original_zone_name)
 		await asyncio.sleep(0.3)
 
-		# auto quest with leader needs to keep control of its follower clients, so skip walk_after
-		if not auto_quest_leader:
-			current_pos = await client.body.position()
+		current_pos = await client.body.position()
+
+		# auto quest with leader needs to keep control of its follower clients, so use leader's quest objective instead of follower's
+		if leader_client:
+			current_quest_xyz = await leader_client.quest_position.position()
+			current_quest_objective = await get_quest_name(leader_client)
+		else:
 			current_quest_xyz = await client.quest_position.position()
 			current_quest_objective = await get_quest_name(client)
-			current_zone = await client.zone_name()
-			original_stats = [original_quest_objective, original_zone_name]
-			current_stats = [current_quest_objective, current_zone]
 
-			if all([await is_free(client), not await is_visible_by_path(client, npc_range_path), are_xyzs_within_threshold(original_quest_xyz, current_quest_xyz, 50), current_stats == original_stats]):
+		current_zone = await client.zone_name()
+		original_stats = [original_quest_objective, original_zone_name]
+		current_stats = [current_quest_objective, current_zone]
+
+		if all([await is_free(client), not await is_visible_by_path(client, npc_range_path), are_xyzs_within_threshold(original_quest_xyz, current_quest_xyz, 50), current_stats == original_stats]):
+			if leader_client:
+				await auto_adjusting_teleport(client, leader_client=leader_client)
+			else:
 				await auto_adjusting_teleport(client)
-				if walk_after:
+
+			if walk_after:
+				if leader_client:
+					await split_walk(client, quest_pos, original_zone=original_zone_name, leader_client=leader_client)
+				else:
 					await split_walk(client, quest_pos, original_zone=original_zone_name)
 
 

@@ -22,6 +22,14 @@ class Quester():
 
     # TODO: Make auto questing accept an optional XYZ param so we can have team based questing
 
+    async def read_popup_(self):
+        popup_msgtext_path = ["WorldView", "NPCRangeWin", "imgBackground", "NPCRangeTxtMessage"]
+        try:
+            popup_text_path = await get_window_from_path(self.client.root_window, popup_msgtext_path)
+            txtmsg = await popup_text_path.maybe_text()
+        except:
+            txtmsg = ""
+        return txtmsg
 
     async def find_safe_entities_from(self, fixed_position1, fixed_position2, safe_distance: float = 700, is_mob: bool = False):
         cli = SprintyClient(self.client)
@@ -366,10 +374,14 @@ class Quester():
             else:
                 await self.check_entities(safe_entities, relevant_str)
 
+    async def followers_in_correct_zone(self):
+        zone = await self.client.zone_name()
+        in_correct_zone = True
+        for c in self.clients:
+            if await c.zone_name() != zone:
+                in_correct_zone = False
 
-    async def override_quest_xyz(self, zone, quest_title):
-        broken_quest_xyzs = {'example quest', ['example zone', XYZ(2.2, 3.3, 4.4)]}
-
+        return in_correct_zone
 
     async def auto_quest_leader(self):
         while self.client.questing_status:
@@ -394,46 +406,38 @@ class Quester():
 
                 quest_xyz = await self.client.quest_position.position()
 
-                # if clients are not in same zone as leader, teleport there
-                # zone = await self.client.zone_name()
-                # for c in self.clients:
-                #     if c.process_id != self.leader_pid and await c.zone_name() != zone:
-                #         # teleport to leader
-                #         await c.send_key(Keycode.F, 0.1)
-                #         try:
-                #             await c.mouse_handler.activate_mouseless()
-                #             await asyncio.sleep(.4)
-                #             await teleport_to_friend_from_list(c, icon_list=2, icon_index=0)  # Fish Icon in friends list
-                #             await c.mouse_handler.deactivate_mouseless()
-                #
-                #             while await c.is_loading():
-                #                 await asyncio.sleep(0.1)
-                #         except:
-                #             print(traceback.format_exc())
-                #             await asyncio.sleep(0.01)
-
-                # if clients are not in same zone as leader, teleport all to commons
-                zone = await self.client.zone_name()
-                incorrect_zone = False
-                for c in self.clients:
-                    if await c.zone_name() != zone:
-                        incorrect_zone = True
-
-                if incorrect_zone:
+                if not await self.followers_in_correct_zone():
+                    # if followers in different zone, try X presses (for X zone changes that require delayed presses between clients)
                     for c in self.clients:
-                        await c.send_key(Keycode.END)
-                        await c.send_key(Keycode.END)
-                        await asyncio.sleep(3)
-                        # use is_loading instead of wait_for_change, as one client could already be in the hub
-                        while await c.is_loading():
-                            pass
+                        if c.process_id != self.leader_pid:
+                            await c.send_key(Keycode.X, 0.1)
+                            await asyncio.sleep(2.5)
 
                     await asyncio.sleep(2)
+                    for c in self.clients:
+                        while await c.is_loading():
+                            await asyncio.sleep(0.1)
+
+                    # if we still aren't in correct zone after X presses, send all to hub and retry
+                    if not await self.followers_in_correct_zone():
+                        for c in self.clients:
+                            await c.send_key(Keycode.END)
+                            await c.send_key(Keycode.END)
+                            await asyncio.sleep(3)
+                            # use is_loading instead of wait_for_change, as one client could already be in the hub
+                            while await c.is_loading():
+                                await asyncio.sleep(0.1)
+
+                        await asyncio.sleep(2)
 
                 distance = calc_Distance(quest_xyz, XYZ(0.0, 0.0, 0.0))
                 if distance > 1:
                     if await is_free(self.client):
-                        await asyncio.gather(*[navmap_tp(p, quest_xyz, auto_quest_leader=True) for p in self.clients])
+                        try:
+                            await asyncio.gather(*[navmap_tp(p, quest_xyz, leader_client=self.client) for p in self.clients])
+                        except:
+                            # some level of error output may be required in navmap_tp, at the moment it is not producing output without traceback
+                            print(traceback.print_exc())
 
                     await asyncio.sleep(0.7)
                     for c in self.clients:
@@ -444,10 +448,10 @@ class Quester():
                     current_pos = await self.client.body.position()
                     if await is_visible_by_path(self.client, npc_range_path) and calc_Distance(quest_xyz, current_pos) < 750.0:
                         # Handles interactables
-                        if await is_visible_by_path(self.client, team_up_button_path):
-                            # Handles entering sigils
+                        sigil_msg_check = await self.read_popup_()
+                        if "to enter" in sigil_msg_check.lower():
+                            # Handles entering dungeons
                             await asyncio.gather(*[p.send_key(Keycode.X, 0.1) for p in self.clients])
-
                             for c in self.clients:
                                 while not await c.is_loading():
                                     if await is_visible_by_path(c, dungeon_warning_path):
@@ -471,19 +475,25 @@ class Quester():
                                 if was_loading:
                                     await asyncio.sleep(1)
 
-                            await asyncio.sleep(0.4)
-                            for c in self.clients:
-                                if c.process_id != self.leader_pid:
-                                    # cancel out of side quest menu on follower clients
-                                    if await is_visible_by_path(c, cancel_multiple_quest_menu_path):
-                                        await click_window_by_path(c, cancel_multiple_quest_menu_path)
+
+                            # Exit NPC menus (spell menus, quest menus, etc)
+                            # await asyncio.sleep(2)
+                            await asyncio.gather(*[exit_menus(c) for c in self.clients])
 
                             await asyncio.sleep(0.75)
 
-                            for c in self.clients:
-                                if await is_visible_by_path(c, spiral_door_teleport_path):
-                                    # Handles spiral door navigation
-                                    await spiral_door_with_quest(c)
+                            if await is_visible_by_path(self.client, spiral_door_teleport_path):
+                                # Handles spiral door navigation
+                                await spiral_door_with_quest(self.client)
+
+                                await asyncio.sleep(1)
+                                leader_world = (await self.client.zone_name()).split('/', 1)[0]
+
+                                # Follower clients use seperate spiral door navigation than leader (since they may not have the same quest)
+                                for c in self.clients:
+                                    if c.process_id != self.leader_pid:
+                                        if await is_visible_by_path(c, spiral_door_teleport_path):
+                                            await go_to_new_world(c, leader_world)
 
                     quest_objective = await get_quest_name(self.client)
 
@@ -526,9 +536,6 @@ class Quester():
                             if c.process_id == self.leader_pid:
                                 self.client = c
 
-                        # leader_client = pid_to_client(self.clients, self.leader_pid)
-                        # self.client = leader_client
-
                         # finally, collect items on the leader
                         await self.auto_collect(self.client)
 
@@ -542,12 +549,17 @@ class Quester():
                         self.client) and await self.client.stats.current_mana() > 1 and await self.client.stats.current_hitpoints() > 1:
                     await collect_wisps(self.client)
 
+            if await is_free(self.client):
                 await auto_potions(self.client, True, buy=True)
                 quest_xyz = await self.client.quest_position.position()
 
                 distance = calc_Distance(quest_xyz, XYZ(0.0, 0.0, 0.0))
                 if distance > 1:
-                    await navmap_tp(self.client, quest_xyz)
+                    try:
+                        await navmap_tp(self.client, quest_xyz)
+                    except:
+                        # some level of error output may be required in navmap_tp, at the moment it is not producing output without traceback
+                        print(traceback.print_exc())
 
                     await asyncio.sleep(0.5)
                     if await is_visible_by_path(self.client, cancel_chest_roll_path):
@@ -557,17 +569,19 @@ class Quester():
                     current_pos = await self.client.body.position()
                     if await is_visible_by_path(self.client, npc_range_path) and calc_Distance(quest_xyz, current_pos) < 750.0:
                         # Handles interactables
-                        if await is_visible_by_path(self.client, team_up_button_path):
-                            # Handles entering sigils
-                            await self.client.send_key(Keycode.X, 0.1)
+                        sigil_msg_check = await self.read_popup_()
+                        if "to enter" in sigil_msg_check.lower():
+                            # Handles entering dungeons
+                            await asyncio.gather(*[p.send_key(Keycode.X, 0.1) for p in self.clients])
+                            for c in self.clients:
+                                while not await c.is_loading():
+                                    if await is_visible_by_path(c, dungeon_warning_path):
+                                        await c.send_key(Keycode.ENTER, 0.1)
+                                    await asyncio.sleep(0.1)
 
-                            while not await self.client.is_loading():
-                                if await is_visible_by_path(self.client, dungeon_warning_path):
-                                    await self.client.send_key(Keycode.ENTER, 0.1)
-                                await asyncio.sleep(0.1)
-
-                            while await self.client.is_loading():
-                                await asyncio.sleep(0.1)
+                            for c in self.clients:
+                                while await c.is_loading():
+                                    await asyncio.sleep(0.1)
                         else:
                             await self.client.send_key(Keycode.X, 0.1)
 

@@ -3,7 +3,7 @@ import asyncio
 from wizwalker import Client, Keycode, XYZ
 from wizwalker.memory import Window
 from loguru import logger
-from src.paths import spiral_door_path, spiral_door_teleport_path, potion_shop_base_path, potion_fill_all_path, potion_buy_path, potion_exit_path, potion_usage_path, quit_button_path, dungeon_warning_path, play_button_path, advance_dialog_path, quest_name_path, popup_title_path
+from src.paths import *
 from src.sprinty_client import SprintyClient
 from typing import List
 
@@ -58,6 +58,113 @@ async def is_visible_by_path(client: Client, path: list[str]):
 		return False
 
 
+async def read_control_checkbox_text(checkbox: Window) -> str:
+	return await checkbox.read_wide_string_from_offset(616)
+
+
+# Teleport to given world through spiral door
+async def go_to_new_world(p, destinationWorld, open_window: bool = True):
+	if open_window:
+		while not await get_popup_title(p) == 'World Gate' and not await is_visible_by_path(p, spiral_door_path):
+			await asyncio.sleep(0.1)
+
+		while not await is_visible_by_path(p, spiral_door_path):
+			await asyncio.sleep(0.1)
+			await p.send_key(Keycode.X, 0.1)
+
+	while await p.is_in_npc_range():
+		await p.send_key(Keycode.X, 0.1)
+		await asyncio.sleep(.4)
+
+	while not await is_visible_by_path(p, spiral_door_path):
+		await asyncio.sleep(0.1)
+		await p.send_key(Keycode.X, 0.1)
+
+	await p.mouse_handler.activate_mouseless()
+
+	# each worldList item (in-file name for a world) correlates to a zoneDoorOptions (in-file name for the buttons in the spiral door)
+	worldList = ["WizardCity", "Krokotopia", "Marleybone", "MooShu", "DragonSpire", "Grizzleheim", "Celestia", "Wysteria", "Zafaria", "Avalon", "Azteca", "Khrysalis", "Polaris", "Arcanum", "Mirage", "Empyrea", "Karamelle", "Lemuria"]
+	zoneDoorOptions = ["wbtnWizardCity", "wbtnKrokotopia", "wbtnMarleybone", "wbtnMooShu", "wbtnDragonSpire", "wbtnGrizzleheim", "wbtnCelestia", "wbtnWysteria", "wbtnZafaria", "wbtnAvalon", "wbtnAzteca", "wbtnKhrysalis", "wbtnPolaris", "wbtnArcanum", "wbtnMirage", "wbtnEmpyrea", "wbtnKaramelle", "wbtnLemuria"]
+	zoneDoorNameList = ["Wizard City", "Krokotopia", "Marleybone", "MooShu", "DragonSpire", "Grizzleheim", "Celestia", "Wysteria", "Zafaria", "Avalon", "Azteca", "Khrysalis", "Polaris", "Arcanum", "Mirage", "Empyrea", "Karamelle", "Lemuria"]
+	# user could be on any of the three pages when opening the world door depending on what their active quest is
+	# switch all the way to the first page to standardize it
+	for i in range(6):
+		await p.mouse_handler.click_window_with_name('leftButton')
+		await asyncio.sleep(0.2)
+
+	option_window = await p.root_window.get_windows_with_name("optionWindow")
+
+	assert len(option_window) == 1, str(option_window)
+
+	for child in await option_window[0].children():
+		if await child.name() == 'pageCount':
+			pageCount = await child.maybe_text()
+			pageCount = pageCount[8:-9]
+			currentPage = pageCount.split('/', 1)[0]
+			maxPage = pageCount.split('/', 1)[1]
+			break
+
+	# ensure we are on page 1 (and if not click over again)
+	while str(currentPage) != '1':
+		await p.mouse_handler.click_window_with_name('leftButton')
+		await asyncio.sleep(0.2)
+		for child in await option_window[0].children():
+			if await child.name() == 'pageCount':
+				pageCount = await child.maybe_text()
+				pageCount = pageCount[8:-9]
+				currentPage = pageCount.split('/', 1)[0]
+
+	worldIndex = worldList.index(destinationWorld)
+	spiralGateName = zoneDoorNameList[worldIndex]
+
+	isChildFound = False
+
+	for i in range(int(maxPage)):
+		for child in await option_window[0].children():
+			if await child.name() in ['opt0', 'opt1', 'opt2', 'opt3']:
+				name = await read_control_checkbox_text(child)
+				if name == spiralGateName:
+					await p.mouse_handler.click_window_with_name(zoneDoorOptions[worldIndex])
+					await asyncio.sleep(.4)
+					await p.mouse_handler.click_window_with_name('teleportButton')
+					await p.wait_for_zone_change()
+
+					await p.mouse_handler.deactivate_mouseless()
+
+					# move away from the spiral door so we dont accidentally click on it again after teleporting later
+					await p.send_key(Keycode.W, 1.5)
+
+					isChildFound = True
+					break
+
+		# correct world was not found - check the next page
+		if not isChildFound:
+			previousPage = currentPage
+			loopCount = 0
+			while currentPage == previousPage and loopCount < 30:
+				loopCount += 1
+				await p.mouse_handler.click_window_with_name('rightButton')
+
+				# ensure that wizwalker didn't misclick and that we actually changed pages
+				for child in await option_window[0].children():
+					if await child.name() == 'pageCount':
+						pageCount = await child.maybe_text()
+						pageCount = pageCount[8:-9]
+						currentPage = pageCount.split('/', 1)[0]
+
+
+async def exit_menus(c):
+	path = (exit_recipe_shop_path, exit_equipment_shop_path, cancel_multiple_quest_menu_path, cancel_spell_vendor, exit_snack_shop_path, exit_tc_vendor, exit_minigame_sigil, exit_wysteria_tournament)
+
+	for i in path:
+		click_button = await get_window_from_path(c.root_window, i)
+		if click_button:
+			if await click_button.is_visible():
+				await c.mouse_handler.activate_mouseless()
+				await c.mouse_handler.click_window(click_button)
+				await c.mouse_handler.deactivate_mouseless()
+
+
 async def click_window_by_path(client: Client, path: list[str], hooks: bool = False):
 	# FULL CREDIT TO SIROLAF FOR THIS FUNCTION
 	# clicks window from path, must actually exist in the UI tree
@@ -103,11 +210,13 @@ async def wait_for_zone_change(client: Client, loading_only: bool = False):
 
 async def spiral_door(client: Client, open_window: bool = True, cycles: int = 0, opt: int = 0):
 	# optionally open the spiral door window
-
 	if open_window:
+		while not await get_popup_title(client) == 'World Gate' and not await is_visible_by_path(client, spiral_door_path):
+			await asyncio.sleep(0.1)
+
 		while not await is_visible_by_path(client, spiral_door_path):
 			await asyncio.sleep(0.1)
-		await client.send_key(Keycode.X, 0.1)
+			await client.send_key(Keycode.X, 0.1)
 
 	# bring menu back to first page
 	for i in range(5):
@@ -172,7 +281,7 @@ async def navigate_to_commons(client: Client):
 		await client.goto(-9.711, -2987.212)
 		await client.send_key(Keycode.W, 0.1)
 		await wait_for_zone_change(client)
-	
+
 	# walk to ravenwood exit
 	await client.goto(-19.549846649169922, -297.7527160644531)
 	await client.goto(-5.701, -1536.491)
@@ -232,26 +341,20 @@ async def is_potion_needed(client: Client, minimum_mana: int = 16):
 async def auto_potions(client: Client, mark: bool = False, minimum_mana: int = 16, buy: bool = True):
 	if await is_potion_needed(client, minimum_mana):
 		await use_potion(client)
-
 	# If we have less than 1 potion left, get potions
 	if await client.stats.potion_charge() < 1.0 and buy:
 		# mark if needed
 		if mark:
 			await client.send_key(Keycode.PAGE_DOWN, 0.1)
-
 		# Navigate to commons
 		await navigate_to_commons(client)
-
 		# Navigate to hilda brewer
 		await navigate_to_potions(client)
-
 		# Buy potions
 		await buy_potions(client)
-
 		# Teleport back
 		if mark:
 			await client.send_key(Keycode.PAGE_UP, 0.1)
-
 
 async def wait_for_window_by_path(client: Client, path: list[str], hooks: bool = False, click: bool = True):
 	while not await is_visible_by_path(client, path):
@@ -293,7 +396,9 @@ async def get_quest_name(client: Client):
 
 async def get_popup_title(client: Client) -> str:
 	if await is_visible_by_path(client, popup_title_path):
-		popup_str = str(await get_window_from_path(client.root_window, popup_title_path))
+		# popup_str = str(await get_window_from_path(client.root_window, popup_title_path))
+		popup_window = await get_window_from_path(client.root_window, popup_title_path)
+		popup_str = await popup_window.maybe_text()
 
 		try:
 			popup_str = popup_str.replace('<center>', '')
