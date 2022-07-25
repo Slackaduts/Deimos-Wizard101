@@ -20,12 +20,13 @@ from src.teleport_math import navmap_tp, calc_Distance
 # from src.questing import Quester
 from src.questing_new import Quester
 from src.sigil import Sigil
-from src.utils import is_visible_by_path, is_free, auto_potions
+from src.utils import is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world
 from src.paths import advance_dialog_path, decline_quest_path
 import PySimpleGUI as gui
 import pyperclip
 from src.sprinty_client import SprintyClient
 from src.gui_inputs import param_input
+from wizwalker.extensions.wizsprinter.wiz_navigator import toZoneDisplayName, toZone
 
 
 tool_version = '3.5.1'
@@ -378,7 +379,7 @@ async def navmap_teleport(foreground_client : wizwalker.Client, background_clien
 	if len(clients_to_port) == 0:
 		if background_clients:
 			clients_to_port.append(background_clients[0])
-	
+
 	# all clients teleport at the same time
 	await asyncio.gather(*[client_navmap_teleport(p, xyz) for p in clients_to_port])
 
@@ -415,7 +416,7 @@ async def friend_teleport_sync(clients : list[wizwalker.Client], debug: bool):
 		for p in child_clients:
 			p.mouseless_status = True
 	except:
-		await asyncio.sleep(0)  
+		await asyncio.sleep(0)
 
 
 async def kill_tool(debug: bool):
@@ -876,7 +877,7 @@ async def main():
 		]
 
 		utils_layout = [
-			[copy_zone], 
+			[copy_zone],
 			[copy_pos],
 			[copy_yaw]
 		]
@@ -891,7 +892,10 @@ async def main():
 		framed_custom_tp_layout = gui.Frame('TP Utils', custom_tp_layout, title_color=gui_text_color)
 
 		dev_utils_layout = [
-			[hotkey_button('Copy Entity List', True), hotkey_button('Copy Camera Position', True), hotkey_button('Copy Camera Rotation', True), hotkey_button('Print UI Tree', True)]
+			[hotkey_button('Copy Entity List', True), hotkey_button('Copy Camera Position', True), hotkey_button('Copy Camera Rotation', True), hotkey_button('Print UI Tree', True)],
+			[gui.Text('Zone Name:', text_color=gui_text_color), gui.InputText(size=(29, 1)), hotkey_button('Go To Zone'), hotkey_button('Mass Go To Zone', True)],
+			[gui.Text('World Name:', text_color=gui_text_color), gui.Combo(['WizardCity', 'Krokotopia', 'Marleybone', 'MooShu', 'DragonSpire', 'Grizzleheim', 'Celestia', 'Wysteria', 'Zafaria', 'Avalon', 'Azteca', 'Khrysalis', 'Polaris', 'Mirage', 'Empyrea', 'Karamelle', 'Lemuria'], text_color=gui_text_color, size=(27, 1)), hotkey_button('Go To World', True), hotkey_button('Mass Go To World', True)],
+			[hotkey_button('Go To Bazaar', True), hotkey_button('Mass Go To Bazaar', True), hotkey_button('Refill Potions', True), hotkey_button('Mass Refill Potions', True)]
 		]
 
 		framed_dev_utils_layout = gui.Frame('Dev Utils', dev_utils_layout, title_color=gui_text_color)
@@ -937,7 +941,7 @@ async def main():
 			match event:
 				case gui.WINDOW_CLOSED:
 					await kill_tool(False)
-				
+
 				case gui.WINDOW_CLOSE_ATTEMPTED_EVENT:
 					await kill_tool(False)
 
@@ -1084,7 +1088,7 @@ async def main():
 							await camera.write_zoom_resolution(min_input)
 						if inputs[14]:
 							await camera.write_max_distance(max_input)
-						
+
 
 				case 'Toggle Camera Collisions':
 					if foreground_client:
@@ -1130,6 +1134,81 @@ async def main():
 					foreground: Client = foreground_client
 					if foreground_client:
 						await foreground.root_window.debug_print_ui_tree()
+
+				case 'Go To Zone':
+					if foreground_client:
+						clients = [foreground_client]
+						zoneChanged = await toZoneDisplayName(clients, str(inputs[15]))
+
+						if zoneChanged == 0:
+							logger.debug('Reached destination zone: ' + await foreground_client.zone_name())
+						else:
+							logger.error('Failed to go to zone.  It may be spelled incorrectly, or may not be supported.')
+
+				case 'Mass Go To Zone':
+					if foreground_client:
+						clients = [foreground_client]
+						for c in background_clients:
+							clients.append(c)
+
+						zoneChanged = await toZoneDisplayName(clients, str(inputs[15]))
+
+						if zoneChanged == 0:
+							logger.debug('Reached destination zone: ' + await foreground_client.zone_name())
+						else:
+							logger.error('Failed to go to zone.  It may be spelled incorrectly, or may not be supported.')
+
+				case 'Go To World':
+					if foreground_client:
+						if inputs[16] and foreground_client:
+							clients = [foreground_client]
+
+							await to_world(clients, inputs[16])
+
+				case 'Mass Go To World':
+					if foreground_client:
+						if inputs[16] and foreground_client:
+							clients = [foreground_client]
+							for c in background_clients:
+								clients.append(c)
+
+							await to_world(clients, inputs[16])
+
+				case 'Go To Bazaar':
+					if foreground_client:
+						clients = []
+						clients.append(foreground_client)
+						zoneChanged = await toZone(clients, 'WizardCity/WC_Streets/Interiors/WC_OldeTown_AuctionHouse')
+
+						if zoneChanged == 0:
+							logger.debug('Reached destination zone: ' + await foreground_client.zone_name())
+						else:
+							logger.error('Failed to go to zone.  It may be spelled incorrectly, or may not be supported.')
+
+				case 'Mass Go To Bazaar':
+					if foreground_client:
+						clients = [foreground_client]
+						for c in background_clients:
+							clients.append(c)
+						zoneChanged = await toZone(clients, 'WizardCity/WC_Streets/Interiors/WC_OldeTown_AuctionHouse')
+
+						if zoneChanged == 0:
+							logger.debug('Reached destination zone: ' + await foreground_client.zone_name())
+						else:
+							logger.error(
+								'Failed to go to zone.  It may be spelled incorrectly, or may not be supported.')
+
+				case 'Refill Potions':
+					if foreground_client:
+						await auto_potions_force_buy(foreground_client, True)
+
+				case 'Mass Refill Potions':
+					if foreground_client:
+						clients = [foreground_client]
+						for c in background_clients:
+							clients.append(c)
+
+						await asyncio.gather(*[auto_potions_force_buy(client, True) for client in clients])
 
 				case _:
 					pass

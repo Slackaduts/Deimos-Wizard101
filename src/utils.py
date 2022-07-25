@@ -1,6 +1,7 @@
 import asyncio
 
 from wizwalker import Client, Keycode, XYZ
+from wizwalker.extensions.wizsprinter.wiz_navigator import toZone
 from wizwalker.memory import Window
 from loguru import logger
 from src.paths import *
@@ -314,6 +315,21 @@ async def buy_potions(client: Client, recall: bool = True):
 		await client.send_key(Keycode.PAGE_DOWN, 0.1)
 
 
+async def to_world(clients, destinationWorld):
+	world_hub_zones = ['WizardCity/WC_Hub', 'Krokotopia/KT_Hub', 'Marleybone/MB_Hub', 'MooShu/MS_Hub', 'DragonSpire/DS_Hub_Cathedral', 'Grizzleheim/GH_MainHub', 'Celestia/CL_Hub', 'Wysteria/PA_Hub', 'Zafaria/ZF_Z00_Hub', 'Avalon/AV_Z00_Hub', 'Azteca/AZ_Z00_Zocalo', 'Khrysalis/KR_Z00_Hub', 'Polaris/PL_Z00_Walruskberg', 'Mirage/MR_Z00_Hub', 'Empyrea/EM_Z00_Aeriel_HUB', 'Karamelle/KM_Z00_HUB', 'Lemuria/LM_Z00_Hub']
+	world_list = ["WizardCity", "Krokotopia", "Marleybone", "MooShu", "DragonSpire", "Grizzleheim", "Celestia", "Wysteria", "Zafaria", "Avalon", "Azteca", "Khrysalis", "Polaris", "Mirage", "Empyrea", "Karamelle", "Lemuria"]
+
+	world_index = world_list.index(destinationWorld)
+	destinationZone = world_hub_zones[world_index]
+
+	zoneChanged = await toZone(clients, destinationZone)
+
+	if zoneChanged == 0:
+		logger.debug('Reached destination world: ' + destinationWorld)
+	else:
+		logger.error('Failed to go to zone.  It may be spelled incorrectly, or may not be supported.')
+
+
 async def use_potion(client: Client):
 	# Uses a potion if we have one
 	if await client.stats.potion_charge() >= 1.0:
@@ -337,6 +353,25 @@ async def is_potion_needed(client: Client, minimum_mana: int = 16):
 	else:
 		return False
 
+async def auto_potions_force_buy(client: Client, mark: bool = False, minimum_mana: int = 16):
+	# If we have any missing potions, get potions
+	if await client.stats.potion_charge() < await client.stats.potion_max():
+		# mark if needed
+		if mark:
+			await client.send_key(Keycode.PAGE_DOWN, 0.1)
+		# Navigate to commons
+		await navigate_to_commons(client)
+		# Navigate to hilda brewer
+		await navigate_to_potions(client)
+		# Buy potions
+		await buy_potions(client)
+
+		if await is_potion_needed(client, minimum_mana):
+			await use_potion(client)
+
+		# Teleport back
+		if mark:
+			await client.send_key(Keycode.PAGE_UP, 0.1)
 
 async def auto_potions(client: Client, mark: bool = False, minimum_mana: int = 16, buy: bool = True):
 	if await is_potion_needed(client, minimum_mana):
