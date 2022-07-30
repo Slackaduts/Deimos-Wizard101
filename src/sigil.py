@@ -19,13 +19,13 @@ class Sigil():
 		self.sigil_xyz = await self.client.body.position()
 		self.sigil_zone = await self.client.zone_name()
 		# mark location
-		await self.client.send_key(Keycode.PAGE_DOWN, 0.1)
+		# await self.client.send_key(Keycode.PAGE_DOWN, 0.1)
 
 
 	async def record_quest(self):
 		self.original_quest = await get_quest_name(self.client)
 
-
+	@logger.catch()
 	async def team_up(self, client: Client = None):
 		# Wait for team up to be visible in case it isnt
 		if not client:
@@ -39,13 +39,14 @@ class Sigil():
 			await click_window_by_path(client, team_up_confirm_path, True)
 			while not await client.is_loading():
 				await asyncio.sleep(0.1)
+
 			await wait_for_zone_change(client, True)
 		else:
 			while not await client.is_loading():
 				await asyncio.sleep(0.1)
 			await wait_for_zone_change(client, True)
 
-
+	@logger.catch()
 	async def join_sigil(self, client: Client = None):
 		if not client:
 			client = self.client
@@ -100,7 +101,7 @@ class Sigil():
 			else:
 				await self.farm_sigil()
 
-
+	@logger.catch()
 	async def solo_farming_logic(self):
 		while self.client.sigil_status:
 			while not await is_visible_by_path(self.client, team_up_button_path) and self.client.sigil_status:
@@ -111,15 +112,14 @@ class Sigil():
 
 			# Join sigil and wait for the zone to change either via team up or sigil countdown
 			await self.join_sigil()
-			
+
 			# if quest objective is same, we know it's a short dungeon, most likely with 1 room
 			if await get_quest_name(self.client) == self.original_quest:
 				start_xyz = await self.client.body.position() 
 				second_xyz = await calc_FrontalVector(self.client, speed_constant=200, speed_adjusted=False)
+				await asyncio.sleep(5.0)
 				await SprintyClient(self.client).tp_to_closest_mob()
-
 				await self.wait_for_combat_finish()
-
 				await asyncio.sleep(0.1)
 
 				after_xyz = await calc_FrontalVector(self.client, speed_constant=450, speed_adjusted=False)

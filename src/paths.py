@@ -73,3 +73,6 @@ exit_minigame_sigil = ['WorldView', 'mainwindow', 'exit']
 
 # Exit Wysteria Pigswick Tournament of Magic Bracket Popup
 exit_wysteria_tournament = ['WorldView', 'TournamentRanking', 'exit']
+
+# Chat Window
+chat_window_path = ['WorldView', 'WizardChatBox', 'chatContainer', 'chatLogContainer', 'chatLogInnerContainer', 'chatLog']

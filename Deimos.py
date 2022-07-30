@@ -15,6 +15,7 @@ from configparser import ConfigParser
 import statistics
 import re
 from pypresence import AioPresence
+from src.drop_logger import logging_loop
 from src.combat import Fighter
 from src.teleport_math import navmap_tp, calc_Distance
 # from src.questing import Quester
@@ -27,9 +28,10 @@ import pyperclip
 from src.sprinty_client import SprintyClient
 from src.gui_inputs import param_input
 from wizwalker.extensions.wizsprinter.wiz_navigator import toZoneDisplayName, toZone
+from typing import List, Tuple
 
 
-tool_version = '3.5.1'
+tool_version = '3.6.0'
 tool_name = 'Deimos'
 repo_name = tool_name + '-Wizard101'
 branch = 'master'
@@ -82,11 +84,13 @@ def read_config(config_name : str):
 	global wiz_path
 	global use_potions
 	global rpc_status
+	global drop_status
 	auto_updating = parser.getboolean('settings', 'auto_updating', fallback=True)
 	speed_multiplier = parser.getfloat('settings', 'speed_multiplier', fallback=5.0)
 	wiz_path = parser.get('settings', 'wiz_path', fallback=None)
 	use_potions = parser.get('settings', 'use_potions', fallback=True)
 	rpc_status = parser.getboolean('settings', 'rich_presence', fallback=True)
+	drop_status = parser.getboolean('settings', 'drop_logging', fallback=True)
 
 	# Hotkeys
 	global x_press_key
@@ -885,6 +889,7 @@ async def main():
 		framed_utils_layout = gui.Frame('Utils', utils_layout, title_color=gui_text_color)
 
 		custom_tp_layout = [
+			[gui.Text('The utils shown below are for advanced users and no support will be provided on them.', text_color=gui_text_color)],
 			[gui.Text('X:', text_color=gui_text_color), gui.InputText(size=(8, 1)), gui.Text('Y:', text_color=gui_text_color), gui.InputText(size=(8, 1)), gui.Text('Z:', text_color=gui_text_color), gui.InputText(size=(8, 1)), gui.Text('Yaw: ', text_color=gui_text_color), gui.InputText(size=(8, 1)), hotkey_button('Custom TP')],
 			[gui.Text('Entity Name:', text_color=gui_text_color), gui.InputText(size=(43, 1)), hotkey_button('Entity TP')]
 		]
@@ -892,6 +897,7 @@ async def main():
 		framed_custom_tp_layout = gui.Frame('TP Utils', custom_tp_layout, title_color=gui_text_color)
 
 		dev_utils_layout = [
+			[gui.Text('The utils shown below are for advanced users and no support will be provided on them.', text_color=gui_text_color)],
 			[hotkey_button('Copy Entity List', True), hotkey_button('Copy Camera Position', True), hotkey_button('Copy Camera Rotation', True), hotkey_button('Print UI Tree', True)],
 			[gui.Text('Zone Name:', text_color=gui_text_color), gui.InputText(size=(29, 1)), hotkey_button('Go To Zone'), hotkey_button('Mass Go To Zone', True)],
 			[gui.Text('World Name:', text_color=gui_text_color), gui.Combo(['WizardCity', 'Krokotopia', 'Marleybone', 'MooShu', 'DragonSpire', 'Grizzleheim', 'Celestia', 'Wysteria', 'Zafaria', 'Avalon', 'Azteca', 'Khrysalis', 'Polaris', 'Mirage', 'Empyrea', 'Karamelle', 'Lemuria'], text_color=gui_text_color, size=(27, 1)), hotkey_button('Go To World', True), hotkey_button('Mass Go To World', True)],
@@ -901,6 +907,7 @@ async def main():
 		framed_dev_utils_layout = gui.Frame('Dev Utils', dev_utils_layout, title_color=gui_text_color)
 
 		camera_controls_layout = [
+			[gui.Text('The utils shown below are for advanced users and no support will be provided on them.', text_color=gui_text_color)],
 			[gui.Text('X:', text_color=gui_text_color), gui.InputText(size=(12, 1)), gui.Text('Y:', text_color=gui_text_color), gui.InputText(size=(12, 1)), gui.Text('Z:', text_color=gui_text_color), gui.InputText(size=(11, 1)), hotkey_button('Set Camera Position', True)],
 			[gui.Text('Yaw:', text_color=gui_text_color), gui.InputText(size=(16, 1)), gui.Text('Roll:', text_color=gui_text_color), gui.InputText(size=(16, 1)), gui.Text('Pitch:', text_color=gui_text_color), gui.InputText(size=(15, 1))],
 			[gui.Text('Entity:', text_color=gui_text_color), gui.InputText(size=(25, 1)), hotkey_button('Anchor', text_color=gui_text_color), hotkey_button('Toggle Camera Collision', True)],
@@ -909,13 +916,17 @@ async def main():
 
 		framed_camera_controls_layout = gui.Frame('Camera Controls', camera_controls_layout, title_color=gui_text_color)
 
+		tabs = [
+			[
+				gui.Tab('Hotkeys', [[framed_toggles_layout, framed_hotkeys_layout, framed_mass_hotkeys_layout, framed_utils_layout]], title_color=gui_text_color),
+				gui.Tab('Camera Utils', [[framed_camera_controls_layout]], title_color=gui_text_color),
+				gui.Tab('Dev Utils', [[framed_custom_tp_layout], [framed_dev_utils_layout]], title_color=gui_text_color)
+			]
+		]
+
 		layout = [
-			[framed_toggles_layout, framed_hotkeys_layout, framed_mass_hotkeys_layout, framed_utils_layout],
-			[client_info_layout],
-			[gui.Text('The utils shown below are for advanced users and no support will be provided on them.', text_color=gui_text_color)],
-			[framed_custom_tp_layout],
-			[framed_camera_controls_layout],
-			[framed_dev_utils_layout]
+			[gui.TabGroup(tabs)],
+			[client_info_layout]
 		]
 
 		window = gui.Window(title= f'{tool_name} GUI v{tool_version}', layout= layout, keep_on_top=gui_on_top, finalize=True)
@@ -1025,7 +1036,8 @@ async def main():
 						if not freecam_status:
 							await toggle_freecam_hotkey()
 
-						camera = await foreground_client.game_client.free_camera_controller()
+						# camera = await foreground_client.game_client.free_camera_controller()
+						camera = await foreground_client.game_client.selected_camera_controller()
 						camera_pos = await camera.position()
 						camera_yaw = await camera.yaw()
 						camera_roll = await camera.roll()
@@ -1346,6 +1358,29 @@ async def main():
 				await rpc.update(state=f'{task_str}In {status_str}{end_zone}', details=details_pane)
 
 
+	async def drop_logging_loop():
+		# Auto potion usage on a per client basis.
+		await asyncio.gather(*[logging_loop(p) for p in walker.clients])
+
+
+	async def zone_check_loop():
+		zone_blacklist = ['WizardCity-TreasureTower-WC_TT', 'Raids', 'Battlegrounds']
+
+		async def async_zone_check(client: Client):
+			while True:
+				print(client.latest_drops)
+				await asyncio.sleep(0.25)
+				zone_name = await client.zone_name()
+				if zone_name and '/' in zone_name:
+					split_zone_name = zone_name.split('/')
+
+					if any([i in split_zone_name[0] for i in zone_blacklist]):
+						logger.critical(f'Client {client.title} entered area with known anticheat, killing {tool_name}.')
+						await kill_tool(False)
+
+		await asyncio.gather(*[async_zone_check(p) for p in walker.clients])
+
+
 	await asyncio.sleep(0)
 	walker = ClientHandler()
 	# walker.clients = []
@@ -1409,6 +1444,7 @@ async def main():
 		p.questing_status = False
 		p.use_team_up = use_team_up
 		p.mouseless_status = False
+		p.latest_drops: List[Tuple[str, int]] = []
 
 		# Set follower/leader statuses for auto questing/sigil
 
@@ -1440,8 +1476,10 @@ async def main():
 		questing_loop_task = asyncio.create_task(questing_loop())
 		potion_usage_loop_task = asyncio.create_task(potion_usage_loop())
 		rpc_loop_task = asyncio.create_task(rpc_loop())
+		drop_logging_loop_task = asyncio.create_task(drop_logging_loop())
+		zone_check_loop_task = asyncio.create_task(zone_check_loop())
 		while True:
-			await asyncio.wait([foreground_client_switching_task, speed_switching_task, combat_loop_task, assign_foreground_clients_task, dialogue_loop_task, anti_afk_loop_task, sigil_loop_task, in_combat_loop_task, questing_loop_task, gui_task, potion_usage_loop_task, rpc_loop_task])
+			await asyncio.wait([foreground_client_switching_task, speed_switching_task, combat_loop_task, assign_foreground_clients_task, dialogue_loop_task, anti_afk_loop_task, sigil_loop_task, in_combat_loop_task, questing_loop_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task])
 	finally:
 		await tool_finish()
 
