@@ -50,12 +50,7 @@ class Fighter(CombatHandler):
 		if not cards:
 			await self.get_cards()
 		
-		ids = []
-		for card in cards:
-			id = await card.spell_id()
-			ids.append(id)
-
-		return ids
+		return list(map(CombatCard.spell_id, cards))
 
 
 	async def member_from_id(self, id: int, members: List[CombatMember] = None) -> CombatMember:
