@@ -1707,13 +1707,27 @@ class Fighter(CombatHandler):
 		# get relevant damage %, with damage limit
 		caster_damage = caster_damages[school_list_ids[card_school]]
 		caster_damage_percent = caster_damage * 100
-		if caster_damage > 1.50:
-			limit = float(await self.client.duel.damage_limit()) * 100
-			caster_damage_percent = float(limit - 536.43 * (math.e ** (-0.0158 * caster_damage_percent)))
-			caster_damage = (caster_damage_percent / 100) + 1
-		else:
-			caster_damage += 1
+		# Get max limit, read k and read n values from the duel object
+		l = await self.client.duel.damage_limit()
+		k0 = await self.client.duel.d_k0()
+		n0 = await self.client.duel.d_n0()
 
+		if caster_damage > (k0 + n0) / 100:
+			limit = float(l) * 100
+
+			# Calculate k, thank you charlied134 and Major
+			if k0 != 0:
+				k = math.log(limit / (limit - k0)) / k0
+			else:
+				k = 1 / limit
+
+			# Calculate n, thank you charlied134 and Major
+			n = math.log(1 - (k0 + n0) / limit) + k * (k0 + n0)
+
+			caster_damage = l - l * math.e ** (-1 * k * caster_damage_percent + n)
+
+		caster_damage += 1
+		caster_damage_percent = caster_damage * 100
 
 		# get relevant flat damage
 		caster_flat_damage = caster_flat_damages[school_list_ids[card_school]]

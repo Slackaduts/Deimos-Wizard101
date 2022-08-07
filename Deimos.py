@@ -1368,7 +1368,7 @@ async def main():
 
 		async def async_zone_check(client: Client):
 			while True:
-				print(client.latest_drops)
+				# print(client.latest_drops)
 				await asyncio.sleep(0.25)
 				zone_name = await client.zone_name()
 				if zone_name and '/' in zone_name:
