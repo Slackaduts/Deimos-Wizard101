@@ -1,6 +1,7 @@
 import asyncio
-
+import traceback
 from wizwalker import Client, Keycode, XYZ
+from wizwalker.extensions.scripting.utils import _maybe_get_named_window, _cycle_to_online_friends, _cycle_friends_list
 from wizwalker.extensions.wizsprinter.wiz_navigator import toZone
 from wizwalker.memory import Window
 from loguru import logger
@@ -81,7 +82,7 @@ async def go_to_new_world(p, destinationWorld, open_window: bool = True):
 		await asyncio.sleep(0.1)
 		await p.send_key(Keycode.X, 0.1)
 
-	await p.mouse_handler.activate_mouseless()
+	await attempt_activate_mouseless(p)
 
 	# each worldList item (in-file name for a world) correlates to a zoneDoorOptions (in-file name for the buttons in the spiral door)
 	worldList = ["WizardCity", "Krokotopia", "Marleybone", "MooShu", "DragonSpire", "Grizzleheim", "Celestia", "Wysteria", "Zafaria", "Avalon", "Azteca", "Khrysalis", "Polaris", "Arcanum", "Mirage", "Empyrea", "Karamelle", "Lemuria"]
@@ -130,7 +131,7 @@ async def go_to_new_world(p, destinationWorld, open_window: bool = True):
 					await p.mouse_handler.click_window_with_name('teleportButton')
 					await p.wait_for_zone_change()
 
-					await p.mouse_handler.deactivate_mouseless()
+					await attempt_deactivate_mouseless(p)
 
 					# move away from the spiral door so we dont accidentally click on it again after teleporting later
 					await p.send_key(Keycode.W, 1.5)
@@ -154,16 +155,87 @@ async def go_to_new_world(p, destinationWorld, open_window: bool = True):
 						currentPage = pageCount.split('/', 1)[0]
 
 
+async def generate_tfc(client: Client):
+	await client.mouse_handler.activate_mouseless()
+
+	# This fails consistently, even when the friends list is actually open.  Detecting whether the friends list is open is also horrifically inconsistent so just brute force it
+	for i in range(5):
+		try:
+			await click_window_by_path(client, close_real_friend_list_button_path)
+			await asyncio.sleep(.1)
+		except ValueError:
+			await asyncio.sleep(.1)
+
+	for i in range(2):
+		await client.send_key(Keycode.F, 0.1)
+		await asyncio.sleep(.2)
+
+	if await is_visible_by_path(client, enter_true_friend_code_button_path):
+		await click_window_by_path(client, enter_true_friend_code_button_path)
+
+	await asyncio.sleep(.3)
+
+	if await is_visible_by_path(client, generate_true_friend_code_path):
+		await click_window_by_path(client, generate_true_friend_code_path)
+
+	await asyncio.sleep(1.0)
+
+	try:
+		tfc_window = await get_window_from_path(client.root_window, true_friend_code_text_path)
+		tfc = await tfc_window.maybe_text()
+	except:
+		print(traceback.print_exc())
+		tfc = None
+
+	if await is_visible_by_path(client, exit_generate_true_friend_window):
+		await click_window_by_path(client, exit_generate_true_friend_window)
+
+	await client.mouse_handler.deactivate_mouseless()
+	print(tfc)
+	return tfc
+
+
+# UNFINISHED - requires some way to type in wiz's edit texts
+async def accept_tfc(client: Client, tfc: str):
+	await client.mouse_handler.activate_mouseless()
+
+	for i in range(2):
+		await client.send_key(Keycode.F, 0.1)
+		await asyncio.sleep(.2)
+
+	if await is_visible_by_path(client, enter_true_friend_code_button_path):
+		await click_window_by_path(client, enter_true_friend_code_button_path)
+
+	await asyncio.sleep(.3)
+
+	# *** This does not work ***
+	for i in range(len(tfc)):
+		# convert characters to keycodes, press each one
+		await client.send_key(Keycode.W)
+		await asyncio.sleep(.15)
+
+	await client.mouse_handler.deactivate_mouseless()
+
+		#if await is_visible_by_path(client, )
+
+
 async def exit_menus(c):
-	path = (exit_recipe_shop_path, exit_equipment_shop_path, cancel_multiple_quest_menu_path, cancel_spell_vendor, exit_snack_shop_path, exit_tc_vendor, exit_minigame_sigil, exit_wysteria_tournament)
+	path = (exit_recipe_shop_path, exit_equipment_shop_path, cancel_multiple_quest_menu_path, cancel_spell_vendor, exit_snack_shop_path, exit_tc_vendor, exit_minigame_sigil, exit_wysteria_tournament, exit_dungeon_path, exit_zafaria_class_picture_button)
 
 	for i in path:
 		click_button = await get_window_from_path(c.root_window, i)
 		if click_button:
 			if await click_button.is_visible():
-				await c.mouse_handler.activate_mouseless()
+				await attempt_activate_mouseless(c)
 				await c.mouse_handler.click_window(click_button)
-				await c.mouse_handler.deactivate_mouseless()
+				await attempt_deactivate_mouseless(c)
+
+
+async def safe_click_window(client: Client, path):
+	if await is_visible_by_path(client, path):
+		await attempt_activate_mouseless(client)
+		await click_window_by_path(client, path)
+		await attempt_deactivate_mouseless(client)
 
 
 async def click_window_by_path(client: Client, path: list[str], hooks: bool = False):
@@ -239,7 +311,7 @@ async def spiral_door(client: Client, open_window: bool = True, cycles: int = 0,
 	await wait_for_zone_change(client)
 
 
-async def navigate_to_commons(client: Client):
+async def navigate_to_ravenwood(client: Client):
 	# navigates to commons from anywhere in the game
 
 	await client.send_key(Keycode.HOME, 0.1)
@@ -283,6 +355,9 @@ async def navigate_to_commons(client: Client):
 		await client.send_key(Keycode.W, 0.1)
 		await wait_for_zone_change(client)
 
+
+
+async def navigate_to_commons_from_ravenwood(client: Client):
 	# walk to ravenwood exit
 	await client.goto(-19.549846649169922, -297.7527160644531)
 	await client.goto(-5.701, -1536.491)
@@ -300,13 +375,21 @@ async def navigate_to_potions(client: Client):
 
 async def buy_potions(client: Client, recall: bool = True):
 	# buy potions and close the potions menu, and recall if needed
-	while not await is_visible_by_path(client, potion_shop_base_path):
-		await client.send_key(Keycode.X, 0.1)
-	await click_window_by_path(client, potion_fill_all_path, True)
-	await click_window_by_path(client, potion_buy_path, True)
-	while await is_visible_by_path(client, potion_shop_base_path):
-		await click_window_by_path(client, potion_exit_path, True)
-		await asyncio.sleep(0.5)
+	for i in range(2):
+		while not await is_visible_by_path(client, potion_shop_base_path):
+			await client.send_key(Keycode.X, 0.1)
+		await asyncio.sleep(0.4)
+		await click_window_by_path(client, potion_fill_all_path, True)
+		await asyncio.sleep(0.4)
+		await click_window_by_path(client, potion_buy_path, True)
+		await asyncio.sleep(0.4)
+		while await is_visible_by_path(client, potion_shop_base_path):
+			await asyncio.sleep(0.4)
+			await click_window_by_path(client, potion_exit_path, True)
+			await asyncio.sleep(0.5)
+		if i == 0:
+			await use_potion(client)
+			await asyncio.sleep(0.5)
 
 	# Put an extra check here in case Starrfox becomes a time traveller or someone is using cheat engine at 100x speed, causing this logic to somehow fail
 	if recall and not await client.is_loading():
@@ -359,8 +442,10 @@ async def auto_potions_force_buy(client: Client, mark: bool = False, minimum_man
 		# mark if needed
 		if mark:
 			await client.send_key(Keycode.PAGE_DOWN, 0.1)
+		# Navigate to ravenwood
+		await navigate_to_ravenwood(client)
 		# Navigate to commons
-		await navigate_to_commons(client)
+		await navigate_to_commons_from_ravenwood(client)
 		# Navigate to hilda brewer
 		await navigate_to_potions(client)
 		# Buy potions
@@ -369,20 +454,30 @@ async def auto_potions_force_buy(client: Client, mark: bool = False, minimum_man
 		if await is_potion_needed(client, minimum_mana):
 			await use_potion(client)
 
-		# Teleport back
 		if mark:
-			await client.send_key(Keycode.PAGE_UP, 0.1)
+			# Teleport back to dungeon if available
+			if await is_visible_by_path(client, dungeon_recall_path):
+				await click_window_by_path(client, dungeon_recall_path)
+			else:
+				# Teleport back to mark
+				await client.send_key(Keycode.PAGE_UP, 0.1)
 
-async def auto_potions(client: Client, mark: bool = False, minimum_mana: int = 16, buy: bool = True):
-	if await is_potion_needed(client, minimum_mana):
-		await use_potion(client)
-	# If we have less than 1 potion left, get potions
-	if await client.stats.potion_charge() < 1.0 and buy:
+
+async def determine_all_are_friends(checking_client: Client, clients: list[Client]):
+	for client in clients:
+		if checking_client.process_id != client.process_id:
+			friend_names.append(acceptor.wizard_name)
+
+
+async def refill_potions(client: Client, mark: bool = False):
+	if await client.stats.reference_level() >= 5:
 		# mark if needed
 		if mark:
 			await client.send_key(Keycode.PAGE_DOWN, 0.1)
-		# Navigate to commons
-		await navigate_to_commons(client)
+		# Navigate to ravenwood
+		await navigate_to_ravenwood(client)
+		# Navigate to commons from ravenwood
+		await navigate_to_commons_from_ravenwood(client)
 		# Navigate to hilda brewer
 		await navigate_to_potions(client)
 		# Buy potions
@@ -390,6 +485,15 @@ async def auto_potions(client: Client, mark: bool = False, minimum_mana: int = 1
 		# Teleport back
 		if mark:
 			await client.send_key(Keycode.PAGE_UP, 0.1)
+
+
+async def auto_potions(client: Client, mark: bool = False, minimum_mana: int = 16, buy: bool = True):
+	if await is_potion_needed(client, minimum_mana):
+		await use_potion(client)
+	# If we have less than 1 potion left, get potions
+	if await client.stats.potion_charge() < 1.0 and buy:
+		await refill_potions(client, mark=mark)
+
 
 async def wait_for_window_by_path(client: Client, path: list[str], hooks: bool = False, click: bool = True):
 	while not await is_visible_by_path(client, path):
@@ -467,20 +571,246 @@ async def spiral_door_with_quest(client: Client):
 		await asyncio.sleep(0.1)
 
 
-async def collect_wisps(client: Client):
+async def sync_camera(client: Client, xyz: XYZ = None, yaw: float = None):
+	# Teleports the freecam to a specified position, yaw, etc.
+	if not xyz:
+		xyz = await client.body.position()
+
+	if not yaw:
+		yaw = await client.body.yaw()
+
+	xyz.z += 200
+
+	camera = await client.game_client.free_camera_controller()
+	await camera.write_position(xyz)
+	await camera.write_yaw(yaw)
+
+
+# returns True if all provided friends are in the list, and False if any single friend is not
+@logger.catch()
+async def check_for_multiple_friends_in_list(client: Client, friend_names: list[str]):
+	try:
+		await client.mouse_handler.activate_mouseless()
+	except:
+		await asyncio.sleep(.1)
+
+	# if some form of friend list or friend popup is already open, close it
+	# This fails consistently, even when the friends list is actually open.  Detecting whether the friends list is open is also horrifically inconsistent so just brute force it
+	for i in range(5):
+		try:
+			await click_window_by_path(client, close_real_friend_list_button_path)
+			await asyncio.sleep(.1)
+		except ValueError:
+			await asyncio.sleep(.1)
+
+	# try:
+	#	friends_window = await _maybe_get_named_window(client.root_window, "NewFriendsListWindow")
+	# except:
+
+	friend_button = await _maybe_get_named_window(client.root_window, "btnFriends")
+	await client.mouse_handler.click_window(friend_button)
+	await asyncio.sleep(.4)
+	friends_window = await _maybe_get_named_window(client.root_window, "NewFriendsListWindow")
+
+	await _cycle_to_online_friends(client, friends_window)
+
+	friends_list_window = await _maybe_get_named_window(friends_window, "listFriends")
+
+	right_button = await _maybe_get_named_window(friends_window, "btnArrowDown")
+	page_number = await _maybe_get_named_window(friends_window, "PageNumber")
+
+	page_number_text = await page_number.maybe_text()
+
+	current_page, _ = map(
+		int,
+		page_number_text.replace("<center>", "")
+			.replace("</center>", "")
+			.replace(" ", "")
+			.split("/"),
+	)
+
+	for friend_name in friend_names:
+		friend, friend_index = await _cycle_friends_list(
+			client,
+			right_button,
+			friends_list_window,
+			None,
+			None,
+			friend_name,
+			current_page,
+		)
+
+		if friend is None:
+			return False
+
+	# Pray that we don't mis-press, because we cannot detect the friends list and cannot accurately click it
+	for i in range(2):
+		await client.send_key(Keycode.F, 0.1)
+
+	# This fails consistently, even when the friends list is actually open.  Detecting whether the friends list is open is also horrifically inconsistent so just brute force it
+	for i in range(3):
+		try:
+			await click_window_by_path(client, close_real_friend_list_button_path)
+			await asyncio.sleep(.1)
+		except ValueError:
+			await asyncio.sleep(.1)
+
+	try:
+		await client.mouse_handler.deactivate_mouseless()
+	except:
+		await asyncio.sleep(.1)
+
+	return True
+
+
+@logger.catch()
+async def check_for_friend_in_list(client: Client, friend_name: str):
+	try:
+		await client.mouse_handler.activate_mouseless()
+	except:
+		await asyncio.sleep(.1)
+
+	# if some form of friend list or friend popup is already open, close it
+	# This fails consistently, even when the friends list is actually open.  Detecting whether the friends list is open is also horrifically inconsistent so just brute force it
+	for i in range(5):
+		try:
+			await click_window_by_path(client, close_real_friend_list_button_path)
+			await asyncio.sleep(.1)
+		except ValueError:
+			await asyncio.sleep(.1)
+
+	# try:
+	#	friends_window = await _maybe_get_named_window(client.root_window, "NewFriendsListWindow")
+	# except:
+
+	friend_button = await _maybe_get_named_window(client.root_window, "btnFriends")
+	await client.mouse_handler.click_window(friend_button)
+	await asyncio.sleep(.4)
+	friends_window = await _maybe_get_named_window(client.root_window, "NewFriendsListWindow")
+
+	await _cycle_to_online_friends(client, friends_window)
+
+	friends_list_window = await _maybe_get_named_window(friends_window, "listFriends")
+
+	right_button = await _maybe_get_named_window(friends_window, "btnArrowDown")
+	page_number = await _maybe_get_named_window(friends_window, "PageNumber")
+
+	page_number_text = await page_number.maybe_text()
+
+	current_page, _ = map(
+		int,
+		page_number_text.replace("<center>", "")
+			.replace("</center>", "")
+			.replace(" ", "")
+			.split("/"),
+	)
+
+	friend, friend_index = await _cycle_friends_list(
+		client,
+		right_button,
+		friends_list_window,
+		None,
+		None,
+		friend_name,
+		current_page,
+	)
+
+	# Pray that we don't mis-press, because we cannot detect the friends list and cannot accurately click it
+	for i in range(2):
+		await client.send_key(Keycode.F, 0.1)
+
+	# This fails consistently, even when the friends list is actually open.  Detecting whether the friends list is open is also horrifically inconsistent so just brute force it
+	for i in range(3):
+		try:
+			await click_window_by_path(client, close_real_friend_list_button_path)
+			await asyncio.sleep(.1)
+		except ValueError:
+			await asyncio.sleep(.1)
+
+	try:
+		await client.mouse_handler.deactivate_mouseless()
+	except:
+		await asyncio.sleep(.1)
+
+	if friend is None:
+		return False
+	else:
+		return True
+
+
+async def set_wizard_name(client: Client):
+	await client.send_key(Keycode.C, 0.1)
+	await asyncio.sleep(.2)
+
+	option_window = await client.root_window.get_windows_with_name('TitleScroll')
+
+	assert len(option_window) == 1, str(option_window)
+
+	# for child in await option_window[0].children():
+	children = await option_window[0].children()
+	wizard_name = await children[0].maybe_text()
+	wizard_name = wizard_name[8:-9]
+
+	await asyncio.sleep(.2)
+	await client.send_key(Keycode.C, 0.1)
+
+	client.wizard_name = wizard_name
+
+
+@logger.catch()
+async def get_friend_popup_wizard_name(client: Client):
+	option_window = await client.root_window.get_windows_with_name("lblCharacterName")
+
+	if len(option_window) > 0:
+		try:
+			assert len(option_window) == 1, str(option_window)
+		except:
+			await asyncio.sleep(.1)
+
+		wizard_name = await option_window[0].maybe_text()
+		wizard_name = wizard_name[8:-9]
+
+		return wizard_name
+	else:
+		return ''
+
+
+async def collect_wisps(client: Client, nothing_but_safe_entities=True):
 	# Collects all the wisps in the current area, only works within the entity draw distance.
-	entities= []
+	entities = []
 	entities = await SprintyClient(client).get_base_entities_with_vague_name('WispHealth')
-	entities += await SprintyClient(client).get_base_entities_with_vague_name('WispHealth')
+	entities += await SprintyClient(client).get_base_entities_with_vague_name('WispMana')
 	entities += await SprintyClient(client).get_base_entities_with_vague_name('WispGold')
 
-	safe_entities = await SprintyClient(client).find_safe_entities_from(entities)
+	if nothing_but_safe_entities:
+		safe_entities = await SprintyClient(client).find_safe_entities_from(entities)
+	else:
+		safe_entities = entities
 
 	if safe_entities:
 		for entity in safe_entities:
 			wisp_xyz = await entity.location()
 			await client.teleport(wisp_xyz)
 			await asyncio.sleep(0.1)
+
+
+async def collect_wisps_with_limit(client: Client, limit=3):
+	# Collects all the wisps in the current area, only works within the entity draw distance.
+	entities = []
+	entities = await SprintyClient(client).get_base_entities_with_vague_name('WispHealth')
+	entities += await SprintyClient(client).get_base_entities_with_vague_name('WispMana')
+
+	total_collected = 0
+
+	for entity in entities:
+		wisp_xyz = await entity.location()
+		await client.teleport(wisp_xyz)
+		total_collected += 1
+
+		if total_collected == limit:
+			break
+
+		await asyncio.sleep(0.1)
 
 
 async def pid_to_client(clients: List[Client], pid: int) -> Client:

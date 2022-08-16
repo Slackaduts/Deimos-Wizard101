@@ -1,4 +1,6 @@
 import asyncio
+import traceback
+
 import requests
 import wizwalker
 from wizwalker import Keycode, HotkeyListener, ModifierKeys, utils, XYZ
@@ -21,7 +23,7 @@ from src.teleport_math import navmap_tp, calc_Distance
 # from src.questing import Quester
 from src.questing_new import Quester
 from src.sigil import Sigil
-from src.utils import is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world
+from src.utils import is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world, collect_wisps, collect_wisps_with_limit
 from src.paths import advance_dialog_path, decline_quest_path
 import PySimpleGUI as gui
 import pyperclip
@@ -140,8 +142,9 @@ def read_config(config_name : str):
 
 	# Auto Questing Settings
 	global client_to_boost
+	global questing_friend_tp
 	client_to_boost = parser.get('questing', 'client_to_boost', fallback=None)
-
+	questing_friend_tp = parser.getboolean('questing', 'friend_teleport', fallback=False)
 
 while True:
 	if not os.path.exists(f'{tool_name}-config.ini'):
@@ -779,7 +782,7 @@ async def main():
 
 		await asyncio.gather(*[async_dialogue(p) for p in walker.clients])
 
-
+	# logger.catch()
 	async def questing_loop():
 		# Auto questing on a per client basis.
 		# TODO: Team logic for auto questing, absolutely no clue how I'll handle this, so this is either a notfaj or future slack problem
@@ -793,7 +796,7 @@ async def main():
 							# if follow leader is off, quest on all clients, passing through only the leader
 							logger.debug(f'Client {client.title} - Handling questing.')
 							questing = Quester(client, walker.clients, questing_leader_pid)
-							await questing.auto_quest_leader()
+							await questing.auto_quest_leader(questing_friend_tp)
 					else:
 						# if follow leader is off, quest on all clients, passing through only the leader
 						logger.debug(f'Client {client.title} - Handling questing.')
@@ -802,6 +805,182 @@ async def main():
 
 					# TODO: Put SlackQuester's loop function here
 		await asyncio.gather(*[async_questing(p) for p in walker.clients])
+
+	async def nearest_duel_circle_distance_and_xyz(sprinter: SprintyClient):
+		min_distance = None
+		circle_xyz = None
+
+		try:
+			entities = await sprinter.get_base_entity_list()
+		except ValueError:
+			return None, None
+
+		for entity in entities:
+			try:
+				entity_name = await entity.object_name()
+			except wizwalker.MemoryReadError:
+				entity_name = ''
+
+			if entity_name == 'Duel Circle':
+				entity_pos = await entity.location()
+				distance = calc_Distance(entity_pos, await sprinter.client.body.position())
+
+				if min_distance is None:
+					min_distance = distance
+					circle_xyz = entity_pos
+				elif distance < min_distance:
+					min_distance = distance
+					circle_xyz = entity_pos
+				# print('distance to duel circle: ', distance)
+
+		return min_distance, circle_xyz
+
+	async def is_duel_circle_joinable(p: Client):
+		sprinter = SprintyClient(p)
+		await asyncio.sleep(7)
+		just_entered_combat = False
+
+		distance, duel_circle_xyz = await nearest_duel_circle_distance_and_xyz(sprinter)
+		# if after 7 seconds we are not in a battle position, we either teleported while invincible or teleported to a non-joinable fight
+		if distance is not None:
+			if not (590 < distance < 610):
+				logger.debug('Bad teleport.  Returning ' + p.title + ' to safe location.')
+				if p.original_location_before_combat is not None:
+					await p.teleport(p.original_location_before_combat)
+					p.original_location_before_combat = None
+				else:
+					position = await p.body.position()
+					await p.teleport(XYZ(position.x, position.y, position.z - 350))
+
+				p.entity_detect_combat_status = False
+
+				return False
+
+			return True
+		else:
+			return False
+
+	async def entity_detect_combat_loop():
+		async def detect_combat(p: Client):
+			sprinter = SprintyClient(p)
+
+			other_clients = []
+			for c in walker.clients:
+				if c != p:
+					other_clients.append(c)
+
+			safe_distance = 620
+			just_left_combat = False
+			just_entered_combat = False
+			try:
+				while True:
+					await asyncio.sleep(0.2)
+					if p.questing_status:
+						distance, duel_circle_xyz = await nearest_duel_circle_distance_and_xyz(sprinter)
+
+						if distance is None:
+							if p.entity_detect_combat_status:
+								just_left_combat = True
+							else:
+								p.entity_detect_combat_status = False
+
+						# When fully in combat (once running animation occurs and selection phase begins) clients in any battle order are ~600 away from the center of the duel circle
+						# extra leeway on this allows clients to teleport more quickly to ensure that they arrive before the selection phase even starts
+						elif distance < safe_distance:
+							# if not p.combat_status and p.entity_detect_combat_status:
+							# 	just_left_combat = True
+							# else:
+								if not p.entity_detect_combat_status:
+									just_entered_combat = True
+
+								p.entity_detect_combat_status = True
+
+								original_client_locations = dict()
+								all_fighting_clients = [p]
+
+								# don't teleport clients to duel circles that are closed off, and don't teleport clients if they are in separate instances
+								if p.duel_circle_joinable and not p.in_solo_zone:
+									helper_clients = []
+									for c in other_clients:
+										if await is_free(c) and not c.entity_detect_combat_status and not c.invincible_combat_timer:
+											# player_distance = calc_Distance(await c.body.position(), await p.body.position())
+											# print('player distance between [', c.title, '] and [', p.title, '] is: ', player_distance)
+
+											if await c.zone_name() == await p.zone_name():
+												if not c.entity_detect_combat_status:
+													c.original_location_before_combat = await c.body.position()
+													original_client_locations.update({c: await c.body.position()})
+													if c not in helper_clients:
+														helper_clients.append(c)
+														all_fighting_clients.append(c)
+
+													if not c.entity_detect_combat_status:
+														logger.debug('Combat detected from client ' + p.title + ' - teleporting client ' + c.title)
+														await c.teleport(duel_circle_xyz)
+														just_entered_combat = True
+
+									if len(helper_clients) > 0:
+										check_duel_circle_joinable = [asyncio.create_task(is_duel_circle_joinable(helper)) for helper in helper_clients]
+										done, pending = await asyncio.wait(check_duel_circle_joinable)
+
+										is_circle_joinable = True
+										for d in done:
+											is_circle_joinable = d.result()
+
+										if not is_circle_joinable:
+											p.duel_circle_joinable = False
+											logger.debug('Client ' + p.title + ' - ' + 'Duel circle not joinable - teleports halted.')
+
+								# if not all(await asyncio.gather(*[is_duel_circle_joinable(helper) for helper in helper_clients]):
+								#	print('a')
+
+								# if len(helping_clients) > 0:
+								# prevent additional unnecessary teleports by giving helper clients a chance to mark themselves as in combat
+								if just_entered_combat:
+									await asyncio.sleep(8)
+									just_entered_combat = False
+
+								original_client_locations = dict()
+								helper_clients = []
+
+
+						else:
+							if p.entity_detect_combat_status:
+								just_left_combat = True
+							else:
+								p.entity_detect_combat_status = False
+
+						if just_left_combat and await is_free(p):
+							# collect wisps, up to a certain number
+							await collect_wisps_with_limit(p, limit=2)
+							await asyncio.sleep(.3)
+
+							# return helper clients to their previous safe location
+
+							if p.original_location_before_combat is not None:
+								logger.debug('Client ' + p.title + ' - ' + 'Returning to safe location.')
+								try:
+									await p.teleport(p.original_location_before_combat)
+								except ValueError:
+									print(traceback.print_exc())
+									p.original_location_before_combat = None
+
+							just_left_combat = False
+
+							# Mark wizard as invincible, as clients can get stuck standing in the middle of another client's battle circle due to teleporting while invincibile
+							logger.debug('Client ' + p.title + ' - ' + 'Battle teleports off while invulnerable')
+							p.invincible_combat_timer = True
+							p.entity_detect_combat_status = False
+							p.duel_circle_joinable = True
+
+							# Timer seems to be about 6.5 seconds to become draggable again
+							await asyncio.sleep(6.5)
+							logger.debug('Client ' + p.title + ' - ' + 'Battle teleports re-enabled')
+							p.invincible_combat_timer = False
+			except:
+				print(traceback.print_exc())
+
+		await asyncio.gather(*[detect_combat(p) for p in walker.clients])
 
 
 	async def sigil_loop():
@@ -1368,7 +1547,6 @@ async def main():
 
 		async def async_zone_check(client: Client):
 			while True:
-				print(client.latest_drops)
 				await asyncio.sleep(0.25)
 				zone_name = await client.zone_name()
 				if zone_name and '/' in zone_name:
@@ -1444,6 +1622,12 @@ async def main():
 		p.questing_status = False
 		p.use_team_up = use_team_up
 		p.mouseless_status = False
+		p.entity_detect_combat_status = False
+		p.invincible_combat_timer = False
+		p.original_location_before_combat = None
+		p.duel_circle_joinable = True
+		p.in_solo_zone = False
+		p.wizard_name = None
 		p.latest_drops: List[Tuple[str, int]] = []
 
 		# Set follower/leader statuses for auto questing/sigil
@@ -1474,12 +1658,14 @@ async def main():
 		in_combat_loop_task = asyncio.create_task(is_client_in_combat_loop())
 		gui_task = asyncio.create_task(handle_gui())
 		questing_loop_task = asyncio.create_task(questing_loop())
+		questing_leader_combat_detection_task = asyncio.create_task(entity_detect_combat_loop())
 		potion_usage_loop_task = asyncio.create_task(potion_usage_loop())
 		rpc_loop_task = asyncio.create_task(rpc_loop())
 		drop_logging_loop_task = asyncio.create_task(drop_logging_loop())
 		zone_check_loop_task = asyncio.create_task(zone_check_loop())
 		while True:
-			await asyncio.wait([foreground_client_switching_task, speed_switching_task, combat_loop_task, assign_foreground_clients_task, dialogue_loop_task, anti_afk_loop_task, sigil_loop_task, in_combat_loop_task, questing_loop_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task])
+			await asyncio.wait([foreground_client_switching_task, speed_switching_task, combat_loop_task, assign_foreground_clients_task, dialogue_loop_task, anti_afk_loop_task, sigil_loop_task, in_combat_loop_task, questing_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task])
+
 	finally:
 		await tool_finish()
 
