@@ -948,6 +948,7 @@ class Quester():
         # only friend TPs if clients are in different zones or we think we may be in a solo zone
         if questing_friend_tp:
             await self.zone_recorrect_friend_tp(maybe_solo_zone=maybe_solo_zone)
+            maybe_solo_zone = await self.determine_solo_zone()
 
         # leader and follower clients can dynamically change during auto questing to account for clients being left behind
         questing_clients = await self.get_questing_clients()
