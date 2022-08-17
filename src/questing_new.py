@@ -910,8 +910,7 @@ class Quester():
 
             # if any clients don't have each other added, friend TP zone correction will fail.  To solve this, we add automatically send and accept friend requests between all clients
             if not clients_already_added:
-                logger.info(
-                    'Auto Quest requires that all clients have added each other as friends.  Attempting to friend all clients')
+                logger.info('Auto Quest requires that all clients have added each other as friends.  Attempting to friend all clients')
 
                 # can_tfc = True
                 # for c in self.clients:
