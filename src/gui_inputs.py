@@ -1,7 +1,7 @@
 import math
 
 
-def param_input(input, default):
+def param_input(input: str, default):
 	# Logic for interpreting number field inputs in the Deimos gui.
 	# Arguments can be chained together, always seperated by spaces.
 	# If you want to add 90 degrees, you would do "+ rad 90". This converts the 90 to radians, then adds it to the current value.
@@ -13,7 +13,6 @@ def param_input(input, default):
 
 	# Note: Keep in mind what values you're actually setting. Rotational values of yaw, roll, and pitch use radians, while everything else uses distances. 
 	# Places where names can be entered are not compatible with this system for obvious reasons.
-
 	adjusted_param = float(default)
 	if ' ' in input:
 		symbol_params = input.split(' ')
@@ -79,34 +78,34 @@ def param_input(input, default):
 
 	elif input:
 		match input:
-				case '+':
-					return adjusted_param * 2
+			case '+':
+				return adjusted_param * 2
 
-				case '*':
-					return adjusted_param ** 2
+			case '*':
+				return adjusted_param ** 2
 
-				case 'rad':
-					return math.radians(adjusted_param)
+			case 'rad':
+				return math.radians(adjusted_param)
 
-				case 'deg':
-					return math.degrees(adjusted_param)
+			case 'deg':
+				return math.degrees(adjusted_param)
 
-				case 'abs':
-					return abs(adjusted_param)
+			case 'abs':
+				return abs(adjusted_param)
 
-				case 'sin':
-					return math.sin(adjusted_param)
+			case 'sin':
+				return math.sin(adjusted_param)
 
-				case 'cos':
-					return math.cos(adjusted_param)
+			case 'cos':
+				return math.cos(adjusted_param)
 
-				case 'tan':
-					return math.tan(adjusted_param)
+			case 'tan':
+				return math.tan(adjusted_param)
 
-				case 'pi':
-					return math.pi
+			case 'pi':
+				return math.pi
 
-				case _:
-					prev_param = float(param)
+			case _:
+				adjusted_param = float(input)
 
 	return adjusted_param

@@ -600,6 +600,7 @@ class Fighter(CombatHandler):
 		self.selected_enemy = None
 		self.selected_ally = None
 		self.selected_ally_id = None
+
 		while await self.is_fighting() and self.client.combat_status:
 			await self.wait_for_planning_phase()
 			self.real_round = await self.round_number()

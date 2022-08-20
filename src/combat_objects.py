@@ -1,11 +1,14 @@
 from typing import List
-from wizwalker.combat import CombatMember
+from wizwalker.combat import CombatMember, CombatCard
 from wizwalker.memory.memory_objects.spell_effect import DynamicSpellEffect
 from wizwalker.memory.memory_objects.game_stats import DynamicGameStats
 
 
 school_ids = {0: 2343174, 1: 72777, 2: 83375795, 3: 2448141, 4: 2330892, 5: 78318724, 6: 1027491821, 7: 2625203, 8: 78483, 9: 2504141, 10: 663550619, 11: 1429009101, 12: 1488274711, 13: 1760873841, 14: 806477568, 15: 931528087}
+school_id_to_names = {'Fire': 2343174, 'Ice': 72777, 'Storm': 83375795, 'Myth': 2448141, 'Life': 2330892, 'Death': 78318724, 'Balance': 1027491821, 'Star': 2625203, 'Sun': 78483, 'Moon': 2504141, 'Gardening': 663550619, 'Shadow': 1429009101, 'Fishing': 1488274711, 'Cantrips': 1760873841, 'CastleMagic': 806477568, 'WhirlyBurly': 931528087}
+school_to_str = {index: i for i, index in school_id_to_names.items()}
 school_list_ids = {index: i for i, index in school_ids.items()}
+school_names = list(school_id_to_names.keys())
 school_id_list = list(school_ids.values())
 
 side_excluded_ids = [663550619, 806477568, 931528087, 1488274711, 1760873841]
@@ -67,3 +70,103 @@ async def get_shadow_effects(member: CombatMember) -> List[DynamicSpellEffect]:
 	participant = await member.get_participant()
 	shadow_effects = await participant.shadow_spell_effects()
 	return shadow_effects
+
+
+async def get_total_effects(member: CombatMember) -> List[DynamicSpellEffect]:
+	# Gets all the hanging effects from a CombatMember
+	effects: List[DynamicSpellEffect] = []
+	effects += await get_hanging_effects(member)
+	effects += await get_aura_effects(member)
+	effects += await get_shadow_effects(member)
+	return effects
+
+
+async def ids_from_cards(cards: List[CombatCard]) -> List[int]:
+	# Returns a list of spell IDs from a list of cards, 1:1
+	card_ids: List[int] = []
+	for card in cards:
+		card_id = await card.spell_id()
+		card_ids.append(card_id)
+
+	return card_ids
+
+
+async def id_to_member(members: List[CombatMember], member_id: int) -> CombatMember:
+	# Returns a CombatMember with a given ID
+	for member in members:
+		if await member.owner_id() == member_id:
+			return member
+
+	raise ValueError
+
+
+async def id_to_card(cards: List[CombatCard], card_id: int) -> CombatCard:
+	for card in cards:
+		if await card.spell_id() == card_id:
+			return card
+
+	raise ValueError
+
+
+async def id_to_hanging_effects(members: List[CombatMember], member_id: int) -> List[DynamicSpellEffect]:
+	# Returns the hanging effects from a given CombatMember ID
+	member = await id_to_member(members, member_id)
+
+	effects = await get_hanging_effects(member)
+
+	return effects
+
+
+async def id_to_aura_effects(members: List[CombatMember], member_id: int) -> List[DynamicSpellEffect]:
+	# Returns the aura effects from a given CombatMember ID
+	member = await id_to_member(members, member_id)
+
+	effects = await get_aura_effects(member)
+
+	return effects
+
+
+async def id_to_shadow_effects(members: List[CombatMember], member_id: int) -> List[DynamicSpellEffect]:
+	# Returns the shadow effects from a given CombatMember ID
+	member = await id_to_member(members, member_id)
+
+	effects = await get_shadow_effects(member)
+
+	return effects
+
+
+async def id_to_total_effects(members: List[CombatMember], member_id: int) -> List[DynamicSpellEffect]:
+	# Returns the total effects from a given CombatMember ID
+	member = await id_to_member(members, member_id)
+
+	effects = await get_total_effects(member)
+
+	return effects
+
+
+async def card_id_to_effects(cards: List[CombatCard], spell_id: int) -> List[DynamicSpellEffect]:
+	# Returns the spell effects for a card corresponding to a spell ID.
+
+	card = await id_to_card(cards, spell_id)
+
+	if card:
+		g_spell = await card.get_graphical_spell()
+		spell_effects = await g_spell.spell_effects()
+		return spell_effects
+
+	raise ValueError
+
+
+async def card_id_school(cards: List[CombatCard], spell_id: int) -> int:
+	# Returns the school ID for a card corresponding to a spell ID.
+	card = await id_to_card(cards, spell_id)
+
+	if card:
+		g_spell = await card.get_graphical_spell()
+		school_id = await g_spell.magic_school_id()
+		return school_id
+
+
+async def card_id_school_str(cards: List[CombatCard], spell_id: int) -> str:
+	school_id = await card_id_school(cards, spell_id)
+	return school_to_str(school_id)
