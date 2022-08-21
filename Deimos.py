@@ -791,10 +791,10 @@ async def main():
 				await asyncio.sleep(1)
 
 				if client in walker.clients and questing_status:
-					if questing_leader_pid is not None:
+					if questing_leader_pid is not None and len(walker.clients) > 1:
 						if client.process_id == questing_leader_pid:
 							# if follow leader is off, quest on all clients, passing through only the leader
-							logger.debug(f'Client {client.title} - Handling questing.')
+							logger.debug(f'Client {client.title} - Handling questing for all clients.')
 							questing = Quester(client, walker.clients, questing_leader_pid)
 							await questing.auto_quest_leader(questing_friend_tp)
 					else:
