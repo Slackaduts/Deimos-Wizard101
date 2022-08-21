@@ -43,8 +43,8 @@ async def total_stats_from_id(members: List[CombatMember], member_id: int) -> Li
     real_resistances = add_universal_stat(raw_resistances, uni_resist)
 
     raw_damages = await stats.dmg_bonus_percent()
-    uni_resist = await stats.dmg_bonus_percent_all()
-    real_damages = add_universal_stat(raw_damages, uni_resist)
+    uni_damage = await stats.dmg_bonus_percent_all()
+    real_damages = add_universal_stat(raw_damages, uni_damage)
 
     raw_crits = await stats.critical_hit_rating_by_school()
     uni_crit = await stats.critical_hit_rating_all()
