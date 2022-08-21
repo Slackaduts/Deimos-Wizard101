@@ -73,6 +73,24 @@ def param_input(input: str, default):
 				case 'pi':
 					prev_param = math.pi
 
+				case 'tau':
+					prev_param = math.tau
+
+				case 'e':
+					prev_param = math.e
+
+				case 'floor':
+					if i == len(symbol_params) - 1:
+						adjusted_param = math.floor(prev_param)
+					else:
+						prev_param = math.floor(prev_param)
+
+				case 'ceiling':
+					if i == len(symbol_params) - 1:
+						adjusted_param = math.ceil(prev_param)
+					else:
+						prev_param = math.ceil(prev_param)
+
 				case _:
 					prev_param = float(param)
 
@@ -104,6 +122,18 @@ def param_input(input: str, default):
 
 			case 'pi':
 				return math.pi
+
+			case 'tau':
+				return math.tau
+
+			case 'e':
+				return math.e
+
+			case 'floor':
+				return math.floor(adjusted_param)
+
+			case 'ceiling':
+				return math.ceil(adjusted_param)
 
 			case _:
 				adjusted_param = float(input)
