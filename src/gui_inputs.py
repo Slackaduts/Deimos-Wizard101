@@ -34,6 +34,9 @@ def param_input(input: str, default):
 				case '**':
 					adjusted_param = adjusted_param ** prev_param
 
+				case 'sqrt':
+					adjusted_param = math.sqrt(adjusted_param)
+
 				case 'rad':
 					if i == len(symbol_params) - 1:
 						adjusted_param = math.radians(prev_param)
@@ -101,6 +104,9 @@ def param_input(input: str, default):
 
 			case '*':
 				return adjusted_param ** 2
+
+			case 'sqrt':
+				return math.sqrt(adjusted_param)
 
 			case 'rad':
 				return math.radians(adjusted_param)
