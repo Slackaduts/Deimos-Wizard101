@@ -4,7 +4,7 @@ from wizwalker.errors import ExceptionalTimeout
 from wizwalker.combat import CombatHandler, CombatCard, CombatMember
 from wizwalker.memory.memory_objects.spell_effect import DynamicSpellEffect
 from wizwalker.memory.memory_objects.enums import SpellEffects
-from src.combat_objects import get_school_stat, get_game_stats, get_shadow_effects, get_hanging_effects, get_aura_effects
+from src.combat_objects import card_id_to_effects, get_school_stat, get_game_stats, get_shadow_effects, get_hanging_effects, get_aura_effects, id_to_card, ids_from_cards, id_to_member
 
 
 hit_enchant_effects = [SpellEffects.modify_card_damage, SpellEffects.modify_card_accuracy, SpellEffects.modify_card_armor_piercing]
@@ -49,19 +49,20 @@ class Fighter(CombatHandler):
 	async def get_card_ids(self, cards: List[CombatCard] = None) -> List[int]:
 		if not cards:
 			await self.get_cards()
-		
-		return list(map(CombatCard.spell_id, cards))
+
+		# DO NOT CHANGE THIS UNLESS SLACK GIVES THE OK OR THERE IS SOME PROBLEM THAT YOU INTEND TO FIX
+		card_ids = await ids_from_cards(cards)
+
+		return card_ids
 
 
 	async def member_from_id(self, id: int, members: List[CombatMember] = None) -> CombatMember:
 		if not members:
 			members = await self.get_members()
 
-		for member in members:
-			if await member.owner_id() == id:
-				return member
+		member = await id_to_member(members, id)
 
-		raise ValueError
+		return member
 
 
 	async def effects_from_id(self, id: int, cards: List[CombatCard] = None) -> List[DynamicSpellEffect]:
@@ -69,13 +70,9 @@ class Fighter(CombatHandler):
 		if not cards:
 			cards = await self.get_cards()
 
-		for card in cards:
-			if await card.spell_id() == id:
-				g_spell = await card.get_graphical_spell()
-				spell_effects = await g_spell.spell_effects()
-				return spell_effects
+		spell_effects = await card_id_to_effects(cards, id)
 
-		raise ValueError
+		return spell_effects
 
 
 	async def effect_types_from_id(self, id: int, cards: List[CombatCard] = None) -> List[SpellEffects]:
@@ -83,12 +80,11 @@ class Fighter(CombatHandler):
 		if not cards:
 			cards = await self.get_cards()
 
-		for card in cards:
-			if await card.spell_id() == id:
-				g_spell = await card.get_graphical_spell()
-				spell_effects = await g_spell.spell_effects()
-				effect_types: List[SpellEffects] = [await e.effect_type() for e in spell_effects]
-				return effect_types
+		spell_effects = await card_id_to_effects(cards, id)
+
+		if spell_effects:
+			effect_types: List[SpellEffects] = [await e.effect_type() for e in spell_effects]
+			return effect_types
 
 		raise ValueError
 
@@ -98,11 +94,9 @@ class Fighter(CombatHandler):
 		if not cards:
 			cards = await self.get_cards()
 
-		for card in cards:
-			if await card.spell_id() == id:
-				return card
+		card = await id_to_card(cards, id)
 
-		raise ValueError
+		return card
 
 
 	async def is_enchantable(self, card: CombatCard) -> bool:

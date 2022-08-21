@@ -1,7 +1,7 @@
 import math
 
 
-def param_input(input, default):
+def param_input(input: str, default):
 	# Logic for interpreting number field inputs in the Deimos gui.
 	# Arguments can be chained together, always seperated by spaces.
 	# If you want to add 90 degrees, you would do "+ rad 90". This converts the 90 to radians, then adds it to the current value.
@@ -13,7 +13,6 @@ def param_input(input, default):
 
 	# Note: Keep in mind what values you're actually setting. Rotational values of yaw, roll, and pitch use radians, while everything else uses distances. 
 	# Places where names can be entered are not compatible with this system for obvious reasons.
-
 	adjusted_param = float(default)
 	if ' ' in input:
 		symbol_params = input.split(' ')
@@ -34,6 +33,9 @@ def param_input(input, default):
 
 				case '**':
 					adjusted_param = adjusted_param ** prev_param
+
+				case 'sqrt':
+					adjusted_param = math.sqrt(adjusted_param)
 
 				case 'rad':
 					if i == len(symbol_params) - 1:
@@ -74,39 +76,72 @@ def param_input(input, default):
 				case 'pi':
 					prev_param = math.pi
 
+				case 'tau':
+					prev_param = math.tau
+
+				case 'e':
+					prev_param = math.e
+
+				case 'floor':
+					if i == len(symbol_params) - 1:
+						adjusted_param = math.floor(prev_param)
+					else:
+						prev_param = math.floor(prev_param)
+
+				case 'ceiling':
+					if i == len(symbol_params) - 1:
+						adjusted_param = math.ceil(prev_param)
+					else:
+						prev_param = math.ceil(prev_param)
+
 				case _:
 					prev_param = float(param)
 
 	elif input:
 		match input:
-				case '+':
-					return adjusted_param * 2
+			case '+':
+				return adjusted_param * 2
 
-				case '*':
-					return adjusted_param ** 2
+			case '*':
+				return adjusted_param ** 2
 
-				case 'rad':
-					return math.radians(adjusted_param)
+			case 'sqrt':
+				return math.sqrt(adjusted_param)
 
-				case 'deg':
-					return math.degrees(adjusted_param)
+			case 'rad':
+				return math.radians(adjusted_param)
 
-				case 'abs':
-					return abs(adjusted_param)
+			case 'deg':
+				return math.degrees(adjusted_param)
 
-				case 'sin':
-					return math.sin(adjusted_param)
+			case 'abs':
+				return abs(adjusted_param)
 
-				case 'cos':
-					return math.cos(adjusted_param)
+			case 'sin':
+				return math.sin(adjusted_param)
 
-				case 'tan':
-					return math.tan(adjusted_param)
+			case 'cos':
+				return math.cos(adjusted_param)
 
-				case 'pi':
-					return math.pi
+			case 'tan':
+				return math.tan(adjusted_param)
 
-				case _:
-					prev_param = float(param)
+			case 'pi':
+				return math.pi
+
+			case 'tau':
+				return math.tau
+
+			case 'e':
+				return math.e
+
+			case 'floor':
+				return math.floor(adjusted_param)
+
+			case 'ceiling':
+				return math.ceil(adjusted_param)
+
+			case _:
+				adjusted_param = float(input)
 
 	return adjusted_param
