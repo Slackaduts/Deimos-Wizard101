@@ -1,7 +1,7 @@
 from typing import Dict, List
 from wizwalker.combat import CombatMember
 from src.combat_objects import id_to_member, school_to_str
-from src.combat_utils import get_str_masteries, enemy_type_str, add_universal_stat, to_seperated_str_stats
+from src.combat_utils import get_str_masteries, enemy_type_str, add_universal_stat, to_seperated_str_stats, to_percent
 import PySimpleGUI as gui
 
 # UNFINISHED - slack
@@ -40,11 +40,15 @@ async def total_stats_from_id(members: List[CombatMember], member_id: int) -> Li
 
     raw_resistances = await stats.dmg_reduce_percent()
     uni_resist = await stats.dmg_reduce_percent_all()
-    real_resistances = add_universal_stat(raw_resistances, uni_resist)
+    real_resistances = to_percent(add_universal_stat(raw_resistances, uni_resist))
 
     raw_damages = await stats.dmg_bonus_percent()
     uni_damage = await stats.dmg_bonus_percent_all()
-    real_damages = add_universal_stat(raw_damages, uni_damage)
+    real_damages = to_percent(add_universal_stat(raw_damages, uni_damage))
+
+    raw_pierces = await stats.ap_bonus_percent()
+    uni_pierce = await stats.ap_bonus_percent_all()
+    real_pierces = to_percent(add_universal_stat(raw_pierces, uni_pierce))
 
     raw_crits = await stats.critical_hit_rating_by_school()
     uni_crit = await stats.critical_hit_rating_all()
@@ -60,6 +64,7 @@ async def total_stats_from_id(members: List[CombatMember], member_id: int) -> Li
     resistances, raw_boosts = to_seperated_str_stats(real_resistances)
 
     damages, _ = to_seperated_str_stats(real_damages)
+    pierces, _ = to_seperated_str_stats(real_pierces)
     crits, _ = to_seperated_str_stats(real_crits)
     blocks, _ = to_seperated_str_stats(real_blocks)
 
@@ -67,10 +72,11 @@ async def total_stats_from_id(members: List[CombatMember], member_id: int) -> Li
         f'Name: {member_name} - {member_type} - {school_name}',
         f'Power Pips: {power_pips} - Pips: {pips}',
         f'Shadow Pips: {shadow_pips}',
-        f'Health: {health}/{max_health} ({(health / max_health) * 100}%)',
+        f'Health: {health}/{max_health} ({int((health / max_health) * 100)}%)',
         f'Boosts: {dict_to_str(raw_boosts)}',
         f'Resists: {dict_to_str(resistances)}',
         f'Damages: {dict_to_str(damages)}',
+        f'Pierces: {dict_to_str(pierces)}',
         f'Crits: {dict_to_str(crits)}',
         f'Blocks: {dict_to_str(blocks)}',
         f'Masteries: {masteries_str}'

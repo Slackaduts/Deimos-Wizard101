@@ -13,7 +13,8 @@ def add_universal_stat(input_stats: List[float], uni_stat: float) -> List[float]
     # Adds a universal stat to every school-specific stat.
     real_stats = []
     for stat in input_stats:
-        real_stats.append(stat + uni_stat)
+        real_stat = stat + uni_stat
+        real_stats.append(real_stat)
 
     return real_stats
 
@@ -23,6 +24,15 @@ def to_percent_str(input_stats: List[float]) -> List[str]:
     readable_stats = []
     for stat in input_stats:
         readable_stats.append(str(f'{stat * 100}%'))
+
+    return readable_stats
+
+
+def to_percent(input_stats: List[float]) -> List[float]:
+    # Converts a list of stats into readable percentage values for use in the GUI
+    readable_stats = []
+    for stat in input_stats:
+        readable_stats.append(stat * 100)
 
     return readable_stats
 
@@ -54,10 +64,10 @@ def to_seperated_str_stats(input_stats: List[float]) -> Tuple[Dict[str, float], 
 
     for i, stat in enumerate(input_stats):
         index_name = school_names[i]
-        if stat > 0:
+        if stat > 0.0:
             positives[index_name] = stat
 
-        elif stat < 0:
+        elif stat < 0.0:
             negatives[index_name] = stat
 
     return (positives, negatives)

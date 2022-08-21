@@ -1102,7 +1102,7 @@ async def main():
 		stat_viewer_layout = [
 			[gui.Text('The utils shown below are for advanced users and no support will be provided on them.', text_color=gui_text_color)],
 			[hotkey_button('Enemy 1'), hotkey_button('Enemy 2'), hotkey_button('Enemy 3'), hotkey_button('Enemy 4')],
-			[gui.Multiline('No client has been selected.', key='stat_viewer', size=(56, 10), text_color=gui_text_color, horizontal_scroll=True)],
+			[gui.Multiline('No client has been selected.', key='stat_viewer', size=(66, 11), text_color=gui_text_color, horizontal_scroll=True)],
 			[hotkey_button('Copy Enemy Stats', True), gui.Text('Note that these stats are only accurate in PVE.', text_color=gui_text_color)]
 			]
 
@@ -1149,7 +1149,7 @@ async def main():
 						for member in members:
 							participant = await member.get_participant()
 
-							if await participant.team_id() != client_team_id:
+							if await participant.team_id() != client_team_id and not await member.is_player():
 								id = await member.owner_id()
 								enemy_ids.append(id)
 
