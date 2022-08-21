@@ -436,6 +436,7 @@ async def is_potion_needed(client: Client, minimum_mana: int = 16):
 	else:
 		return False
 
+
 async def auto_potions_force_buy(client: Client, mark: bool = False, minimum_mana: int = 16):
 	# If we have any missing potions, get potions
 	if await client.stats.potion_charge() < await client.stats.potion_max():
@@ -461,12 +462,6 @@ async def auto_potions_force_buy(client: Client, mark: bool = False, minimum_man
 			else:
 				# Teleport back to mark
 				await client.send_key(Keycode.PAGE_UP, 0.1)
-
-
-async def determine_all_are_friends(checking_client: Client, clients: list[Client]):
-	for client in clients:
-		if checking_client.process_id != client.process_id:
-			friend_names.append(acceptor.wizard_name)
 
 
 async def refill_potions(client: Client, mark: bool = False):
