@@ -1473,7 +1473,7 @@ class Fighter(CombatHandler):
 
 			# detect failed cast, only if the client is soloing and is not in pvp as to avoid issues
 			await asyncio.sleep(1)
-			if len(self.clients) == len(self.allies) and not in_pvp:  # bad check to see if it's only your char's in battle.
+			if len(self.clients) == len(self.allies) and len(self.clients) == 1 and not in_pvp:  # bad check to see if it's only your char's in battle.
 				if await self.client.duel.duel_phase() == DuelPhase.planning:
 					await asyncio.sleep(0.5)
 					pass
