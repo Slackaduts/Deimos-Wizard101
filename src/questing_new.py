@@ -879,7 +879,7 @@ class Quester():
         else:
             client_quests = await self.get_client_quests(questing_clients)
 
-        return follower_clients
+        return follower_clients, client_quests
 
     # @logger.catch()
     async def auto_quest_leader(self, questing_friend_tp: bool):
@@ -983,8 +983,7 @@ class Quester():
 
             # dynamically change leader client when follower's get left behind
             # if there were previously clients on the same quest check for quest objective change on all clients
-            follower_clients = await self.determine_new_leader_and_followers(client_quests, questing_clients,
-                                                                             follower_clients)
+            follower_clients, client_quests = await self.determine_new_leader_and_followers(client_quests, questing_clients, follower_clients)
 
             quest_xyz = await self.current_leader_client.quest_position.position()
             # if followers in wrong zone, first attempt to click X - this may send them into the next zone if they are near an interactible door
