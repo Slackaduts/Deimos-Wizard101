@@ -44,7 +44,7 @@ class Quester():
         except:
             txtmsg = ""
 
-        if 'to enter' in txtmsg.lower() or 'to interact' in txtmsg.lower():
+        if 'to enter' in txtmsg.lower() or 'to interact' in txtmsg.lower() or 'to activate' in txtmsg.lower():
             return True
         else:
             return False
