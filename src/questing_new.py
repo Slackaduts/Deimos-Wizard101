@@ -1257,22 +1257,18 @@ class Quester():
                             logger.debug('Quest completed manually - continuing Auto Quest.')
                         else:
                             for c in self.clients:
-                                if c.process_id != self.current_leader_pid:
+                                if c.process_id != self.leader_pid:
                                     try:
-                                        # TODO: change this to a task so we can stop changing member variables improperly
-                                        # collect_quest_task = asyncio.create_task(collect_quest_loop(c))
-                                        # await asyncio.wait([solo_zone_task])
-                                        collect_quester = Quester(c, self.clients, None)
-                                        await collect_quester.auto_collect(c)
+                                        await self.auto_collect(c)
                                     except:
                                         print(traceback.print_exc())
 
-                            # for c in self.clients:
-                            #     if c.process_id == current_leader_pid:
-                            #         self.client = c
+                            for c in self.clients:
+                                if c.process_id == self.leader_pid:
+                                    self.client = c
 
-                            # finally, collect items on the leader
-                            await self.auto_collect(self.current_leader_client)
+                                # finally, collect items on the leader
+                            await self.auto_collect(self.client)
                     else:
                         logger.debug('False collect quest detected.  Quest position: ' + str(distance))
 
