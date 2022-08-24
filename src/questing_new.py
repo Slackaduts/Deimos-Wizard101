@@ -881,6 +881,77 @@ class Quester():
 
         return follower_clients, client_quests
 
+    async def num_clients_in_same_area(self):
+        try:
+            sprinter = SprintyClient(self.current_leader_client)
+            entities = await sprinter.get_base_entity_list()
+
+            player_count = 0
+            list_of_present_clients = []
+            for entity in entities:
+                entity_name = await entity.object_name()
+                if entity_name == 'Player Object':
+                    for c in self.clients:
+                        if c.process_id not in list_of_present_clients:
+                            distance = calc_Distance(await c.body.position(), await entity.location())
+                            # this is almost certainly one of our clients
+                            if distance < 20:
+                                player_count += 1
+                                list_of_present_clients.append(c.process_id)
+                                break
+
+                    if player_count == len(self.clients):
+                        break
+
+            return player_count
+        except:
+            print(traceback.print_exc())
+
+        if player_count == len(self.clients):
+            return True
+        else:
+            return False
+
+    async def correct_dungeon_desync(self, follower_clients):
+        for c in self.clients:
+            await c.mouse_handler.activate_mouseless()
+
+        # await asyncio.gather(*[await c.mouse_handler.activate_mouseless() for c in self.clients])
+
+        # attempt to correct the desync by simply teleporting all clients to the leader
+        await asyncio.gather(*[teleport_to_friend_from_list(c, name=self.current_leader_client.wizard_name) for c in follower_clients])
+
+        await asyncio.sleep(1.5)
+
+        # this may fail - some zones cannot be teleported to even if they have public sigils - detect whether this zone is locked off to teleports
+        teleport_banned_zone = False
+        for c in self.clients:
+            if await is_visible_by_path(c, friend_is_busy_path):
+                await click_window_by_path(c, friend_is_busy_path)
+                teleport_banned_zone = True
+
+        await asyncio.sleep(.5)
+
+        # if we cannot teleport, send all to hub, then teleport
+        # teleporting can never fail in the hub (due to a locked zone at least), so this is a surefire way get all clients in the same realm / area
+        if teleport_banned_zone:
+            logger.debug('Friend teleport correction for dungeon desync failed - sending all clients to hub and retrying teleport')
+            await self.zone_recorrect_hub()
+            await asyncio.gather(*[teleport_to_friend_from_list(c, name=self.current_leader_client.wizard_name) for c in follower_clients])
+
+            await asyncio.sleep(5.0)
+            for c in self.clients:
+                while await c.is_loading():
+                    await asyncio.sleep(.1)
+        else:
+            await asyncio.sleep(3.0)
+            for c in self.clients:
+                while await c.is_loading():
+                    await asyncio.sleep(.1)
+
+        for c in self.clients:
+            await c.mouse_handler.deactivate_mouseless()
+
     # @logger.catch()
     async def auto_quest_leader(self, questing_friend_tp: bool):
         follower_clients = await self.get_follower_clients()
@@ -986,8 +1057,10 @@ class Quester():
             follower_clients, client_quests = await self.determine_new_leader_and_followers(client_quests, questing_clients, follower_clients)
 
             quest_xyz = await self.current_leader_client.quest_position.position()
+
             # if followers in wrong zone, first attempt to click X - this may send them into the next zone if they are near an interactible door
-            if not await self.followers_in_correct_zone() or maybe_solo_zone:
+            # don't do this when friend tp is active (as x press correction for some reason appears to be inconsistent)
+            if (not await self.followers_in_correct_zone() or maybe_solo_zone) and not questing_friend_tp:
                 logger.debug('Clients may be in wrong zone - attempting to correct with X press')
                 await self.X_press_zone_recorrect()
 
@@ -1108,6 +1181,19 @@ class Quester():
                         if "to enter" in sigil_msg_check.lower():
                             logger.debug('Entering dungeon')
                             await self.enter_dungeon()
+
+                            await asyncio.sleep(1.0)
+
+                            # check for instance desync, and attempt to fix if it has happened
+                            if questing_friend_tp:
+                                num_visible_clients = await self.num_clients_in_same_area()
+
+                                if num_visible_clients == len(self.clients):
+                                    pass
+                                elif num_visible_clients > 1:
+                                    # teleport all, this clearly isnt a solo zone
+                                    logger.debug('One or more clients was separated from the group - teleporting all to leader')
+                                    await self.correct_dungeon_desync(follower_clients)
                         else:
                             original_zone = await self.current_leader_client.zone_name()
                             logger.debug('Sending X press to all clients')
