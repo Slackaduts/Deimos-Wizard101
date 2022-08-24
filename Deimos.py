@@ -875,113 +875,114 @@ async def main():
 			safe_distance = 620
 			just_left_combat = False
 			just_entered_combat = False
-			try:
-				while True:
-					await asyncio.sleep(0.2)
-					if p.questing_status:
-						distance, duel_circle_xyz = await nearest_duel_circle_distance_and_xyz(sprinter)
+			while True:
+				await asyncio.sleep(0.2)
+				if p.questing_status:
+					distance, duel_circle_xyz = await nearest_duel_circle_distance_and_xyz(sprinter)
 
-						if distance is None:
-							if p.entity_detect_combat_status:
-								just_left_combat = True
-							else:
-								p.entity_detect_combat_status = False
-
-						# When fully in combat (once running animation occurs and selection phase begins) clients in any battle order are ~600 away from the center of the duel circle
-						# extra leeway on this allows clients to teleport more quickly to ensure that they arrive before the selection phase even starts
-						elif distance < safe_distance:
-							# if not p.combat_status and p.entity_detect_combat_status:
-							# 	just_left_combat = True
-							# else:
-								if not p.entity_detect_combat_status:
-									just_entered_combat = True
-
-								p.entity_detect_combat_status = True
-
-								original_client_locations = dict()
-								all_fighting_clients = [p]
-
-								# don't teleport clients to duel circles that are closed off, and don't teleport clients if they are in separate instances
-								if p.duel_circle_joinable and not p.in_solo_zone:
-									helper_clients = []
-									for c in other_clients:
-										if await is_free(c) and not c.entity_detect_combat_status and not c.invincible_combat_timer:
-											# player_distance = calc_Distance(await c.body.position(), await p.body.position())
-											# print('player distance between [', c.title, '] and [', p.title, '] is: ', player_distance)
-
-											if await c.zone_name() == await p.zone_name():
-												if not c.entity_detect_combat_status:
-													c.original_location_before_combat = await c.body.position()
-													original_client_locations.update({c: await c.body.position()})
-													if c not in helper_clients:
-														helper_clients.append(c)
-														all_fighting_clients.append(c)
-
-													if not c.entity_detect_combat_status:
-														logger.debug('Combat detected from client ' + p.title + ' - teleporting client ' + c.title)
-														await c.teleport(duel_circle_xyz)
-														just_entered_combat = True
-
-									if len(helper_clients) > 0:
-										check_duel_circle_joinable = [asyncio.create_task(is_duel_circle_joinable(helper)) for helper in helper_clients]
-										done, pending = await asyncio.wait(check_duel_circle_joinable)
-
-										is_circle_joinable = True
-										for d in done:
-											is_circle_joinable = d.result()
-
-										if not is_circle_joinable:
-											p.duel_circle_joinable = False
-											logger.debug('Client ' + p.title + ' - ' + 'Duel circle not joinable - teleports halted.')
-
-								# if not all(await asyncio.gather(*[is_duel_circle_joinable(helper) for helper in helper_clients]):
-								#	print('a')
-
-								# if len(helping_clients) > 0:
-								# prevent additional unnecessary teleports by giving helper clients a chance to mark themselves as in combat
-								if just_entered_combat:
-									await asyncio.sleep(8)
-									just_entered_combat = False
-
-								original_client_locations = dict()
-								helper_clients = []
-
-
+					if distance is None:
+						if p.entity_detect_combat_status:
+							just_left_combat = True
 						else:
-							if p.entity_detect_combat_status:
-								just_left_combat = True
-							else:
-								p.entity_detect_combat_status = False
-
-						if just_left_combat and await is_free(p):
-							# collect wisps, up to a certain number
-							await collect_wisps_with_limit(p, limit=2)
-							await asyncio.sleep(.3)
-
-							# return helper clients to their previous safe location
-
-							if p.original_location_before_combat is not None:
-								logger.debug('Client ' + p.title + ' - ' + 'Returning to safe location.')
-								try:
-									await p.teleport(p.original_location_before_combat)
-								except ValueError:
-									print(traceback.print_exc())
-									p.original_location_before_combat = None
-
-							just_left_combat = False
-
-							# Mark wizard as invincible, as clients can get stuck standing in the middle of another client's battle circle due to teleporting while invincibile
-							logger.debug('Client ' + p.title + ' - ' + 'Battle teleports off while invulnerable')
-							p.invincible_combat_timer = True
 							p.entity_detect_combat_status = False
-							p.duel_circle_joinable = True
 
-							# Timer seems to be about 6.5 seconds to become draggable again
-							await asyncio.sleep(6.5)
-							logger.debug('Client ' + p.title + ' - ' + 'Battle teleports re-enabled')
-							p.invincible_combat_timer = False
-			except:
-				print(traceback.print_exc())
+					# When fully in combat (once running animation occurs and selection phase begins) clients in any battle order are ~600 away from the center of the duel circle
+					# extra leeway on this allows clients to teleport more quickly to ensure that they arrive before the selection phase even starts
+					elif distance < safe_distance:
+						# if not p.combat_status and p.entity_detect_combat_status:
+						# 	just_left_combat = True
+						# else:
+							if not p.entity_detect_combat_status:
+								just_entered_combat = True
+
+							p.entity_detect_combat_status = True
+
+							original_client_locations = dict()
+							all_fighting_clients = [p]
+
+							# don't teleport clients to duel circles that are closed off, and don't teleport clients if they are in separate instances
+							if p.duel_circle_joinable and not p.in_solo_zone:
+								helper_clients = []
+								for c in other_clients:
+									if await is_free(c) and not c.entity_detect_combat_status and not c.invincible_combat_timer:
+										# player_distance = calc_Distance(await c.body.position(), await p.body.position())
+										# print('player distance between [', c.title, '] and [', p.title, '] is: ', player_distance)
+
+										if await c.zone_name() == await p.zone_name():
+											if not c.entity_detect_combat_status:
+												c.original_location_before_combat = await c.body.position()
+												original_client_locations.update({c: await c.body.position()})
+												if c not in helper_clients:
+													helper_clients.append(c)
+													all_fighting_clients.append(c)
+
+												if not c.entity_detect_combat_status:
+													logger.debug('Combat detected from client ' + p.title + ' - teleporting client ' + c.title)
+													try:
+														await c.teleport(duel_circle_xyz)
+													except ValueError:
+														pass
+													
+													just_entered_combat = True
+
+								if len(helper_clients) > 0:
+									check_duel_circle_joinable = [asyncio.create_task(is_duel_circle_joinable(helper)) for helper in helper_clients]
+									done, pending = await asyncio.wait(check_duel_circle_joinable)
+
+									is_circle_joinable = True
+									for d in done:
+										is_circle_joinable = d.result()
+
+									if not is_circle_joinable:
+										p.duel_circle_joinable = False
+										logger.debug('Client ' + p.title + ' - ' + 'Duel circle not joinable - teleports halted.')
+
+							# if not all(await asyncio.gather(*[is_duel_circle_joinable(helper) for helper in helper_clients]):
+							#	print('a')
+
+							# if len(helping_clients) > 0:
+							# prevent additional unnecessary teleports by giving helper clients a chance to mark themselves as in combat
+							if just_entered_combat:
+								await asyncio.sleep(8)
+								just_entered_combat = False
+
+							original_client_locations = dict()
+							helper_clients = []
+
+
+					else:
+						if p.entity_detect_combat_status:
+							just_left_combat = True
+						else:
+							p.entity_detect_combat_status = False
+
+					if just_left_combat and await is_free(p):
+						# collect wisps, up to a certain number
+						await collect_wisps_with_limit(p, limit=2)
+						await asyncio.sleep(.3)
+
+						# return helper clients to their previous safe location
+
+						if p.original_location_before_combat is not None:
+							logger.debug('Client ' + p.title + ' - ' + 'Returning to safe location.')
+							try:
+								await p.teleport(p.original_location_before_combat)
+							except ValueError:
+								print(traceback.print_exc())
+								p.original_location_before_combat = None
+
+						just_left_combat = False
+
+						# Mark wizard as invincible, as clients can get stuck standing in the middle of another client's battle circle due to teleporting while invincibile
+						logger.debug('Client ' + p.title + ' - ' + 'Battle teleports off while invulnerable')
+						p.invincible_combat_timer = True
+						p.entity_detect_combat_status = False
+						p.duel_circle_joinable = True
+
+						# Timer seems to be about 6.5 seconds to become draggable again
+						await asyncio.sleep(6.5)
+						logger.debug('Client ' + p.title + ' - ' + 'Battle teleports re-enabled')
+						p.invincible_combat_timer = False
 
 		await asyncio.gather(*[detect_combat(p) for p in walker.clients])
 
