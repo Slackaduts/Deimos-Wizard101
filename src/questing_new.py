@@ -122,7 +122,10 @@ class Quester():
                     display_name_code = await object_template.display_name()
                     display_name = await self.client.cache_handler.get_langcode_name(display_name_code)
 
-                    print(parsed_quest_info, display_name)
+
+
+                    print('here: ' + str(parsed_quest_info), display_name)
+                    # await asyncio.sleep(1000000)
 
                     # match = SequenceMatcher(None, display_name.lower(), str(parsed_quest_info[0]).lower()).ratio()
                     match = fuzz.ratio(display_name.lower(), str(parsed_quest_info[0]).lower())
@@ -952,6 +955,71 @@ class Quester():
         for c in self.clients:
             await c.mouse_handler.deactivate_mouseless()
 
+    async def auto_collect_rewrite(self, client: Client):
+        quest_name_path = ["WorldView", "windowHUD", "QuestHelperHud", "ElementWindow", "",
+                           "txtGoalName"]  # path to the yellow text under arrow which tells you your quest
+        quest_item_list = await self.parse_quest_stuff(
+            quest_name_path)  # gets quest name from path and parses it for collect quest item name
+        print(quest_item_list[0])
+
+        chunk_cords = await self.Nav_Hull()  # list of cords that load in chunk
+        for points in chunk_cords:  # loops through the points
+            points = XYZ(points.x, points.y, points.z - 550)  # sets cord to underground to avoid pull / detection
+            await client.teleport(points, move_after=False, wait_on_inuse=True)  # teleports under the area
+            await client.teleport(points, wait_on_inuse=True)  # updates cords in wizard101 server
+
+            entities = await self.client.get_base_entity_list()  # gets the entity list of the map
+            for e in entities:
+                try:
+                    object_template = await e.object_template()  # gets entity template
+                    display_name_code = await object_template.display_name()  # gets display name code
+                    display_name = await self.client.cache_handler.get_langcode_name(display_name_code)  # uses display name code to get display name text
+                    match = fuzz.ratio(display_name.lower(), str(
+                        quest_item_list[0]).lower())  # fuzzywuzzy check if display name matches quest item.
+                    if match > 80:  # if strings match greater than 80 it means that it's most likely the item
+                        if await self.collect_entity(e):  # grabs enity
+                            return
+                except ValueError:
+                    pass
+
+            # this is backup if displayname doesn't work
+            for e in entities:
+                temp = await e.object_template()
+                e_name = str(await temp.object_name())  # entity name
+                if not e_name == "Basic Positional":  # helps speed things up
+                    name_list = e_name.split('_')
+                    edited_name = ''.join(name_list[1:])
+                    # do stripping symbols stuff with edited_name
+                    edit_name2 = ''.join([i for i in edited_name if not i.isdigit()])
+                    edit_name3 = str(edit_name2).replace("_", "")
+                    match = fuzz.ratio(edit_name3.lower(), str(quest_item_list[0]).lower())
+                    if int(match) > 50:
+                        if await self.collect_entity(e):  # grabs enity
+                            return
+
+            #await asyncio.sleep(1)
+
+    async def collect_entity(self, e: DynamicClientObject):
+        xyz = await e.location()  # gets entities xyz
+        for _ in range(2):  # try's to collect item twice if not safe
+            can_Teleport = await self.find_safe_entities_from(xyz, None, safe_distance=2600, is_mob=True)  # checks if safe to collect
+            if can_Teleport:
+                try:
+                    await navmap_tp(self.client, xyz)  # teleports to the xyz
+                except:
+                    print(traceback.format_exc())
+
+                await asyncio.sleep(.2)  # waits 2 secs for the UI to load
+
+                if await is_visible_by_path(self.client, path=npc_range_path):  # checks if there is an UI
+                    for i in range(5):
+                        await asyncio.gather(
+                            *[p.send_key(Keycode.X, .1) for p in self.clients])  # trys to collect by spamming x
+                    print('Collecting')
+                    # collected = True
+                    return True
+        return False
+
     # @logger.catch()
     async def auto_quest_leader(self, questing_friend_tp: bool):
         follower_clients = await self.get_follower_clients()
@@ -1241,12 +1309,91 @@ class Quester():
 
                     if distance < 1:
                         quest_objective = await get_quest_name(self.current_leader_client)
+
+                        truncated_quest_obj = (await self.get_truncated_quest_objectives(self.current_leader_client)).lower()
+                        # Key - truncated quest name
+                        # Values - 0: time between entity respawns, 1-... : xyz locations of separate entities belonging to the quest
+                        all_hardcoded_quests = {'collect sea foam crystal in the floating land': [35, XYZ(x=5330.3466796875, y=-1514.7388916015625, z=-499.20001220703125), XYZ(x=6373.23046875, y=-4622.3076171875, z=-534.3988647460938), XYZ(x=4883.55419921875, y=-5877.2265625, z=-518.2752685546875), XYZ(x=2708.878662109375, y=-4461.57568359375, z=-499.1999816894531)] }
+                        incompatible_hardcoded_quests = {'find submarine parts in the floating land': [40, XYZ(x=-17412.53515625, y=10505.794921875, z=-429.19927978515625), XYZ(x=-17088.447265625, y=12284.244140625, z=-410.1100769042969), XYZ(x=-21681.78125, y=11547.5966796875, z=-429.19927978515625)]}
+
                         forbidden_quests = ['Break Mining Equipment in Tyrian Gorge',
                                             'Steal Barrel of Kermes Fire in Tyrian Gorge']
 
+
+                        if any(map(truncated_quest_obj.__contains__, incompatible_hardcoded_quests.keys())):
+                            logger.debug('Hardcoded collect')
+
+                            entity_data = incompatible_hardcoded_quests.get(truncated_quest_obj[:-1])
+                            for c in self.clients:
+                                if c.process_id != self.current_leader_client.process_id:
+                                    current_quest = (await self.get_truncated_quest_objectives(c)).lower()
+                                    follower_on_collect = False
+                                    safe_location = await c.body.position()
+                                    while current_quest == truncated_quest_obj:
+                                        follower_on_collect = True
+                                        for coord in entity_data[1:]:
+                                            try:
+                                                await c.teleport(coord)
+                                                await asyncio.sleep(1.0)
+
+                                                for i in range(3):
+                                                    await c.send_key(Keycode.X)
+                                                    await asyncio.sleep(.15)
+                                            except ValueError:
+                                                pass
+
+                                        current_quest = (await self.get_truncated_quest_objectives(c)).lower()
+
+                                    if follower_on_collect:
+                                        while not await is_free(c) or c.entity_detect_combat_status:
+                                            await asyncio.sleep(1.0)
+
+                                        if await is_free(c) and not c.entity_detect_combat_status:
+                                            await c.teleport(safe_location)
+                                        print('sleeping for ' + str(entity_data[0]))
+                                        await asyncio.sleep((entity_data[0] + 5))
+
+                            current_quest = truncated_quest_obj
+                            safe_location = await self.current_leader_client.body.position()
+                            while current_quest == truncated_quest_obj:
+                                for coord in entity_data[1:]:
+                                    try:
+                                        await self.current_leader_client.teleport(coord)
+                                        await asyncio.sleep(1.0)
+
+                                        for i in range(3):
+                                            await self.current_leader_client.send_key(Keycode.X)
+                                            await asyncio.sleep(.15)
+                                    except ValueError:
+                                        pass
+
+                                current_quest = (await self.get_truncated_quest_objectives(self.current_leader_client)).lower()
+
+                            while not await is_free(self.current_leader_client) or self.current_leader_client.entity_detect_combat_status:
+                                await asyncio.sleep(1.0)
+
+                            if await is_free(self.current_leader_client) and not self.current_leader_client.entity_detect_combat_status:
+                                await self.current_leader_client.teleport(safe_location)
+
+
+
+                            entity_data = incompatible_hardcoded_quests.get(truncated_quest_obj[:-1])
+                            current_quest = truncated_quest_obj
+                            while current_quest == truncated_quest_obj:
+                                for coord in entity_data:
+                                    print(coord)
+
+                                current_quest = (await self.get_truncated_quest_objectives(self.current_leader_client)).lower()
+
+                            # wait until it is completed manually
+                            while any(map(truncated_quest_obj.__contains__, forbidden_quests)):
+                                await asyncio.sleep(2)
+                                quest_objective = await get_quest_name(self.current_leader_client)
+
+                            logger.debug('Quest completed manually - continuing Auto Quest.')
                         # if on a bad collect quest, tell the user to complete manually
                         # some zones / quests are impossible to complete or for several reasons should be avoided
-                        if any(map(quest_objective.__contains__, forbidden_quests)):
+                        elif any(map(quest_objective.__contains__, forbidden_quests)):
                             logger.debug('Cannot complete this quest - Please complete it manually to continue.')
 
                             # wait until it is completed manually
@@ -1256,19 +1403,53 @@ class Quester():
 
                             logger.debug('Quest completed manually - continuing Auto Quest.')
                         else:
-                            for c in self.clients:
-                                if c.process_id != self.leader_pid:
-                                    try:
-                                        await self.auto_collect(c)
-                                    except:
-                                        print(traceback.print_exc())
+                            collect_quests_on = True
+                            if not collect_quests_on:
+                                # input('on collect quest - press enter to continue')
+                                print('on collect quest, waiting for completion')
+                                await asyncio.sleep(2.0)
+                            else:
+                                old_collects = True
+                                if old_collects:
+                                    for c in self.clients:
+                                        if c.process_id != self.current_leader_pid:
+                                            try:
+                                                # TODO: change this to a task so we can stop changing member variables improperly
+                                                # collect_quest_task = asyncio.create_task(collect_quest_loop(c))
+                                                # await asyncio.wait([solo_zone_task])
+                                                collect_quester = Quester(c, self.clients, None)
+                                                await collect_quester.auto_collect(c)
+                                            except:
+                                                print(traceback.print_exc())
 
-                            for c in self.clients:
-                                if c.process_id == self.leader_pid:
-                                    self.client = c
+                                    # for c in self.clients:
+                                    #     if c.process_id == current_leader_pid:
+                                    #         self.client = c
 
-                                # finally, collect items on the leader
-                            await self.auto_collect(self.client)
+                                    # finally, collect items on the leader
+                                    await self.auto_collect(self.current_leader_client)
+                                else:
+                                    print('testing new collects')
+                                    # for c in self.clients:
+                                    #     if c.process_id != self.current_leader_pid:
+                                    #         try:
+                                    #             # TODO: change this to a task so we can stop changing member variables improperly
+                                    #             # collect_quest_task = asyncio.create_task(collect_quest_loop(c))
+                                    #             # await asyncio.wait([solo_zone_task])
+                                    #             collect_quester = Quester(c, self.clients, None)
+                                    #             await collect_quester.auto_collect_rewrite(c)
+                                    #         except:
+                                    #             print(traceback.print_exc())
+
+
+
+
+                                    # for c in self.clients:
+                                    #     if c.process_id == current_leader_pid:
+                                    #         self.client = c
+
+                                    # finally, collect items on the leader
+                                    await self.auto_collect_rewrite(self.current_leader_client)
                     else:
                         logger.debug('False collect quest detected.  Quest position: ' + str(distance))
 
@@ -1344,7 +1525,7 @@ class Quester():
                 distance = calc_Distance(quest_xyz, XYZ(0.0, 0.0, 0.0))
 
                 if distance < 1:
-                    await self.auto_collect(self.client)
+                    await self.auto_collect_rewrite(self.client)
 
     async def auto_quest(self):
         while self.client.questing_status:
