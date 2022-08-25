@@ -90,12 +90,14 @@ def read_config(config_name : str):
 	global use_potions
 	global rpc_status
 	global drop_status
+	global kill_minions_first
 	auto_updating = parser.getboolean('settings', 'auto_updating', fallback=True)
 	speed_multiplier = parser.getfloat('settings', 'speed_multiplier', fallback=5.0)
 	wiz_path = parser.get('settings', 'wiz_path', fallback=None)
 	use_potions = parser.get('settings', 'use_potions', fallback=True)
 	rpc_status = parser.getboolean('settings', 'rich_presence', fallback=True)
 	drop_status = parser.getboolean('settings', 'drop_logging', fallback=True)
+	kill_minions_first = parser.getboolean('settings', 'kill_minions_first', fallback=False)
 
 	# Hotkeys
 	global x_press_key
@@ -1691,6 +1693,7 @@ async def main():
 		p.duel_circle_joinable = True
 		p.in_solo_zone = False
 		p.wizard_name = None
+		p.kill_minions_first = kill_minions_first
 		p.latest_drops: List[Tuple[str, int]] = []
 
 		# Set follower/leader statuses for auto questing/sigil

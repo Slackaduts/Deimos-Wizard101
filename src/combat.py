@@ -1894,8 +1894,16 @@ class Fighter(CombatHandler):
 			damage = await self.calculate_damage(target, card, enchant)
 			if damage >= target_health:
 				kill_counter = kill_counter + 1
-		if kill_counter / len(self.mobs) >= 0.5:
-			return True
+
+		if self.client.kill_minions_first: # a bool that checks in config if we should kill minions first
+			if kill_counter / len(self.mobs) >= 0.5:
+				return True
+		else:
+			# print('icecream')
+			# print(':)')
+			if kill_counter / len(self.mobs) == 1:
+				return True
+
 		# Accept smaller hit percentages in PVP
 		if any([await m.is_player() for m in self.mobs]):
 			if target_health > 3000:
