@@ -7,7 +7,7 @@ from src.utils import use_potion, buy_potions, is_free, logout_and_in, wait_for_
 from src.teleport_math import YPR, write_ypr
 import re
 
-
+# THIS WHOLE THING IS UNFINISHED - slack
 
 async def parse_input(client: Client, clients: List[Client], raw_commands: str, line_seperator: str = '\n'):
     # Calls wizwalker functions based on text commands in the GUI.
