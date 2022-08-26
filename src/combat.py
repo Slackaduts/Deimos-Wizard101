@@ -600,6 +600,7 @@ class Fighter(CombatHandler):
 		self.selected_enemy = None
 		self.selected_ally = None
 		self.selected_ally_id = None
+
 		while await self.is_fighting() and self.client.combat_status:
 			await self.wait_for_planning_phase()
 			self.real_round = await self.round_number()
@@ -1472,7 +1473,7 @@ class Fighter(CombatHandler):
 
 			# detect failed cast, only if the client is soloing and is not in pvp as to avoid issues
 			await asyncio.sleep(1)
-			if len(self.clients) == len(self.allies) and not in_pvp:  # bad check to see if it's only your char's in battle.
+			if len(self.clients) == len(self.allies) and len(self.clients) == 1 and not in_pvp:  # bad check to see if it's only your char's in battle.
 				if await self.client.duel.duel_phase() == DuelPhase.planning:
 					await asyncio.sleep(0.5)
 					pass
@@ -1707,13 +1708,27 @@ class Fighter(CombatHandler):
 		# get relevant damage %, with damage limit
 		caster_damage = caster_damages[school_list_ids[card_school]]
 		caster_damage_percent = caster_damage * 100
-		if caster_damage > 1.50:
-			limit = float(await self.client.duel.damage_limit()) * 100
-			caster_damage_percent = float(limit - 536.43 * (math.e ** (-0.0158 * caster_damage_percent)))
-			caster_damage = (caster_damage_percent / 100) + 1
-		else:
-			caster_damage += 1
+		# Get max limit, read k and read n values from the duel object
+		l = await self.client.duel.damage_limit()
+		k0 = await self.client.duel.d_k0()
+		n0 = await self.client.duel.d_n0()
 
+		if caster_damage > (k0 + n0) / 100:
+			limit = float(l) * 100
+
+			# Calculate k, thank you charlied134 and Major
+			if k0 != 0:
+				k = math.log(limit / (limit - k0)) / k0
+			else:
+				k = 1 / limit
+
+			# Calculate n, thank you charlied134 and Major
+			n = math.log(1 - (k0 + n0) / limit) + k * (k0 + n0)
+
+			caster_damage = l - l * math.e ** (-1 * k * caster_damage_percent + n)
+
+		caster_damage += 1
+		caster_damage_percent = caster_damage * 100
 
 		# get relevant flat damage
 		caster_flat_damage = caster_flat_damages[school_list_ids[card_school]]
@@ -1879,8 +1894,16 @@ class Fighter(CombatHandler):
 			damage = await self.calculate_damage(target, card, enchant)
 			if damage >= target_health:
 				kill_counter = kill_counter + 1
-		if kill_counter / len(self.mobs) >= 0.5:
-			return True
+
+		if self.client.kill_minions_first: # a bool that checks in config if we should kill minions first
+			if kill_counter / len(self.mobs) >= 0.5:
+				return True
+		else:
+			# print('icecream')
+			# print(':)')
+			if kill_counter / len(self.mobs) == 1:
+				return True
+
 		# Accept smaller hit percentages in PVP
 		if any([await m.is_player() for m in self.mobs]):
 			if target_health > 3000:

@@ -13,8 +13,12 @@ potion_fill_all_path = ['WorldView', 'main', 'fillallpotions']
 potion_exit_path = ['WorldView', 'main', 'exit']
 potion_usage_path = ['WorldView', 'windowHUD', 'btnPotions']
 
+# Spellbook Paths
+check_spellbook_open_path = ['WorldView', 'DeckConfiguration']
+
 # Quitting/Playing Paths
 quit_button_path = ['WorldView', 'DeckConfiguration', 'SettingPage', 'QuitButton']
+close_spellbook_path = ['WorldView', 'DeckConfiguration', 'Close_Button']
 play_button_path = ['WorldView', 'mainWindow', 'btnPlay']
 
 # Dungeon Entry Paths
@@ -25,7 +29,7 @@ advance_dialog_path = ['WorldView', 'wndDialogMain', 'btnRight']
 decline_quest_path = ['WorldView', 'wndDialogMain', 'btnLeft']
 
 # Quest Objective Path
-quest_name_path = ["WorldView", "windowHUD", "QuestHelperHud", "ElementWindow", "" ,"txtGoalName"]
+quest_name_path = ["WorldView", "windowHUD", "QuestHelperHud", "ElementWindow", "", "txtGoalName"]
 
 # NPC Range Popup Paths
 popup_title_path = ["WorldView", "NPCRangeWin", "wndTitleBackground", "NPCRangeTxtTitle"]
@@ -73,3 +77,40 @@ exit_minigame_sigil = ['WorldView', 'mainwindow', 'exit']
 
 # Exit Wysteria Pigswick Tournament of Magic Bracket Popup
 exit_wysteria_tournament = ['WorldView', 'TournamentRanking', 'exit']
+
+# Chat Window
+chat_window_path = ['WorldView', 'WizardChatBox', 'chatContainer', 'chatLogContainer', 'chatLogInnerContainer', 'chatLog']
+
+# Popup Message Path
+popup_msgtext_path = ["WorldView", "NPCRangeWin", "imgBackground", "NPCRangeTxtMessage"]
+
+# Friend Busy (on teleport) Path
+friend_is_busy_path = ['MessageBoxModalWindow', 'messageBoxBG', 'messageBoxLayout', 'AdjustmentWindow', 'Layout', 'rightButton']
+
+# Friend List / Friend Popup Paths
+add_remove_friend_path = ['WorldView', 'windowHUD', 'wndCharacter', 'ButtonLayout', 'btnAddRemoveFriend']
+confirm_send_friend_request = ['MessageBoxModalWindow', 'messageBoxBG', 'messageBoxLayout', 'AdjustmentWindow', 'Layout', 'centerButton']
+confirm_accept_friend_request = ['WorldView', 'MessageBoxModalWindow', 'messageBoxBG', 'messageBoxLayout', 'AdjustmentWindow', 'Layout', 'centerButton']
+enter_true_friend_code_button_path = ['WorldView', 'windowHUD', 'wndFriendsList', 'btnSecureChatSetup']
+true_friend_window = ['WorldView', 'FriendCodeWindow']
+generate_true_friend_code_path = ['WorldView', 'FriendCodeWindow', 'btnGenerateCode']
+confirm_true_friend_code = ['WorldView', 'FriendCodeWindow', 'ValidateWindow', 'btnValidateCode']
+exit_true_friend_window = ['WorldView', 'FriendCodeWindow', 'btnExit']
+exit_generate_true_friend_window = ['WorldView', '', 'btnExit']
+true_friend_code_text_path = ['WorldView', '', 'txtRLFCode']
+close_real_friend_list_button_path = ['WorldView', 'windowHUD', 'wndFriendsList', 'btnFriendListClose']
+
+# Teleport Mark Recall Path
+teleport_mark_recall_path = ['WorldView', 'windowHUD', 'compassAndTeleporterButtons', 'RecallButton']
+
+# Dungeon Recall Path
+dungeon_recall_path = ['WorldView', 'windowHUD', 'compassAndTeleporterButtons', 'ResumeInstanceButton']
+
+# Open Cantrips Path ?
+open_cantrips_path = ['WorldView', 'windowHUD', 'compassAndTeleporterButtons', 'OpenCantripsButton']
+
+# Exit Dungeon Path
+exit_dungeon_path = ['MessageBoxModalWindow', 'messageBoxBG', 'messageBoxLayout', 'AdjustmentWindow', 'Layout', 'centerButton']
+
+# Zafaria Class Picture Exit Path
+exit_zafaria_class_picture_button = ['WorldView', 'ClassPicture', 'exit']
