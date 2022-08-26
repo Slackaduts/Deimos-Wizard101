@@ -817,3 +817,13 @@ async def pid_to_client(clients: List[Client], pid: int) -> Client:
 		return clients[0]
 	else:
 		return None
+
+
+async def wait_for_visible_by_path(client: Client, path: List[str], wait_for_not: bool = False, interval: float = 0.25):
+	if wait_for_not:
+		while await is_visible_by_path(client, path):
+			await asyncio.sleep(interval)
+
+	else:
+		while not await is_visible_by_path(client, path):
+			await asyncio.sleep(interval)
