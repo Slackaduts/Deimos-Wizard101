@@ -27,6 +27,7 @@ dungeon_warning_path = ['MessageBoxModalWindow', 'messageBoxBG', 'messageBoxLayo
 # Dialogue Paths
 advance_dialog_path = ['WorldView', 'wndDialogMain', 'btnRight']
 decline_quest_path = ['WorldView', 'wndDialogMain', 'btnLeft']
+dialog_text_path = ['WorldView', 'wndDialogMain', 'txtArea', 'txtMessage']
 
 # Quest Objective Path
 quest_name_path = ["WorldView", "windowHUD", "QuestHelperHud", "ElementWindow", "", "txtGoalName"]
@@ -114,3 +115,13 @@ exit_dungeon_path = ['MessageBoxModalWindow', 'messageBoxBG', 'messageBoxLayout'
 
 # Zafaria Class Picture Exit Path
 exit_zafaria_class_picture_button = ['WorldView', 'ClassPicture', 'exit']
+
+# Check Backpack Open Path
+backpack_is_visible_path = ['WorldView', 'DeckConfiguration', 'InventorySpellbookPage', 'EquipmentManager']
+
+# Equipment Set Manager Paths
+equipment_set_manager_title_path = ['WorldView', 'DeckConfiguration', 'EquipmentManager', 'top_scroll', 'title']
+individual_equipment_set_parent_path = ['WorldView', 'DeckConfiguration', 'EquipmentManager', '']
+
+# Backpack Page Title
+backpack_title_path = ['WorldView', 'DeckConfiguration', 'InventorySpellbookPage', 'top_scroll', 'title']

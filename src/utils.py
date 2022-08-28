@@ -1,13 +1,20 @@
 import asyncio
+import time
 import traceback
-from wizwalker import Client, Keycode, XYZ
+
+import wizwalker.errors
+from wizwalker import Client, Keycode, XYZ, user32
 from wizwalker.extensions.scripting.utils import _maybe_get_named_window, _cycle_to_online_friends, _cycle_friends_list
 from wizwalker.extensions.wizsprinter.wiz_navigator import toZone
 from wizwalker.memory import Window
 from loguru import logger
+
 from src.paths import *
 from src.sprinty_client import SprintyClient
-from typing import List
+from typing import List, Optional
+
+# from src.teleport_math import calc_Distance
+
 
 async def attempt_activate_mouseless(client: Client, sleep_time: float = 0.1):
 	# Attempts to activate mouseless, in a try block in case it's already on for this client
@@ -464,6 +471,84 @@ async def auto_potions_force_buy(client: Client, mark: bool = False, minimum_man
 				await client.send_key(Keycode.PAGE_UP, 0.1)
 
 
+async def is_control_grayed(button):
+	return await button.read_value_from_offset(688, "bool")
+
+
+async def change_equipment_set(client: Client, set_number: int, handle_mouseless=False):
+	if handle_mouseless:
+		await client.mouse_handler.activate_mouseless()
+
+	# Press B until backpack opens
+	while not await is_visible_by_path(client, backpack_is_visible_path):
+		await client.send_key(Keycode.B, 0.1)
+
+	# Click open equipment page button.  Corrects for failed clicks
+	while await is_visible_by_path(client, backpack_title_path):
+		while not await is_visible_by_path(client, equipment_set_manager_title_path):
+			await client.mouse_handler.click_window_with_name('EquipmentManager')
+
+	# Click specific set
+	individual_equipment_set = individual_equipment_set_parent_path.copy()
+	individual_equipment_set.append('equippedIcon' + str(set_number))
+	for i in range(8):
+		await click_window_by_path(client, individual_equipment_set)
+
+	# Click equipment set button.  Corrects for failed clicks
+	while await is_visible_by_path(client, backpack_title_path) or await is_visible_by_path(client, equipment_set_manager_title_path):
+		await client.send_key(Keycode.B, 0.1)
+
+	if handle_mouseless:
+		await client.mouse_handler.deactivate_mouseless()
+
+
+async def safe_wait_for_zone_change(self, name: Optional[str] = None, *, sleep_time: Optional[float] = 0.5):
+	if name is None:
+		name = await self.zone_name()
+
+	# distance = 0.0
+	# original_location = await self.body.position()
+	start_time = time.time()
+	zone_change_failed = False
+	while await self.zone_name() == name:
+		print('waiting for zone change')
+		await asyncio.sleep(sleep_time)
+		if await is_visible_by_path(self, friend_is_busy_path):
+			zone_change_failed = True
+			await click_window_by_path(self, friend_is_busy_path)
+			break
+
+		# 5 seconds have passed
+		if time.time() > start_time + 10:
+			if await self.is_loading():
+				break
+			# if after 5 seconds we have not entered a loading screen and have not seen a friend is busy popup, we're in the same zone
+			else:
+				zone_change_failed = True
+				break
+
+		# distance = calc_Distance(await self.body.position, XYZ(0.0, 0.0, 0.0))
+		#
+		# # we likely moved to a different location within our current zone (perhaps through friend teleport)
+		# if await self.zone_name() == name and distance > 20:
+		# 	exit_function = True
+		# 	break
+
+	if not zone_change_failed:
+		while await self.is_loading():
+			print('waiting in loading')
+			await asyncio.sleep(sleep_time)
+			if await is_visible_by_path(self, friend_is_busy_path):
+				zone_change_failed = True
+				await click_window_by_path(self, friend_is_busy_path)
+
+	if zone_change_failed:
+		print('returning false')
+		return False
+	else:
+		return True
+
+
 async def refill_potions(client: Client, mark: bool = False):
 	if await client.stats.reference_level() >= 5:
 		# mark if needed
@@ -582,7 +667,6 @@ async def sync_camera(client: Client, xyz: XYZ = None, yaw: float = None):
 
 
 # returns True if all provided friends are in the list, and False if any single friend is not
-@logger.catch()
 async def check_for_multiple_friends_in_list(client: Client, friend_names: list[str]):
 	try:
 		await client.mouse_handler.activate_mouseless()
@@ -658,7 +742,6 @@ async def check_for_multiple_friends_in_list(client: Client, friend_names: list[
 	return True
 
 
-@logger.catch()
 async def check_for_friend_in_list(client: Client, friend_name: str):
 	try:
 		await client.mouse_handler.activate_mouseless()
@@ -752,7 +835,6 @@ async def set_wizard_name(client: Client):
 	client.wizard_name = wizard_name
 
 
-@logger.catch()
 async def get_friend_popup_wizard_name(client: Client):
 	option_window = await client.root_window.get_windows_with_name("lblCharacterName")
 

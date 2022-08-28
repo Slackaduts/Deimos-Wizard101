@@ -99,6 +99,7 @@ def read_config(config_name : str):
 	drop_status = parser.getboolean('settings', 'drop_logging', fallback=True)
 	kill_minions_first = parser.getboolean('settings', 'kill_minions_first', fallback=False)
 
+
 	# Hotkeys
 	global x_press_key
 	global sync_locations_key
@@ -148,8 +149,10 @@ def read_config(config_name : str):
 	# Auto Questing Settings
 	global client_to_boost
 	global questing_friend_tp
+	global gear_switching_in_solo_zones
 	client_to_boost = parser.get('questing', 'client_to_boost', fallback=None)
 	questing_friend_tp = parser.getboolean('questing', 'friend_teleport', fallback=False)
+	gear_switching_in_solo_zones = parser.getboolean('questing', 'gear_switching_in_solo_zones', fallback=False)
 
 while True:
 	if not os.path.exists(f'{tool_name}-config.ini'):
@@ -803,7 +806,7 @@ async def main():
 							# if follow leader is off, quest on all clients, passing through only the leader
 							logger.debug(f'Client {client.title} - Handling questing for all clients.')
 							questing = Quester(client, walker.clients, questing_leader_pid)
-							await questing.auto_quest_leader(questing_friend_tp)
+							await questing.auto_quest_leader(questing_friend_tp, gear_switching_in_solo_zones)
 					else:
 						# if follow leader is off, quest on all clients, passing through only the leader
 						logger.debug(f'Client {client.title} - Handling questing.')
