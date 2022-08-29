@@ -226,10 +226,8 @@ async def accept_tfc(client: Client, tfc: str):
 		#if await is_visible_by_path(client, )
 
 
-async def exit_menus(c):
-	path = (exit_recipe_shop_path, exit_equipment_shop_path, cancel_multiple_quest_menu_path, cancel_spell_vendor, exit_snack_shop_path, exit_tc_vendor, exit_minigame_sigil, exit_wysteria_tournament, exit_dungeon_path, exit_zafaria_class_picture_button)
-
-	for i in path:
+async def exit_menus(c, paths):
+	for i in paths:
 		click_button = await get_window_from_path(c.root_window, i)
 		if click_button:
 			if await click_button.is_visible():

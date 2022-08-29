@@ -321,6 +321,117 @@ async def split_walk(client: Client, xyz: XYZ = None, segments: int = 5, origina
         await asyncio.sleep(0)
 
 
+async def navmap_tp_leader_quest(client: Client, xyz: XYZ = None, minimum_distance_increment: int = 250, walk_after=True, pet_mode: bool = False, leader_client: Client = None):
+    if await is_free(client):
+        original_zone_name = await client.zone_name()
+        if leader_client:
+            original_quest_xyz = await leader_client.quest_position.position()
+            original_quest_objective = await get_quest_name(leader_client)
+        else:
+            original_quest_xyz = await client.quest_position.position()
+            original_quest_objective = await get_quest_name(client)
+
+        original_position = await client.body.position()
+        if xyz:
+            quest_pos = xyz
+        else:
+            quest_pos = await client.quest_position.position()
+
+        minimum_vertex_distance = minimum_distance_increment
+        await teleport_move_adjust(client, quest_pos, pet_mode=pet_mode)
+        while not await is_free(client) or client.entity_detect_combat_status:
+            await asyncio.sleep(0.1)
+        current_zone = await client.zone_name()
+        navmap_errored = False
+        try:
+            wad = await load_wad(current_zone)
+            nav_data = await wad.get_file("zone.nav")
+            vertices = []
+            vertices, _ = parse_nav_data(nav_data)
+        except:
+            if leader_client:
+                await auto_adjusting_teleport(client, original_quest_xyz)
+            else:
+                await auto_adjusting_teleport(client)
+
+            if walk_after:
+                navmap_errored = True
+                if leader_client:
+                    await split_walk(client, quest_pos, original_zone=original_zone_name, leader_client=leader_client)
+                else:
+                    await split_walk(client, quest_pos, original_zone=original_zone_name)
+        squared_distances = [calc_squareDistance(quest_pos, n) for n in vertices]
+        sorted_distances = sorted(squared_distances)
+        while not navmap_errored:
+        # while are_xyzs_within_threshold(xyz_1=(await client.body.position()), xyz_2=original_position, threshold=100) and await client.zone_name() == original_zone_name and not await client.is_loading():
+            current_pos = await client.body.position()
+            if await client.zone_name() == original_zone_name and await is_free(client) and not client.entity_detect_combat_status:
+                if are_xyzs_within_threshold(xyz_1=current_pos, xyz_2=original_position, threshold=100):
+                    pass
+                else:
+                    break
+            else:
+                break
+            # set minimum distance between 2 chosen vertices
+            minimum_vertex_distance += minimum_distance_increment
+            for s in sorted_distances:
+                current_index = sorted_distances.index(s)
+                if current_index + 1 < len(sorted_distances):
+                    # this is REALLY inefficient but I'll fix it later maybe
+                    # selection of the 2 closest vertices that satisfy the criteria
+                    vertex = vertices[int(squared_distances.index(sorted_distances[current_index]))]
+                    next_vertex = vertices[int(squared_distances.index(sorted_distances[current_index + 1]))]
+                    between_vertices = calc_Distance(vertex, next_vertex)
+                    quest_to_vertex = calc_Distance(quest_pos, next_vertex)
+                    if between_vertices >= quest_to_vertex or between_vertices < minimum_vertex_distance:
+                        pass
+                    elif between_vertices < quest_to_vertex and between_vertices >= minimum_vertex_distance:
+                        adjusted_pos = calc_AveragePoint([vertex, next_vertex, quest_pos, quest_pos])
+                        final_adjusted_pos = XYZ(x=adjusted_pos.x, y=adjusted_pos.y, z=max([quest_pos.z, adjusted_pos.z]))
+                        if await client.zone_name() == original_zone_name and await is_free(client) and not client.entity_detect_combat_status:
+                            await teleport_move_adjust(client, final_adjusted_pos, pet_mode=pet_mode)
+                        elif not await is_free(client) or client.entity_detect_combat_status:
+                            break
+                        break
+                    else:
+                        pass
+                else:
+                    break
+
+        if walk_after:
+            if leader_client:
+                await split_walk(client, quest_pos, original_zone=original_zone_name, leader_client=leader_client)
+            else:
+                await split_walk(client, quest_pos, original_zone=original_zone_name)
+        await asyncio.sleep(0.3)
+
+        current_pos = await client.body.position()
+
+        # auto quest with leader needs to keep control of its follower clients, so use leader's quest objective instead of follower's
+        if leader_client:
+            current_quest_xyz = await leader_client.quest_position.position()
+            current_quest_objective = await get_quest_name(leader_client)
+        else:
+            current_quest_xyz = await client.quest_position.position()
+            current_quest_objective = await get_quest_name(client)
+
+        current_zone = await client.zone_name()
+        original_stats = [original_quest_objective, original_zone_name]
+        current_stats = [current_quest_objective, current_zone]
+
+        if all([await is_free(client), not client.entity_detect_combat_status, not await is_visible_by_path(client, npc_range_path), are_xyzs_within_threshold(original_quest_xyz, current_quest_xyz, 50), current_stats == original_stats]):
+            if leader_client:
+                await auto_adjusting_teleport(client, leader_client=leader_client)
+            else:
+                await auto_adjusting_teleport(client)
+
+            if walk_after:
+                if leader_client:
+                    await split_walk(client, quest_pos, original_zone=original_zone_name, leader_client=leader_client)
+                else:
+                    await split_walk(client, quest_pos, original_zone=original_zone_name)
+
+
 async def navmap_tp(client: Client, xyz: XYZ = None, minimum_distance_increment: int = 250, walk_after=True, pet_mode: bool = False, leader_client: Client = None):
     if await is_free(client):
         original_zone_name = await client.zone_name()

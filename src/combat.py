@@ -1,4 +1,5 @@
 import asyncio
+
 import wizwalker
 from typing import Optional, Tuple, Union, List
 from wizwalker.combat import CombatHandler, CombatCard, CombatMember
@@ -41,7 +42,7 @@ SELECT_HEAL_BLADES = frozenset(['Guiding Light', 'Precision', 'Guiding Armor'])
 
 # Traps
 SELECT_TRAPS = frozenset(["Elemental Trap",'Hex', 'Disarming Trap', 'Curse', 'Spirit Trap', 'Death Trap', 'Life Trap', 'Myth Trap', 'Storm Trap', 'Fire Trap', 'Backdraft', 'Feint', 'Ice Trap'])
-AOE_TRAPS = frozenset(['Bewilder', 'Beastmoon Curse', 'Debilitate', 'Ambush', 'Mass Death Trap', 'Mass Life Trap', 'Mass Feint', 'Mass Myth Trap', 'Mass Fire Trap', 'Mass Ice Trap', 'Mass Storm Trap', 'Mass Hex', 'Malediction'])
+AOE_TRAPS = frozenset(['Bewilder', 'Beastmoon Curse', 'Debilitate', 'Ambush', 'Mass Death Trap', 'Mass Life Trap', 'Mass Feint', 'Mass Myth Trap', 'Mass Fire Trap', 'Mass Ice Trap', 'Mass Storm Trap', 'Mass Hex', 'Malediction', 'Windstorm'])
 
 # Globals
 GLOBALS = frozenset(['Age of Reckoning', 'Astraphobia', 'Balance of Power', 'Balefrost', 'Circle of Thorns', 'Combustion', 'Counterforce', 'Darkwind', 'Deadzone', 'Doom and Gloom', 'Elemental Surge', 'Katabatic Wind', 'Namaste', 'Power Play', 'Saga of Heroes', 'Sanctuary', 'Spiritual Attunement', 'Time of Legend', 'Tide of Battle', 'Wyldfire', 'Elemental Surge', 'Dampen Magic'])
@@ -453,7 +454,6 @@ class Fighter(CombatHandler):
 		self.client = client
 		self.clients = clients
 
-
 	async def get_cards(self) -> List[CombatCard]:  # extended to sort by enchanted # Olaf's fix for coro graphical spell error
 			async def _inner() -> List[CombatCard]:
 				cards = await super(Fighter, self).get_cards()
@@ -635,7 +635,12 @@ class Fighter(CombatHandler):
 				await self.assign_spell_logic()
 				await self.effect_enchant_ID(self.client_member)
 				await self.enchant_all()
-				await self.discard_useless()
+				if self.client.discard_duplicate_cards:
+					print('discard')
+					await self.discard_useless()
+				else:
+					self.combat_resolver = await self.client.duel.combat_resolver()
+					print('dont discard')
 				await self.get_tc()
 				await self.handle_round()
 			else: 
@@ -1102,6 +1107,11 @@ class Fighter(CombatHandler):
 		priority_types = []
 		selected_ally = None
 
+		if self.client.automatic_team_based_combat == True:
+			selected_ally = None
+		else:
+			# all clients buff themselves
+			selected_ally = self.client_member
 
 		# Healing logic
 		player_members = [a for a in self.allies if await a.is_player() == True]
@@ -1114,7 +1124,7 @@ class Fighter(CombatHandler):
 		if health_percentages[highest_priority_ally] < 0.51:
 			selected_ally = highest_priority_ally
 			priority_types += heal_types
-		if len([c for c in self.cards if self.card_names[c] == "Reshuffle"]) > len([c for c in self.cards if not self.card_names[c] == "Reshuffle" and not await c.is_treasure_card()]) and len([self.cards]) < 6 :
+		if len([c for c in self.cards if self.card_names[c] == "Reshuffle"]) > len([c for c in self.cards if not self.card_names[c] == "Reshuffle" and not await c.is_treasure_card()]) and len([self.cards]) < 6:
 			selected_ally = self.client_member
 			priority_types += reshuffle_types
 
@@ -1317,7 +1327,8 @@ class Fighter(CombatHandler):
 
 		await self.effect_enchant_ID(self.selected_enemy)
 		for card in self.cards:
-			await self.discard_spell_in_hanging_effect(card)
+			if self.client.discard_duplicate_cards:
+				await self.discard_spell_in_hanging_effect(card)
 		_ = await self.get_valid_cards(self.card_exclusions)
 		await self.assign_card_names()
 		await self.assign_spell_logic()
@@ -1336,8 +1347,10 @@ class Fighter(CombatHandler):
 
 		# print(f"current ally : {self.selected_ally}")
 		await self.effect_enchant_ID(self.selected_ally)
-		for card in self.cards:
-			await self.discard_spell_in_hanging_effect(card)
+
+		if self.client.discard_duplicate_cards:
+			for card in self.cards:
+				await self.discard_spell_in_hanging_effect(card)
 
 		_ = await self.get_valid_cards(self.card_exclusions)
 		await self.assign_card_names()
@@ -1352,7 +1365,13 @@ class Fighter(CombatHandler):
 		#selected_ally = None
 		# search cards for matching spell type, finds all matches and then breaks.
 		#print(f"strategy : {strategy}")
+
+
 		if castable_cards:
+			spell_selected = False
+			backup_spell = None
+			backup_selected_ally_id = None
+			backup_selected_ally = None
 			for t in strategy:
 				for c in castable_cards:
 					if c in self.spell_logic:
@@ -1365,6 +1384,7 @@ class Fighter(CombatHandler):
 					spell_matches_ranks = {}
 					spell_pip_value_in_order = []
 					spell_pip_value = []
+					print('strategy: ' + t)
 					if "HIT" in strategy:
 						for s in spell_matches:
 							pip_value = self.pip_values[s]
@@ -1378,38 +1398,63 @@ class Fighter(CombatHandler):
 
 					for i in spell_pip_value:
 						spell_pip_value_in_order.append(i[1])
+
+
 					for selected_spell in spell_pip_value_in_order: 
 						selected_spell_logic = self.spell_logic[selected_spell]
 						# Ally Selection, if not done via playstyle mods already
-						if not selected_ally :
-							spiritblade = [2330892, 78318724, 2448141, 1027491821]#list of schools [life, death, myth, balance]
-							elementalblade = [83375795, 2343174, 72777, 102749182]#list of schools [storm, fire, ice, balance]
-							non_balance_uni_blade_names = ['Dark Pact']
-							selected_graphical_spell =  await selected_spell.get_graphical_spell()
-							selected_spell_school = await selected_graphical_spell.magic_school_id()
-							allies_to_compare = [a for a in self.allies if await a.is_player() == True if await self.member_participants[a].primary_magic_school_id() == selected_spell_school or self.card_names[selected_spell] == "Spirit Blade" and await self.member_participants[a].primary_magic_school_id() in spiritblade or self.card_names[selected_spell] == "Elemental Blade" and await self.member_participants[a].primary_magic_school_id() in elementalblade or selected_spell_school == 1027491821 or self.card_names[selected_spell] in non_balance_uni_blade_names]
-							if allies_to_compare:
-								max_ally_damages = {}
-								for a in allies_to_compare:
-									max_ally_damages[a] = max(self.member_damages[a])
-								# return the ally with the max damage, school matched
-								selected_ally = max(max_ally_damages, key = lambda a: max_ally_damages[a])
+						if not selected_ally:
+							selected_ally = await self.get_selected_ally(selected_spell)
+
+							if selected_ally is not None:
 								await self.effect_enchant_ID(selected_ally)
-								if await self.is_spell_in_hanging_effect(selected_spell) == False:
+
+								if await self.is_spell_in_hanging_effect(selected_spell) == False: # and self.client.discard_duplicate_cards: # or self.client.discard_duplicate_cards:
+									spell_selected = True
 									self.selected_spell = selected_spell
 									self.selected_ally_id = await selected_ally.owner_id()
 									self.selected_ally = selected_ally
+
 									break
-									
-					if self.selected_spell:
+								# do not discount cards that are duplicates - we may use them later if there is simply nothing better to use
+								# instead continue looping through and hope to find a unique card
+								elif not self.client.discard_duplicate_cards and backup_spell is None:
+									backup_spell = selected_spell
+									backup_selected_ally_id = await selected_ally.owner_id()
+									backup_selected_ally = selected_ally
+
+					if spell_selected:
 						break
 					else:
 						for spell in spell_pip_value_in_order:
 							if not await self.is_spell_in_hanging_effect(spell):
+								spell_selected = True
 								self.selected_spell = spell
+
+								if not self.client.discard_duplicate_cards and self.client.automatic_team_based_combat:
+									selected_ally = await self.get_selected_ally(spell)
+
+									if selected_ally is not None:
+										self.selected_ally_id = await selected_ally.owner_id()
+
 								break
-						break
-				
+							# keep track of spell incase we cannot find a valid alternative
+							# for non-team based combat, do not consider allies as an option
+							elif not self.client.automatic_team_based_combat and not self.client.discard_duplicate_cards and backup_spell is None:
+								backup_spell = spell
+
+						if self.client.discard_duplicate_cards or spell_selected == True:
+							break
+
+			# if after iterating through all strategies we could not find a valid card, cast the duplicate (if config option is set)
+			if not self.client.discard_duplicate_cards and not spell_selected:
+				self.selected_spell = backup_spell
+
+				# if an ally was meant to be targeted by the backup spell, set them here
+				if backup_selected_ally_id is not None and backup_selected_ally is not None:
+					self.selected_ally_id = backup_selected_ally_id
+					self.selected_ally = backup_selected_ally
+
 		# print("icecream")
 		# print(self.removed_spells)
 		#cards = []
@@ -1481,6 +1526,23 @@ class Fighter(CombatHandler):
 					break
 			else:
 				break
+
+	async def get_selected_ally(self, spell):
+		spiritblade = [2330892, 78318724, 2448141, 1027491821]  # list of schools [life, death, myth, balance]
+		elementalblade = [83375795, 2343174, 72777, 102749182]  # list of schools [storm, fire, ice, balance]
+		non_balance_uni_blade_names = ['Dark Pact']
+		selected_graphical_spell = await spell.get_graphical_spell()
+		selected_spell_school = await selected_graphical_spell.magic_school_id()
+		allies_to_compare = [a for a in self.allies if await a.is_player() == True if await self.member_participants[a].primary_magic_school_id() == selected_spell_school or self.card_names[spell] == "Spirit Blade" and await self.member_participants[a].primary_magic_school_id() in spiritblade or self.card_names[spell] == "Elemental Blade" and await self.member_participants[a].primary_magic_school_id() in elementalblade or selected_spell_school == 1027491821 or self.card_names[spell] in non_balance_uni_blade_names]
+		if allies_to_compare:
+			max_ally_damages = {}
+			for a in allies_to_compare:
+				max_ally_damages[a] = max(self.member_damages[a])
+			# return the ally with the max damage, school matched
+			selected_ally = max(max_ally_damages, key=lambda a: max_ally_damages[a])
+			return selected_ally
+
+		return None
 
 #big thanks to major for doing most of the work, & click for helping
 	#TODO not overread

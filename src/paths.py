@@ -61,6 +61,9 @@ exit_equipment_shop_path = ['WorldView', 'shopGUI', 'buyWindow', 'exit']
 # Exit Pet Snack Shops
 exit_snack_shop_path = ['WorldView', 'ShoppingPetSnackWindow', 'buyWindow', 'exit']
 
+# Exit Reagent Shops
+exit_reagent_shop_path = ['WorldView', 'ShoppingReagentWindow', 'buyWindow', 'exit']
+
 # Cancel Quest Menus (For NPCs that offer multiple side quests at once)
 cancel_multiple_quest_menu_path = ['WorldView', 'NPCServicesWin', 'wndDialogMain', 'Exit']
 
@@ -125,3 +128,10 @@ individual_equipment_set_parent_path = ['WorldView', 'DeckConfiguration', 'Equip
 
 # Backpack Page Title
 backpack_title_path = ['WorldView', 'DeckConfiguration', 'InventorySpellbookPage', 'top_scroll', 'title']
+
+# Exit Pet Leveled Up Popup
+# UNTESTED
+exit_pet_leveled_up_button_path = ['WorldView', 'PetLevelUpWindow', 'wndPetLevelBkg', 'btnPetLevelClose']
+
+# Exit Avalon Badge Popup
+avalon_badge_exit_button_path = ['WorldView', 'HelpHousingTips2', 'toolbar', 'exit']
