@@ -54,6 +54,8 @@ def hotkey_button(name: str, auto_size: bool, text_color: str, button_color: str
 def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_version, gui_on_top):
 	gui.theme(gui_theme)
 
+	gui.popup('Deimos always be free and open-source.\nBy using Deimos, you agree to the GPL v3 license agreement.\nIf you bought this, you got scammed!', title='License Agreement', keep_on_top=True, text_color=gui_text_color, button_color=(gui_text_color, gui_button_color))
+
 	global hotkey_button
 	original_hotkey_button = hotkey_button
 	def hotkey_button(name, auto_size=False, text_color=gui_text_color, button_color=gui_button_color):
@@ -166,6 +168,7 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 	]
 
 	layout = [
+		[gui.Text('Deimos will always be a free tool. If you paid for this, you got scammed!')],
 		[gui.TabGroup(tabs)],
 		[client_info_layout]
 	]

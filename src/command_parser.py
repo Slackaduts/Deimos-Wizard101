@@ -123,22 +123,22 @@ async def parse_command(clients: List[Client], command_str: str):
             await desired_client.send_key(Keycode[key], time)
 
         case 'waitfordialog' | 'waitfordialogue':
-            await wait_for_coro(desired_client.is_in_dialog) if mass else await asyncio.gather(*[wait_for_coro(client.is_in_dialog) for client in clients])
+            await wait_for_coro(desired_client.is_in_dialog) if not mass else await asyncio.gather(*[wait_for_coro(client.is_in_dialog) for client in clients])
 
             if split_command[1].lower() == 'completion':
-                await wait_for_coro(desired_client.is_in_dialog, True) if mass else await asyncio.gather(*[wait_for_coro(client.is_in_dialog, True) for client in clients])
+                await wait_for_coro(desired_client.is_in_dialog, True) if not mass else await asyncio.gather(*[wait_for_coro(client.is_in_dialog, True) for client in clients])
 
         case 'waitforbattle' | 'waitforcombat':
-            await wait_for_coro(desired_client.in_battle) if mass else await asyncio.gather(*[wait_for_coro(client.in_battle) for client in clients])
+            await wait_for_coro(desired_client.in_battle) if not mass else await asyncio.gather(*[wait_for_coro(client.in_battle) for client in clients])
 
             if split_command[-1].lower() == 'completion':
-                await wait_for_coro(desired_client.in_battle, True) if mass else await asyncio.gather(*[wait_for_coro(client.in_battle, True) for client in clients])
+                await wait_for_coro(desired_client.in_battle, True) if not mass else await asyncio.gather(*[wait_for_coro(client.in_battle, True) for client in clients])
 
         case 'waitforzonechange':
-            await desired_client.wait_for_zone_change() if mass else await asyncio.gather(*[client.wait_for_zone_change() for client in clients])
+            await desired_client.wait_for_zone_change() if not mass else await asyncio.gather(*[client.wait_for_zone_change() for client in clients])
 
             if split_command[-1].lower() == 'completion':
-                await wait_for_coro(desired_client.is_loading) if mass else await asyncio.gather(*[wait_for_coro(client.is_loading) for client in clients])
+                await wait_for_coro(desired_client.is_loading) if not mass else await asyncio.gather(*[wait_for_coro(client.is_loading) for client in clients])
 
         case 'waitforfree':
             async def _wait_for_free(client: Client, wait_for_not: bool = False, interval: float = 0.25):
@@ -150,25 +150,25 @@ async def parse_command(clients: List[Client], command_str: str):
                     while not await is_free(client):
                         await asyncio.sleep(interval)
 
-            await _wait_for_free(desired_client) if mass else await asyncio.gather(*[_wait_for_free(client) for client in clients])
+            await _wait_for_free(desired_client) if not mass else await asyncio.gather(*[_wait_for_free(client) for client in clients])
 
             if split_command[1].lower() == 'completion':
-                await _wait_for_free(desired_client, True) if mass else await asyncio.gather(*[_wait_for_free(client, True) for client in clients])
+                await _wait_for_free(desired_client, True) if not mass else await asyncio.gather(*[_wait_for_free(client, True) for client in clients])
 
         case 'usepotion':
-            await use_potion(desired_client) if mass else await asyncio.gather(*[use_potion(client) for client in clients])
+            await use_potion(desired_client) if not mass else await asyncio.gather(*[use_potion(client) for client in clients])
 
         case 'buypotions':
-            await buy_potions(desired_client) if mass else await asyncio.gather(*[buy_potions(client) for client in clients])
+            await buy_potions(desired_client) if not mass else await asyncio.gather(*[buy_potions(client) for client in clients])
 
         case 'speed':
-            await desired_client.client_object.write_speed_multiplier(int(split_command[-1])) if mass else await asyncio.gather(*[client.client_object.write_speed_multiplier(int(split_command[-1])) for client in clients])
+            await desired_client.client_object.write_speed_multiplier(int(split_command[-1])) if not mass else await asyncio.gather(*[client.client_object.write_speed_multiplier(int(split_command[-1])) for client in clients])
 
         case 'sleep' | 'wait' | 'delay':
             await asyncio.sleep(float(split_command[-1]))
 
         case 'logoutandin' | 'relog':
-            await logout_and_in(desired_client) if mass else await asyncio.gather(*[logout_and_in(client) for client in clients])
+            await logout_and_in(desired_client) if not mass else await asyncio.gather(*[logout_and_in(client) for client in clients])
 
         case _:
             await asyncio.sleep(0.25)

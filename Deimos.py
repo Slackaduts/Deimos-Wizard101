@@ -550,7 +550,7 @@ async def main():
 			if await p.game_client.is_freecam():
 				await p.camera_elastic()
 			else:
-				camera = await p.game_client.elastic_camera_controller()
+				camera: ElasticCameraController = await p.game_client.elastic_camera_controller()
 				client_object = await p.body.parent_client_object()
 				await camera.write_attached_client_object(client_object)
 				await camera.write_check_collisions(True)
@@ -1414,8 +1414,9 @@ async def main():
 								bot_task = asyncio.create_task(run_bot())
 
 							case deimosgui.GUICommandType.KillBot:
-								bot_task.cancel()
-								bot_task = None
+								if bot_task is not None:
+									bot_task.cancel()
+									bot_task = None
 
 				except queue.Empty:
 					pass
