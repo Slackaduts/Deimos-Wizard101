@@ -1,8 +1,11 @@
 import asyncio
+from distutils.log import debug
 import traceback
 from pathlib import Path
 
 import requests
+import queue
+import threading
 import wizwalker
 from wizwalker import Keycode, HotkeyListener, ModifierKeys, utils, XYZ
 from wizwalker.client_handler import ClientHandler, Client
@@ -38,6 +41,8 @@ from src.sprinty_client import SprintyClient
 from src.gui_inputs import param_input
 from wizwalker.extensions.wizsprinter.wiz_navigator import toZoneDisplayName, toZone
 from typing import List, Tuple
+
+from src import deimosgui
 
 
 tool_version = '3.6.0'
@@ -471,6 +476,7 @@ async def kill_tool(debug: bool):
 	# raises KeyboardInterrupt, forcing the tool to exit.
 	if debug:
 		logger.debug(f'{kill_tool_key} key pressed, killing {tool_name}.')
+	gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.Close))
 	await asyncio.sleep(0)
 	await asyncio.sleep(0)
 	raise KeyboardInterrupt
@@ -532,9 +538,6 @@ async def main():
 	background_clients = []
 	await asyncio.sleep(0)
 	listener.start()
-
-	#HookHandler.activate_dance_game_moves_hook = activate_dance_game_moves_hook
-	#HookHandler.deactivate_dance_game_moves_hook = deactivate_dance_game_moves_hook
 
 	async def tool_finish():
 		if speed_status:
@@ -991,6 +994,7 @@ async def main():
 
 													if hitter_client is not None:
 														if all_already_in_battle and hitter_client in c.title:
+															print('already in battle')
 															# slight delay to ensure hitter makes it to the circle last
 															await asyncio.sleep(1.0)
 
@@ -1093,460 +1097,317 @@ async def main():
 
 	async def handle_gui():
 		if show_gui:
-			await create_gui()
+			global gui_send_queue
+			gui_send_queue = queue.Queue()
+			recv_queue = queue.Queue()
+
+			# swap queue order because sending from window means receiving from here
+			gui_thread = threading.Thread(
+				target=deimosgui.manage_gui,
+				args=(recv_queue, gui_send_queue, gui_theme, gui_text_color, gui_button_color, tool_name, tool_version, gui_on_top)
+			)
+			gui_thread.start()
+
+			enemy_stats = []
+
+			while True:
+				if foreground_client:
+					current_zone = await foreground_client.zone_name()
+					current_pos = await foreground_client.body.position()
+					current_yaw = await foreground_client.body.yaw()
+					if foreground_client:
+						combat = CombatHandler(foreground_client)
+						members = await combat.get_members()
+
+						enemy_ids = []
+						if await foreground_client.in_battle() and members:
+							client_member = await combat.get_client_member()
+							client_participant = await client_member.get_participant()
+							client_team_id = await client_participant.team_id()
+
+							for member in members:
+								participant = await member.get_participant()
+
+								if await participant.team_id() != client_team_id and not await member.is_player():
+									id = await member.owner_id()
+									enemy_ids.append(id)
+
+					else:
+						enemy_ids = []
+
+					gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Title', f'Client: {foreground_client.title}')))
+					gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Zone', f'Zone: {current_zone}')))
+					gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('x', f'X: {current_pos.x}')))
+					gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('y', f'Y: {current_pos.y}')))
+					gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('z', f'Z: {current_pos.z}')))
+					gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Yaw', f'Yaw: {current_yaw}')))
+
+				# Stuff sent by the window
+				try:
+				# Eat as much as the queue gives us. We will be freed by exception
+					while True:
+						com = recv_queue.get_nowait()
+						match com.com_type:
+							case deimosgui.GUICommandType.Close:
+								await kill_tool_hotkey()
+
+							case deimosgui.GUICommandType.ToggleOption:
+								match com.data:
+									case 'Speedhack':
+										await toggle_speed_hotkey()
+									case 'Combat':
+										await toggle_combat_hotkey()
+									case 'Dialogue':
+										await toggle_dialogue_hotkey()
+									case 'Sigil':
+										await toggle_sigil_hotkey()
+									case 'Questing':
+										await toggle_questing_hotkey()
+									case 'Freecam':
+										await toggle_freecam_hotkey()
+									case 'Camera Collision':
+										if foreground_client:
+											camera: ElasticCameraController = await foreground_client.game_client.elastic_camera_controller()
+
+											collision_status = await camera.check_collisions()
+											collision_status ^= True
+
+											logger.debug(f'Camera Collisions {bool_to_string(collision_status)}')
+											await camera.write_check_collisions(collision_status)
+									case _:
+										logger.debug(f'Unknown window toggle: {com.data}')
+
+							case deimosgui.GUICommandType.Copy:
+								match com.data:
+									case 'Zone':
+										logger.debug('Copied Zone')
+										pyperclip.copy(current_zone)
+									case 'Position':
+										logger.debug('Copied Position')
+										pyperclip.copy(f'XYZ(x={current_pos.x}, y={current_pos.y}, z={current_pos.z})')
+									case 'Yaw':
+										logger.debug('Copied Yaw')
+										pyperclip.copy(current_yaw)
+									case 'Entity List':
+										if foreground_client:
+											logger.debug('Copied Entity List')
+											sprinter = SprintyClient(foreground_client)
+											entities = await sprinter.get_base_entity_list()
+											entities_info = ''
+											for entity in entities:
+												entity_pos = await entity.location()
+												entity_name = await entity.object_name()
+												entities_info += f'{entity_name}, XYZ(x={entity_pos.x}, y={entity_pos.y}, z={entity_pos.z})\n'
+											pyperclip.copy(entities_info)
+									case 'Camera Position':
+										if foreground_client:
+											camera = await foreground_client.game_client.selected_camera_controller()
+											camera_pos = await camera.position()
+
+											logger.debug('Copied Selected Camera Position')
+											pyperclip.copy(f'XYZ(x={camera_pos.x}, y={camera_pos.y}, z={camera_pos.z})')
+									case 'Camera Rotation':
+										if foreground_client:
+											camera = await foreground_client.game_client.selected_camera_controller()
+											camera_yaw = await camera.yaw()
+											camera_roll = await camera.roll()
+											camera_pitch = await camera.pitch()
+
+											logger.debug('Copied Camera Rotations')
+											pyperclip.copy(f'Yaw={camera_yaw}\nRoll={camera_roll}\nPitch={camera_pitch}')
+									case 'UI Tree':
+										foreground: Client = foreground_client
+										if foreground_client:
+											ui_tree = ''
+
+											# TODO: Put this function in utils, with a parent function that can return the string properly
+											async def get_ui_tree(window: Window, depth: int = 0, depth_symbol: str = '-', seperator: str = '\n'):
+												nonlocal ui_tree
+												ui_tree += f"{depth_symbol * depth} [{await window.name()}] {await window.maybe_read_type_name()}{seperator}"
+
+												for child in await utils.wait_for_non_error(window.children):
+													await get_ui_tree(child, depth + 1)
+
+											await get_ui_tree(foreground.root_window)
+
+											logger.debug(f'Copied UI Tree for client {foreground.title}')
+											pyperclip.copy(ui_tree)
+									case 'Enemy Stats':
+										if enemy_stats:
+											logger.debug('Copied Enemy Stats')
+											pyperclip.copy('\n'.join(enemy_stats))
+										else:
+											logger.info('No enemy stats are loaded. Select an Enemy # button corresponding to the desired enemy, then click the copy button.')
+									case _:
+										logger.debug(f'Unknown copy value: {com.data}')
+
+							case deimosgui.GUICommandType.Teleport:
+								match com.data:
+									case 'Quest':
+										await navmap_teleport_hotkey()
+									case 'Mass':
+										await mass_navmap_teleport_hotkey()
+									case 'Freecam':
+										await tp_to_freecam_hotkey()
+									case _:
+										logger.debug(f'Unknown teleport type: {com.data}')
+
+							case deimosgui.GUICommandType.CustomTeleport:
+								if foreground_client:
+									x_input = param_input(com.data['X'], current_pos.x)
+									y_input = param_input(com.data['Y'], current_pos.y)
+									z_input = param_input(com.data['Z'], current_pos.z)
+									yaw_input = param_input(com.data['Yaw'], current_yaw)
+
+									custom_xyz = XYZ(x=x_input, y=y_input, z=z_input)
+									logger.debug(f'Teleporting client {foreground_client.title} to {custom_xyz}, yaw= {yaw_input}')
+									await foreground_client.teleport(custom_xyz)
+									await foreground_client.body.write_yaw(yaw_input)
+
+							case deimosgui.GUICommandType.EntityTeleport:
+								# Teleports to closest entity with vague name, using WizSprinter
+								if foreground_client:
+									sprinter = SprintyClient(foreground_client)
+									entities = await sprinter.get_base_entities_with_vague_name(com.data)
+									if entities:
+										entity = await sprinter.find_closest_of_entities(entities)
+										entity_pos = await entity.location()
+										await foreground_client.teleport(entity_pos)
+
+							case deimosgui.GUICommandType.SelectEnemy:
+								if enemy_ids:
+									selected_index = int(com.data)
+									if selected_index <= len(enemy_ids):
+										selected_id = enemy_ids[selected_index - 1]
+										enemy_stats = await total_stats_from_id(members, selected_id)
+										gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('stat_viewer', '\n'.join(enemy_stats))))
+
+							case deimosgui.GUICommandType.XYZSync:
+								await xyz_sync_hotkey()
+
+							case deimosgui.GUICommandType.XPress:
+								await x_press_hotkey()
+
+							case deimosgui.GUICommandType.AnchorCam:
+								if foreground_client:
+									if freecam_status:
+										await toggle_freecam_hotkey()
+
+									camera = await foreground_client.game_client.elastic_camera_controller()
+
+									sprinter = SprintyClient(foreground_client)
+									entities = await sprinter.get_base_entities_with_vague_name(com.data)
+									entity_pos: XYZ = None
+									if entities:
+										entity = await sprinter.find_closest_of_entities(entities)
+										entity_name = await entity.object_name()
+										logger.debug(f'Anchoring camera to entity {entity_name}')
+										await camera.write_attached_client_object(entity)
+
+							case deimosgui.GUICommandType.SetCamPosition:
+								if foreground_client:
+									if not freecam_status:
+										await toggle_freecam_hotkey()
+
+									camera: DynamicCameraController = await foreground_client.game_client.selected_camera_controller()
+									camera_pos: XYZ = await camera.position()
+									camera_yaw = await camera.yaw()
+									camera_roll = await camera.roll()
+									camera_pitch = await camera.pitch()
+
+									x_input = param_input(com.data['X'], camera_pos.x)
+									y_input = param_input(com.data['Y'], camera_pos.y)
+									z_input = param_input(com.data['Z'], camera_pos.z)
+									yaw_input = param_input(com.data['Yaw'], camera_yaw)
+									roll_input = param_input(com.data['Roll'], camera_roll)
+									pitch_input = param_input(com.data['Pitch'], camera_pitch)
+
+									input_pos = XYZ(x_input, y_input, z_input)
+									logger.debug(f'Teleporting Camera to {input_pos}, yaw={yaw_input}, roll={roll_input}, pitch={pitch_input}')
+
+									await camera.write_position(input_pos)
+									await camera.write_yaw(yaw_input)
+									await camera.write_roll(roll_input)
+									await camera.write_pitch(pitch_input)
+
+							case deimosgui.GUICommandType.SetCamDistance:
+								if foreground_client:
+									camera = await foreground_client.game_client.elastic_camera_controller()
+									current_zoom = await camera.distance()
+									current_min = await camera.min_distance()
+									current_max = await camera.max_distance()
+									distance_input = param_input(com.data["Distance"], current_zoom)
+									min_input = param_input(com.data["Min"], current_min)
+									max_input = param_input(com.data["Max"], current_max)
+									logger.debug(f'Setting camera distance to {distance_input}, min={min_input}, max={max_input}')
+
+									if com.data["Distance"]:
+										await camera.write_distance_target(distance_input)
+										await camera.write_distance(distance_input)
+									if com.data["Min"]:
+										await camera.write_min_distance(min_input)
+										await camera.write_zoom_resolution(min_input)
+									if com.data["Max"]:
+										await camera.write_max_distance(max_input)
+
+							case deimosgui.GUICommandType.GoToZone:
+								if foreground_client:
+									clients = [foreground_client]
+									if com.data[0]:
+										for c in background_clients:
+											clients.append(c)
+
+									zoneChanged = await toZoneDisplayName(clients, com.data[1])
+
+									if zoneChanged == 0:
+										logger.debug('Reached destination zone: ' + await foreground_client.zone_name())
+									else:
+										logger.error('Failed to go to zone.  It may be spelled incorrectly, or may not be supported.')
+
+							case deimosgui.GUICommandType.GoToWorld:
+								if foreground_client:
+									clients = [foreground_client]
+									if com.data[0]:
+										for c in background_clients:
+											clients.append(c)
+
+									await to_world(clients, com.data[1])
+
+							case deimosgui.GUICommandType.GoToBazaar:
+								if foreground_client:
+									clients = [foreground_client]
+									if com.data:
+										for c in background_clients:
+											clients.append(c)
+									zoneChanged = await toZone(clients, 'WizardCity/WC_Streets/Interiors/WC_OldeTown_AuctionHouse')
+
+									if zoneChanged == 0:
+										logger.debug('Reached destination zone: ' + await foreground_client.zone_name())
+									else:
+										logger.error('Failed to go to zone.  It may be spelled incorrectly, or may not be supported.')
+
+							case deimosgui.GUICommandType.RefillPotions:
+								if foreground_client:
+									clients = [foreground_client]
+									if com.data:
+										for c in background_clients:
+											clients.append(c)
+
+									await asyncio.gather(*[auto_potions_force_buy(client, True) for client in clients])
+
+				except queue.Empty:
+					pass
+
+				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('SigilStatus', bool_to_string(sigil_status))))
+				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('CombatStatus', bool_to_string(combat_status))))
+				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('DialogueStatus', bool_to_string(dialogue_status))))
+				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('SpeedhackStatus', bool_to_string(speed_status))))
+				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('QuestingStatus', bool_to_string(questing_status))))
+
+				await asyncio.sleep(0.1)
 		else:
 			while True:
 				await asyncio.sleep(1)
-
-
-	async def create_gui():
-		gui.theme(gui_theme)
-
-		toggles = ['Speedhack', 'Combat', 'Dialogue', 'Sigil', 'Questing']
-		hotkeys = ['Quest TP', 'Freecam', 'Freecam TP']
-		mass_hotkeys = ['Mass TP', 'XYZ Sync', 'X Press']
-		toggles_layout = [[hotkey_button(name), gui.Text(f'Disabled', key=f'{name}Status', auto_size_text=False, size=(7, 1), text_color=gui_text_color)] for name in toggles]
-		framed_toggles_layout = gui.Frame('Toggles', toggles_layout, title_color=gui_text_color)
-		hotkeys_layout = [[hotkey_button(name)] for name in hotkeys]
-		framed_hotkeys_layout = gui.Frame('Hotkeys', hotkeys_layout, title_color=gui_text_color)
-		mass_hotkeys_layout = [[hotkey_button(name)] for name in mass_hotkeys]
-		framed_mass_hotkeys_layout = gui.Frame('Mass Hotkeys', mass_hotkeys_layout, title_color=gui_text_color)
-
-		client_title = gui.Text('Client: ', key='Title', text_color=gui_text_color)
-
-		x_pos = gui.Text('x: ', key='x', auto_size_text=False, text_color=gui_text_color)
-		y_pos = gui.Text('y: ', key='y', auto_size_text=False, text_color=gui_text_color)
-		z_pos = gui.Text('z: ', key='z', auto_size_text=False, text_color=gui_text_color)
-		yaw = gui.Text('Yaw: ', key='Yaw', auto_size_text=False, text_color=gui_text_color)
-
-		zone_info = gui.Text('Zone: ', key='Zone', auto_size_text=False, size=(62, 1), text_color=gui_text_color)
-
-		copy_pos = hotkey_button('Copy Position')
-		copy_zone = hotkey_button('Copy Zone')
-		copy_yaw = hotkey_button('Copy Yaw')
-
-		client_info_layout = [
-			[client_title],
-			[zone_info],
-			[x_pos],
-			[y_pos],
-			[z_pos],
-			[yaw]
-		]
-
-		utils_layout = [
-			[copy_zone],
-			[copy_pos],
-			[copy_yaw]
-		]
-
-		framed_utils_layout = gui.Frame('Utils', utils_layout, title_color=gui_text_color)
-
-		custom_tp_layout = [
-			[gui.Text('The utils shown below are for advanced users and no support will be provided on them.', text_color=gui_text_color)],
-			[gui.Text('X:', text_color=gui_text_color), gui.InputText(size=(8, 1)), gui.Text('Y:', text_color=gui_text_color), gui.InputText(size=(8, 1)), gui.Text('Z:', text_color=gui_text_color), gui.InputText(size=(8, 1)), gui.Text('Yaw: ', text_color=gui_text_color), gui.InputText(size=(8, 1)), hotkey_button('Custom TP')],
-			[gui.Text('Entity Name:', text_color=gui_text_color), gui.InputText(size=(43, 1)), hotkey_button('Entity TP')]
-		]
-
-		framed_custom_tp_layout = gui.Frame('TP Utils', custom_tp_layout, title_color=gui_text_color)
-
-		dev_utils_layout = [
-			[gui.Text('The utils shown below are for advanced users and no support will be provided on them.', text_color=gui_text_color)],
-			[hotkey_button('Copy Entity List', True), hotkey_button('Copy Camera Position', True), hotkey_button('Copy Camera Rotation', True), hotkey_button('Copy UI Tree', True)],
-			[gui.Text('Zone Name:', text_color=gui_text_color), gui.InputText(size=(29, 1)), hotkey_button('Go To Zone'), hotkey_button('Mass Go To Zone', True)],
-			[gui.Text('World Name:', text_color=gui_text_color), gui.Combo(['WizardCity', 'Krokotopia', 'Marleybone', 'MooShu', 'DragonSpire', 'Grizzleheim', 'Celestia', 'Wysteria', 'Zafaria', 'Avalon', 'Azteca', 'Khrysalis', 'Polaris', 'Mirage', 'Empyrea', 'Karamelle', 'Lemuria'], text_color=gui_text_color, size=(27, 1)), hotkey_button('Go To World', True), hotkey_button('Mass Go To World', True)],
-			[hotkey_button('Go To Bazaar', True), hotkey_button('Mass Go To Bazaar', True), hotkey_button('Refill Potions', True), hotkey_button('Mass Refill Potions', True)]
-		]
-
-		framed_dev_utils_layout = gui.Frame('Dev Utils', dev_utils_layout, title_color=gui_text_color)
-
-		camera_controls_layout = [
-			[gui.Text('The utils shown below are for advanced users and no support will be provided on them.', text_color=gui_text_color)],
-			[gui.Text('X:', text_color=gui_text_color), gui.InputText(size=(12, 1)), gui.Text('Y:', text_color=gui_text_color), gui.InputText(size=(12, 1)), gui.Text('Z:', text_color=gui_text_color), gui.InputText(size=(11, 1)), hotkey_button('Set Camera Position', True)],
-			[gui.Text('Yaw:', text_color=gui_text_color), gui.InputText(size=(16, 1)), gui.Text('Roll:', text_color=gui_text_color), gui.InputText(size=(16, 1)), gui.Text('Pitch:', text_color=gui_text_color), gui.InputText(size=(15, 1))],
-			[gui.Text('Entity:', text_color=gui_text_color), gui.InputText(size=(25, 1)), hotkey_button('Anchor', text_color=gui_text_color), hotkey_button('Toggle Camera Collision', True)],
-			[gui.Text('Distance:', text_color=gui_text_color), gui.InputText(size=(10, 1)), gui.Text('Min:', text_color=gui_text_color), gui.InputText(size=(10, 1)), gui.Text('Max:', text_color=gui_text_color), gui.InputText(size=(11, 1)), hotkey_button('Set Distance', True)]
-		]
-
-		framed_camera_controls_layout = gui.Frame('Camera Controls', camera_controls_layout, title_color=gui_text_color)
-
-		# UNFINISHED - slack
-		stat_viewer_layout = [
-			[gui.Text('The utils shown below are for advanced users and no support will be provided on them.', text_color=gui_text_color)],
-			[hotkey_button('Enemy 1'), hotkey_button('Enemy 2'), hotkey_button('Enemy 3'), hotkey_button('Enemy 4')],
-			[gui.Multiline('No client has been selected.', key='stat_viewer', size=(66, 11), text_color=gui_text_color, horizontal_scroll=True)],
-			[hotkey_button('Copy Enemy Stats', True), gui.Text('Note that these stats are only accurate in PVE.', text_color=gui_text_color)]
-			]
-
-		framed_stat_viewer_layout = gui.Frame('Stat Viewer', stat_viewer_layout, title_color=gui_text_color)
-
-		tabs = [
-			[
-				gui.Tab('Hotkeys', [[framed_toggles_layout, framed_hotkeys_layout, framed_mass_hotkeys_layout, framed_utils_layout]], title_color=gui_text_color),
-				gui.Tab('Camera Utils', [[framed_camera_controls_layout]], title_color=gui_text_color),
-				gui.Tab('Dev Utils', [[framed_custom_tp_layout], [framed_dev_utils_layout]], title_color=gui_text_color),
-				gui.Tab('Stat Viewer', [[framed_stat_viewer_layout]], title_color=gui_text_color)
-			]
-		]
-
-		layout = [
-			[gui.TabGroup(tabs)],
-			[client_info_layout]
-		]
-
-		window = gui.Window(title= f'{tool_name} GUI v{tool_version}', layout= layout, keep_on_top=gui_on_top, finalize=True)
-
-		enemy_stats = []
-
-		global hotkeys_blocked
-		while True:
-			hotkeys_blocked = True
-			event, inputs = window.read(timeout=0.25)
-			hotkeys_blocked = False
-
-			if foreground_client:
-				current_zone = await foreground_client.zone_name()
-				current_pos = await foreground_client.body.position()
-				current_yaw = await foreground_client.body.yaw()
-				if foreground_client:
-					combat = CombatHandler(foreground_client)
-					members = await combat.get_members()
-
-					enemy_ids = []
-					if await foreground_client.in_battle() and members:
-						client_member = await combat.get_client_member()
-						client_participant = await client_member.get_participant()
-						client_team_id = await client_participant.team_id()
-
-						for member in members:
-							participant = await member.get_participant()
-
-							if await participant.team_id() != client_team_id and not await member.is_player():
-								id = await member.owner_id()
-								enemy_ids.append(id)
-
-				else:
-					enemy_ids = []
-
-
-				window['Title'].update(f'Client: {foreground_client.title}')
-				window['Zone'].update(f'Zone: {current_zone}')
-				window['x'].update(f'X: {current_pos.x}')
-				window['y'].update(f'Y: {current_pos.y}')
-				window['z'].update(f'Z: {current_pos.z}')
-				window['Yaw'].update(f'Yaw: {current_yaw}')
-
-			match event:
-				case gui.WINDOW_CLOSED:
-					await kill_tool(False)
-
-				case gui.WINDOW_CLOSE_ATTEMPTED_EVENT:
-					await kill_tool(False)
-
-				case 'Speedhack':
-					await toggle_speed_hotkey()
-
-				case 'Combat':
-					await toggle_combat_hotkey()
-
-				case 'Dialogue':
-					await toggle_dialogue_hotkey()
-
-				case 'Sigil':
-					await toggle_sigil_hotkey()
-
-				case 'Questing':
-					await toggle_questing_hotkey()
-
-				case 'Quest TP':
-					await navmap_teleport_hotkey()
-
-				case 'Mass TP':
-					await mass_navmap_teleport_hotkey()
-
-				case 'Freecam':
-					await toggle_freecam_hotkey()
-
-				case 'Freecam TP':
-					await tp_to_freecam_hotkey()
-
-				case 'XYZ Sync':
-					await xyz_sync_hotkey()
-
-				case 'X Press':
-					await x_press_hotkey()
-
-				case 'Copy Zone':
-					logger.debug('Copied Zone')
-					pyperclip.copy(current_zone)
-
-				case 'Copy Position':
-					logger.debug('Copied Position')
-					pyperclip.copy(f'XYZ(x={current_pos.x}, y={current_pos.y}, z={current_pos.z})')
-
-				case 'Copy Yaw':
-					logger.debug('Copied Yaw')
-					pyperclip.copy(current_yaw)
-
-				case 'Custom TP':
-					# Teleports to custom XYZ or adding/subtracting from it, same with the yaw (Character rotation)
-					tp_inputs = [inputs[i] for i in range(14)][10:14]
-					if any(tp_inputs) and foreground_client:
-						x_input = tp_inputs[0]
-						y_input = tp_inputs[1]
-						z_input = tp_inputs[2]
-						yaw_input = tp_inputs[3]
-
-						x_input = param_input(tp_inputs[0], current_pos.x)
-						y_input = param_input(tp_inputs[1], current_pos.y)
-						z_input = param_input(tp_inputs[2], current_pos.z)
-						yaw_input = param_input(tp_inputs[3], current_yaw)
-
-						custom_xyz = XYZ(x=x_input, y=y_input, z=z_input)
-						logger.debug(f'Teleporting client {foreground_client.title} to {custom_xyz}, yaw= {yaw_input}')
-						await foreground_client.teleport(custom_xyz)
-						await foreground_client.body.write_yaw(yaw_input)
-
-				case 'Entity TP':
-					# Teleports to closest entity with vague name, using WizSprinter
-					if foreground_client and inputs[14]:
-						sprinter = SprintyClient(foreground_client)
-						entities = await sprinter.get_base_entities_with_vague_name(inputs[14])
-						if entities:
-							entity = await sprinter.find_closest_of_entities(entities)
-							entity_pos = await entity.location()
-							await foreground_client.teleport(entity_pos)
-
-				case 'Set Camera Position':
-					camera_inputs = [inputs[i] for i in range(10)][0:6]
-					if any(camera_inputs) and foreground_client:
-						if not freecam_status:
-							await toggle_freecam_hotkey()
-
-						camera: DynamicCameraController = await foreground_client.game_client.selected_camera_controller()
-						camera_pos: XYZ = await camera.position()
-						camera_yaw = await camera.yaw()
-						camera_roll = await camera.roll()
-						camera_pitch = await camera.pitch()
-
-						x_input = camera_inputs[0]
-						y_input = camera_inputs[1]
-						z_input = camera_inputs[2]
-						yaw_input = camera_inputs[3]
-						roll_input = camera_inputs[4]
-						pitch_input = camera_inputs[5]
-
-						x_input = param_input(camera_inputs[0], camera_pos.x)
-						y_input = param_input(camera_inputs[1], camera_pos.y)
-						z_input = param_input(camera_inputs[2], camera_pos.z)
-						yaw_input = param_input(camera_inputs[3], camera_yaw)
-						roll_input = param_input(camera_inputs[4], camera_roll)
-						pitch_input = param_input(camera_inputs[5], camera_pitch)
-
-						input_pos = XYZ(x_input, y_input, z_input)
-						logger.debug(f'Teleporting Camera to {input_pos}, yaw={yaw_input}, roll={roll_input}, pitch={pitch_input}')
-
-						await camera.write_position(input_pos)
-						await camera.write_yaw(yaw_input)
-						await camera.write_roll(roll_input)
-						await camera.write_pitch(pitch_input)
-
-				case 'Anchor':
-					if inputs[6] and foreground_client:
-						if freecam_status:
-							await toggle_freecam_hotkey()
-
-						camera = await foreground_client.game_client.elastic_camera_controller()
-
-						sprinter = SprintyClient(foreground_client)
-						entities = await sprinter.get_base_entities_with_vague_name(inputs[6])
-						entity_pos: XYZ = None
-						if entities:
-							entity = await sprinter.find_closest_of_entities(entities)
-							entity_name = await entity.object_name()
-							logger.debug(f'Anchoring camera to entity {entity_name}')
-							await camera.write_attached_client_object(entity)
-
-				case 'Set Distance':
-					distance_inputs = [inputs[i] for i in range(15)][7:10]
-					if any(distance_inputs) and foreground_client:
-						camera = await foreground_client.game_client.elastic_camera_controller()
-						current_zoom = await camera.distance()
-						current_min = await camera.min_distance()
-						current_max = await camera.max_distance()
-						distance_input = param_input(distance_inputs[0], current_zoom)
-						min_input = param_input(distance_inputs[1], current_min)
-						max_input = param_input(distance_inputs[2], current_max)
-						logger.debug(f'Setting camera distance to {distance_input}, min={min_input}, max={max_input}')
-
-						if distance_inputs[0]:
-							await camera.write_distance_target(distance_input)
-							await camera.write_distance(distance_input)
-						if distance_inputs[1]:
-							await camera.write_min_distance(min_input)
-							await camera.write_zoom_resolution(min_input)
-						if distance_inputs[2]:
-							await camera.write_max_distance(max_input)
-
-
-				case 'Toggle Camera Collision':
-					if foreground_client:
-						camera: ElasticCameraController = await foreground_client.game_client.elastic_camera_controller()
-
-						collision_status = await camera.check_collisions()
-						collision_status ^= True
-
-						logger.debug(f'Camera Collisions {bool_to_string(collision_status)}')
-						await camera.write_check_collisions(collision_status)
-
-				case 'Copy Entity List':
-					if foreground_client:
-						logger.debug('Copied Entity List')
-						sprinter = SprintyClient(foreground_client)
-						entities = await sprinter.get_base_entity_list()
-						entities_info = ''
-						for entity in entities:
-							entity_pos = await entity.location()
-							entity_name = await entity.object_name()
-							entities_info += f'{entity_name}, XYZ(x={entity_pos.x}, y={entity_pos.y}, z={entity_pos.z})\n'
-						pyperclip.copy(entities_info)
-
-				case 'Copy Camera Position':
-					if foreground_client:
-						camera = await foreground_client.game_client.selected_camera_controller()
-						camera_pos = await camera.position()
-
-						logger.debug('Copied Selected Camera Position')
-						pyperclip.copy(f'XYZ(x={camera_pos.x}, y={camera_pos.y}, z={camera_pos.z})')
-
-				case 'Copy Camera Rotation':
-					if foreground_client:
-						camera = await foreground_client.game_client.selected_camera_controller()
-						camera_yaw = await camera.yaw()
-						camera_roll = await camera.roll()
-						camera_pitch = await camera.pitch()
-
-						logger.debug('Copied Camera Rotations')
-						pyperclip.copy(f'Yaw={camera_yaw}\nRoll={camera_roll}\nPitch={camera_pitch}')
-
-				case 'Copy UI Tree':
-					foreground: Client = foreground_client
-					if foreground_client:
-						ui_tree = ''
-
-						# TODO: Put this function in utils, with a parent function that can return the string properly
-						async def get_ui_tree(window: Window, depth: int = 0, depth_symbol: str = '-', seperator: str = '\n'):
-							nonlocal ui_tree
-							ui_tree += f"{depth_symbol * depth} [{await window.name()}] {await window.maybe_read_type_name()}{seperator}"
-
-							for child in await utils.wait_for_non_error(window.children):
-								await get_ui_tree(child, depth + 1)
-
-						await get_ui_tree(foreground.root_window)
-
-						logger.debug(f'Copied UI Tree for client {foreground.title}')
-						pyperclip.copy(ui_tree)
-
-				case 'Go To Zone':
-					if foreground_client:
-						clients = [foreground_client]
-						zoneChanged = await toZoneDisplayName(clients, str(inputs[15]))
-
-						if zoneChanged == 0:
-							logger.debug('Reached destination zone: ' + await foreground_client.zone_name())
-						else:
-							logger.error('Failed to go to zone.  It may be spelled incorrectly, or may not be supported.')
-
-				case 'Mass Go To Zone':
-					if foreground_client:
-						clients = [foreground_client]
-						for c in background_clients:
-							clients.append(c)
-
-						zoneChanged = await toZoneDisplayName(clients, str(inputs[15]))
-
-						if zoneChanged == 0:
-							logger.debug('Reached destination zone: ' + await foreground_client.zone_name())
-						else:
-							logger.error('Failed to go to zone.  It may be spelled incorrectly, or may not be supported.')
-
-				case 'Go To World':
-					if foreground_client:
-						if inputs[16] and foreground_client:
-							clients = [foreground_client]
-
-							await to_world(clients, inputs[16])
-
-				case 'Mass Go To World':
-					if foreground_client:
-						if inputs[16] and foreground_client:
-							clients = [foreground_client]
-							for c in background_clients:
-								clients.append(c)
-
-							await to_world(clients, inputs[16])
-
-				case 'Go To Bazaar':
-					if foreground_client:
-						clients = []
-						clients.append(foreground_client)
-						zoneChanged = await toZone(clients, 'WizardCity/WC_Streets/Interiors/WC_OldeTown_AuctionHouse')
-
-						if zoneChanged == 0:
-							logger.debug('Reached destination zone: ' + await foreground_client.zone_name())
-						else:
-							logger.error('Failed to go to zone.  It may be spelled incorrectly, or may not be supported.')
-
-				case 'Mass Go To Bazaar':
-					if foreground_client:
-						clients = [foreground_client]
-						for c in background_clients:
-							clients.append(c)
-						zoneChanged = await toZone(clients, 'WizardCity/WC_Streets/Interiors/WC_OldeTown_AuctionHouse')
-
-						if zoneChanged == 0:
-							logger.debug('Reached destination zone: ' + await foreground_client.zone_name())
-						else:
-							logger.error(
-								'Failed to go to zone.  It may be spelled incorrectly, or may not be supported.')
-
-				case 'Refill Potions':
-					if foreground_client:
-						await auto_potions_force_buy(foreground_client, True)
-
-				case 'Mass Refill Potions':
-					if foreground_client:
-						clients = [foreground_client]
-						for c in background_clients:
-							clients.append(c)
-
-						await asyncio.gather(*[auto_potions_force_buy(client, True) for client in clients])
-
-				case 'Copy Enemy Stats':
-					if enemy_stats:
-						logger.debug('Copied Enemy Stats')
-						pyperclip.copy('\n'.join(enemy_stats))
-					else:
-						logger.info('No enemy stats are loaded. Select an Enemy # button corresponding to the desired enemy, then click the copy button.')
-
-				case _:
-					# Handling for stat viewer enemy buttons
-					if "Enemy " in event and enemy_ids:
-						selected_index = int(event[-1])
-						if selected_index <= len(enemy_ids):
-							selected_id = enemy_ids[selected_index - 1]
-							enemy_stats = await total_stats_from_id(members, selected_id)
-							window["stat_viewer"].update('\n'.join(enemy_stats))
-
-
-
-			window["SigilStatus"].update(bool_to_string(sigil_status))
-			window["CombatStatus"].update(bool_to_string(combat_status))
-			window["DialogueStatus"].update(bool_to_string(dialogue_status))
-			window["SpeedhackStatus"].update(bool_to_string(speed_status))
-			window["QuestingStatus"].update(bool_to_string(questing_status))
-
-			await asyncio.sleep(0.5)
 
 	async def potion_usage_loop():
 		# Auto potion usage on a per client basis.

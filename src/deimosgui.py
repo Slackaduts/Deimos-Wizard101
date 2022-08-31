@@ -1,0 +1,285 @@
+import asyncio
+from enum import Enum, auto
+import queue
+
+import PySimpleGUI as gui
+
+
+class GUICommandType(Enum):
+	# deimos <-> window
+	Close = auto()
+
+	# window -> deimos
+	ToggleOption = auto()
+	Copy = auto()
+	SelectEnemy = auto()
+	
+	Teleport = auto()
+	CustomTeleport = auto()
+	EntityTeleport = auto()
+
+	XYZSync = auto()
+	XPress = auto()
+
+	GoToZone = auto()
+	GoToWorld = auto()
+	GoToBazaar = auto()
+
+	RefillPotions = auto()
+
+	AnchorCam = auto()
+	SetCamPosition = auto()
+	SetCamDistance = auto()
+
+	# deimos -> window
+	UpdateWindow = auto()
+
+
+
+class GUICommand:
+	def __init__(self, com_type: GUICommandType, data=None):
+		self.com_type = com_type
+		self.data = data
+
+
+def hotkey_button(name: str, auto_size: bool, text_color: str, button_color: str):
+	return gui.Button(name, button_color=(text_color, button_color), auto_size_button=auto_size)
+
+
+def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_version, gui_on_top):
+	gui.theme(gui_theme)
+
+	global hotkey_button
+	original_hotkey_button = hotkey_button
+	def hotkey_button(name, auto_size=True, text_color=gui_text_color, button_color=gui_button_color):
+		return original_hotkey_button(name, auto_size, text_color, button_color)
+
+
+	toggles = ['Speedhack', 'Combat', 'Dialogue', 'Sigil', 'Questing']
+	hotkeys = ['Quest TP', 'Freecam', 'Freecam TP']
+	mass_hotkeys = ['Mass TP', 'XYZ Sync', 'X Press']
+	toggles_layout = [[hotkey_button(name), gui.Text(f'Disabled', key=f'{name}Status', auto_size_text=False, size=(7, 1), text_color=gui_text_color)] for name in toggles]
+	framed_toggles_layout = gui.Frame('Toggles', toggles_layout, title_color=gui_text_color)
+	hotkeys_layout = [[hotkey_button(name)] for name in hotkeys]
+	framed_hotkeys_layout = gui.Frame('Hotkeys', hotkeys_layout, title_color=gui_text_color)
+	mass_hotkeys_layout = [[hotkey_button(name)] for name in mass_hotkeys]
+	framed_mass_hotkeys_layout = gui.Frame('Mass Hotkeys', mass_hotkeys_layout, title_color=gui_text_color)
+
+	client_title = gui.Text('Client: ', key='Title', text_color=gui_text_color)
+
+	x_pos = gui.Text('x: ', key='x', auto_size_text=False, text_color=gui_text_color)
+	y_pos = gui.Text('y: ', key='y', auto_size_text=False, text_color=gui_text_color)
+	z_pos = gui.Text('z: ', key='z', auto_size_text=False, text_color=gui_text_color)
+	yaw = gui.Text('Yaw: ', key='Yaw', auto_size_text=False, text_color=gui_text_color)
+
+	zone_info = gui.Text('Zone: ', key='Zone', auto_size_text=False, size=(62, 1), text_color=gui_text_color)
+
+	copy_pos = hotkey_button('Copy Position')
+	copy_zone = hotkey_button('Copy Zone')
+	copy_yaw = hotkey_button('Copy Yaw')
+
+	client_info_layout = [
+		[client_title],
+		[zone_info],
+		[x_pos],
+		[y_pos],
+		[z_pos],
+		[yaw]
+	]
+
+	utils_layout = [
+		[copy_zone],
+		[copy_pos],
+		[copy_yaw]
+	]
+
+	framed_utils_layout = gui.Frame('Utils', utils_layout, title_color=gui_text_color)
+
+	custom_tp_layout = [
+		[gui.Text('The utils shown below are for advanced users and no support will be provided on them.', text_color=gui_text_color)],
+		[gui.Text('X:', text_color=gui_text_color), gui.InputText(size=(8, 1)), gui.Text('Y:', text_color=gui_text_color), gui.InputText(size=(8, 1)), gui.Text('Z:', text_color=gui_text_color), gui.InputText(size=(8, 1)), gui.Text('Yaw: ', text_color=gui_text_color), gui.InputText(size=(8, 1)), hotkey_button('Custom TP')],
+		[gui.Text('Entity Name:', text_color=gui_text_color), gui.InputText(size=(43, 1)), hotkey_button('Entity TP')]
+	]
+
+	framed_custom_tp_layout = gui.Frame('TP Utils', custom_tp_layout, title_color=gui_text_color)
+
+	dev_utils_layout = [
+		[gui.Text('The utils shown below are for advanced users and no support will be provided on them.', text_color=gui_text_color)],
+		[hotkey_button('Copy Entity List', True), hotkey_button('Copy Camera Position', True), hotkey_button('Copy Camera Rotation', True), hotkey_button('Copy UI Tree', True)],
+		[gui.Text('Zone Name:', text_color=gui_text_color), gui.InputText(size=(29, 1)), hotkey_button('Go To Zone'), hotkey_button('Mass Go To Zone', True)],
+		[gui.Text('World Name:', text_color=gui_text_color), gui.Combo(['WizardCity', 'Krokotopia', 'Marleybone', 'MooShu', 'DragonSpire', 'Grizzleheim', 'Celestia', 'Wysteria', 'Zafaria', 'Avalon', 'Azteca', 'Khrysalis', 'Polaris', 'Mirage', 'Empyrea', 'Karamelle', 'Lemuria'], text_color=gui_text_color, size=(27, 1)), hotkey_button('Go To World', True), hotkey_button('Mass Go To World', True)],
+		[hotkey_button('Go To Bazaar', True), hotkey_button('Mass Go To Bazaar', True), hotkey_button('Refill Potions', True), hotkey_button('Mass Refill Potions', True)]
+	]
+
+	framed_dev_utils_layout = gui.Frame('Dev Utils', dev_utils_layout, title_color=gui_text_color)
+
+	camera_controls_layout = [
+		[gui.Text('The utils shown below are for advanced users and no support will be provided on them.', text_color=gui_text_color)],
+		[gui.Text('X:', text_color=gui_text_color), gui.InputText(size=(12, 1)), gui.Text('Y:', text_color=gui_text_color), gui.InputText(size=(12, 1)), gui.Text('Z:', text_color=gui_text_color), gui.InputText(size=(11, 1)), hotkey_button('Set Camera Position', True)],
+		[gui.Text('Yaw:', text_color=gui_text_color), gui.InputText(size=(16, 1)), gui.Text('Roll:', text_color=gui_text_color), gui.InputText(size=(16, 1)), gui.Text('Pitch:', text_color=gui_text_color), gui.InputText(size=(15, 1))],
+		[gui.Text('Entity:', text_color=gui_text_color), gui.InputText(size=(25, 1)), hotkey_button('Anchor', text_color=gui_text_color), hotkey_button('Toggle Camera Collision', True)],
+		[gui.Text('Distance:', text_color=gui_text_color), gui.InputText(size=(10, 1)), gui.Text('Min:', text_color=gui_text_color), gui.InputText(size=(10, 1)), gui.Text('Max:', text_color=gui_text_color), gui.InputText(size=(11, 1)), hotkey_button('Set Distance', True)]
+	]
+
+	framed_camera_controls_layout = gui.Frame('Camera Controls', camera_controls_layout, title_color=gui_text_color)
+
+	# UNFINISHED - slack
+	stat_viewer_layout = [
+		[gui.Text('The utils shown below are for advanced users and no support will be provided on them.', text_color=gui_text_color)],
+		[hotkey_button('Enemy 1'), hotkey_button('Enemy 2'), hotkey_button('Enemy 3'), hotkey_button('Enemy 4')],
+		[gui.Multiline('No client has been selected.', key='stat_viewer', size=(66, 11), text_color=gui_text_color, horizontal_scroll=True)],
+		[hotkey_button('Copy Enemy Stats', True), gui.Text('Note that these stats are only accurate in PVE.', text_color=gui_text_color)]
+		]
+
+	framed_stat_viewer_layout = gui.Frame('Stat Viewer', stat_viewer_layout, title_color=gui_text_color)
+
+	tabs = [
+		[
+			gui.Tab('Hotkeys', [[framed_toggles_layout, framed_hotkeys_layout, framed_mass_hotkeys_layout, framed_utils_layout]], title_color=gui_text_color),
+			gui.Tab('Camera Utils', [[framed_camera_controls_layout]], title_color=gui_text_color),
+			gui.Tab('Dev Utils', [[framed_custom_tp_layout], [framed_dev_utils_layout]], title_color=gui_text_color),
+			gui.Tab('Stat Viewer', [[framed_stat_viewer_layout]], title_color=gui_text_color)
+		]
+	]
+
+	layout = [
+		[gui.TabGroup(tabs)],
+		[client_info_layout]
+	]
+
+	window = gui.Window(title= f'{tool_name} GUI v{tool_version}', layout= layout, keep_on_top=gui_on_top, finalize=True)
+	return window
+
+
+def manage_gui(send_queue, recv_queue: queue.Queue, gui_theme, gui_text_color, gui_button_color, tool_name, tool_version, gui_on_top):
+	window = create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_version, gui_on_top)
+
+	running = True
+
+	enemy_ids = []
+
+	while running:
+		event, inputs = window.read(timeout=10)
+
+		# Program commands
+		try:
+			# Eat as much as the queue gives us. We will be freed by exception
+			while True:
+				com = recv_queue.get_nowait()
+				match com.com_type:
+					case GUICommandType.Close:
+						running = False
+
+					case GUICommandType.UpdateWindow:
+						window[com.data[0]].update(com.data[1])
+		except queue.Empty:
+			pass
+
+		# Window events
+		match event:
+			case gui.WINDOW_CLOSED:
+				running = False
+				send_queue.put(GUICommand(GUICommandType.Close))
+
+			case gui.WINDOW_CLOSE_ATTEMPTED_EVENT:
+				running = False
+				send_queue.put(GUICommand(GUICommandType.Close))
+
+
+			# Toggles
+			case 'Speedhack' | 'Combat' | 'Dialogue' | 'Sigil' | 'Questing' | 'Freecam' | \
+						'Toggle Camera Collision':
+				send_queue.put(GUICommand(GUICommandType.ToggleOption, event.replace('Toggle', '').strip()))
+
+			# Copying
+			case 'Copy Zone' | 'Copy Position' | 'Copy Yaw' | 'Copy Entity List' | \
+						'Copy Camera Position' | 'Copy Camera Rotation' | 'Copy UI Tree' | \
+						'Copy Enemy Stats':
+				send_queue.put(GUICommand(GUICommandType.Copy, event.replace('Copy', '').strip()))
+			
+			# Simple teleports
+			case 'Quest TP' | 'Mass TP' | 'Freecam TP':
+				send_queue.put(GUICommand(GUICommandType.Teleport, event.replace('TP', '').strip()))
+
+			# Custom tp
+			case 'Custom TP':
+				tp_inputs = [inputs[i] for i in range(14)][10:14]
+				if any(tp_inputs):
+					send_queue.put(GUICommand(GUICommandType.CustomTeleport, {
+						'X': tp_inputs[0],
+						'Y': tp_inputs[1],
+						'Z': tp_inputs[2],
+						'Yaw': tp_inputs[3],
+					}))
+
+			# Entity tp
+			case 'Entity TP':
+				if inputs[14]:
+					send_queue.put(GUICommand(GUICommandType.EntityTeleport, inputs[14]))
+
+			# XYZ Sync
+			case 'XYZ Sync':
+				send_queue.put(GUICommand(GUICommandType.XYZSync))
+
+			# X Press
+			case 'X Press':
+				send_queue.put(GUICommand(GUICommandType.XPress))
+
+			# Cam stuff
+			case 'Anchor':
+				send_queue.put(GUICommand(GUICommandType.AnchorCam, inputs[6]))
+
+			case 'Set Camera Position':
+				camera_inputs = [inputs[i] for i in range(10)][0:6]
+				if any(camera_inputs):
+					send_queue.put(GUICommand(GUICommandType.SetCamPosition, {
+						'X': camera_inputs[0],
+						'Y': camera_inputs[1],
+						'Z': camera_inputs[2],
+						'Yaw': camera_inputs[3],
+						'Roll': camera_inputs[4],
+						'Pitch': camera_inputs[5],
+					}))
+
+			case 'Set Distance':
+				distance_inputs = [inputs[i] for i in range(15)][7:10]
+				if any(distance_inputs):
+					send_queue.put(GUICommand(GUICommandType.SetCamDistance, {
+						"Distance": distance_inputs[0],
+						"Min": distance_inputs[1],
+						"Max": distance_inputs[2],
+					}))
+
+			# Gotos
+			case 'Go To Zone':
+				if inputs[15]:
+					send_queue.put(GUICommand(GUICommandType.GoToZone, (False, str(inputs[15]))))
+			case 'Mass Go To Zone':
+				if inputs[15]:
+					send_queue.put(GUICommand(GUICommandType.GoToZone, (True, str(inputs[15]))))
+
+			case 'Go To World':
+				if inputs[16]:
+					send_queue.put(GUICommand(GUICommandType.GoToWorld, (False, inputs[16])))
+			case 'Mass Go To World':
+				if inputs[16]:
+					send_queue.put(GUICommand(GUICommandType.GoToWorld, (True, inputs[16])))
+
+			case 'Go To Bazaar':
+				send_queue.put(GUICommand(GUICommandType.GoToBazaar, False))
+			case 'Mass Go To Bazaar':
+				send_queue.put(GUICommand(GUICommandType.GoToBazaar, True))
+
+			case 'Refill Potions':
+				send_queue.put(GUICommand(GUICommandType.RefillPotions, False))
+			case 'Mass Refill Potions':
+				send_queue.put(GUICommand(GUICommandType.RefillPotions, True))
+
+			# Other
+			case _:
+				if 'Enemy ' in event:
+					send_queue.put(GUICommand(GUICommandType.SelectEnemy, event[-1]))
+
+
+	
+	window.close()
