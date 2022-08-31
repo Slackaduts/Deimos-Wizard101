@@ -328,7 +328,7 @@ async def navmap_tp_leader_quest(client: Client, xyz: XYZ = None, minimum_distan
             original_quest_xyz = await leader_client.quest_position.position()
             original_quest_objective = await get_quest_name(leader_client)
         else:
-            original_quest_xyz = await client.quest_position.position()
+            original_quest_xyz = xyz
             original_quest_objective = await get_quest_name(client)
 
         original_position = await client.body.position()
@@ -349,10 +349,7 @@ async def navmap_tp_leader_quest(client: Client, xyz: XYZ = None, minimum_distan
             vertices = []
             vertices, _ = parse_nav_data(nav_data)
         except:
-            if leader_client:
-                await auto_adjusting_teleport(client, original_quest_xyz)
-            else:
-                await auto_adjusting_teleport(client)
+            await auto_adjusting_teleport(client, xyz)
 
             if walk_after:
                 navmap_errored = True

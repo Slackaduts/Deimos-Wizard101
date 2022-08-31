@@ -636,11 +636,9 @@ class Fighter(CombatHandler):
 				await self.effect_enchant_ID(self.client_member)
 				await self.enchant_all()
 				if self.client.discard_duplicate_cards:
-					print('discard')
 					await self.discard_useless()
 				else:
 					self.combat_resolver = await self.client.duel.combat_resolver()
-					print('dont discard')
 				await self.get_tc()
 				await self.handle_round()
 			else: 
@@ -1384,7 +1382,6 @@ class Fighter(CombatHandler):
 					spell_matches_ranks = {}
 					spell_pip_value_in_order = []
 					spell_pip_value = []
-					print('strategy: ' + t)
 					if "HIT" in strategy:
 						for s in spell_matches:
 							pip_value = self.pip_values[s]

@@ -1,5 +1,6 @@
 import asyncio
 import traceback
+from pathlib import Path
 
 import requests
 import wizwalker
@@ -7,6 +8,7 @@ from wizwalker import Keycode, HotkeyListener, ModifierKeys, utils, XYZ
 from wizwalker.client_handler import ClientHandler, Client
 from wizwalker.extensions.scripting import teleport_to_friend_from_list
 from wizwalker.combat import CombatMember, CombatHandler
+from wizwalker.memory import HookHandler
 from wizwalker.memory.memory_objects.camera_controller import DynamicCameraController, FreeCameraController, ElasticCameraController
 from wizwalker.memory.memory_objects.window import Window
 import os
@@ -19,6 +21,8 @@ from configparser import ConfigParser
 import statistics
 import re
 from pypresence import AioPresence
+
+from src.auto_pet import activate_dance_game_moves_hook, deactivate_dance_game_moves_hook, read_current_dance_game_moves
 from src.drop_logger import logging_loop
 from src.combat import Fighter
 from src.stat_viewer import total_stats_from_id
@@ -152,11 +156,12 @@ def read_config(config_name : str):
 	global questing_friend_tp
 	global gear_switching_in_solo_zones
 	global hitter_client
+	global auto_pet_questing
 	client_to_boost = parser.get('questing', 'client_to_boost', fallback=None)
 	questing_friend_tp = parser.getboolean('questing', 'friend_teleport', fallback=False)
 	gear_switching_in_solo_zones = parser.getboolean('questing', 'gear_switching_in_solo_zones', fallback=False)
 	hitter_client = parser.get('questing', 'hitter_client', fallback=None)
-
+	auto_pet_questing = parser.get('questing', 'auto_pet', fallback=False)
 	# empty string can falsely be read as a client.  Check if the user's config entry was valid and set to None if not
 	valid_configs = ['p1', 'p2', 'p3', 'p4', '1', '2', '3', '4']
 	if any(hitter_client == option for option in valid_configs):
@@ -172,6 +177,13 @@ def read_config(config_name : str):
 	kill_minions_first = parser.getboolean('combat', 'kill_minions_first', fallback=False)
 	automatic_team_based_combat = parser.getboolean('combat', 'automatic_team_based_combat', fallback=False)
 	discard_duplicate_cards = parser.getboolean('combat', 'discard_duplicate_cards', fallback=True)
+
+
+	# Auto Pet Settings
+	global ignore_pet_level_up
+	global play_dance_game
+	ignore_pet_level_up = parser.getboolean('auto pet', 'ignore_pet_level_up', fallback=False)
+	play_dance_game = parser.getboolean('auto pet', 'play_dance_game', fallback=False)
 
 
 while True:
@@ -521,6 +533,9 @@ async def main():
 	await asyncio.sleep(0)
 	listener.start()
 
+	#HookHandler.activate_dance_game_moves_hook = activate_dance_game_moves_hook
+	#HookHandler.deactivate_dance_game_moves_hook = deactivate_dance_game_moves_hook
+
 	async def tool_finish():
 		if speed_status:
 			await asyncio.gather(*[p.client_object.write_speed_multiplier(client_speeds[p]) for p in walker.clients])
@@ -826,12 +841,12 @@ async def main():
 							# if follow leader is off, quest on all clients, passing through only the leader
 							logger.debug(f'Client {client.title} - Handling questing for all clients.')
 							questing = Quester(client, walker.clients, questing_leader_pid)
-							await questing.auto_quest_leader(questing_friend_tp, gear_switching_in_solo_zones, hitter_client)
+							await questing.auto_quest_leader(questing_friend_tp, gear_switching_in_solo_zones, hitter_client, auto_pet_questing, ignore_pet_level_up, play_dance_game)
 					else:
 						# if follow leader is off, quest on all clients, passing through only the leader
 						logger.debug(f'Client {client.title} - Handling questing.')
 						questing = Quester(client, walker.clients, None)
-						await questing.auto_quest()
+						await questing.auto_quest(auto_pet_questing, ignore_pet_level_up, play_dance_game)
 
 					# TODO: Put SlackQuester's loop function here
 		await asyncio.gather(*[async_questing(p) for p in walker.clients])
@@ -976,7 +991,6 @@ async def main():
 
 													if hitter_client is not None:
 														if all_already_in_battle and hitter_client in c.title:
-															print('already in battle')
 															# slight delay to ensure hitter makes it to the circle last
 															await asyncio.sleep(1.0)
 
@@ -1524,6 +1538,8 @@ async def main():
 							enemy_stats = await total_stats_from_id(members, selected_id)
 							window["stat_viewer"].update('\n'.join(enemy_stats))
 
+
+
 			window["SigilStatus"].update(bool_to_string(sigil_status))
 			window["CombatStatus"].update(bool_to_string(combat_status))
 			window["DialogueStatus"].update(bool_to_string(dialogue_status))
@@ -1531,7 +1547,6 @@ async def main():
 			window["QuestingStatus"].update(bool_to_string(questing_status))
 
 			await asyncio.sleep(0.5)
-
 
 	async def potion_usage_loop():
 		# Auto potion usage on a per client basis.
@@ -1752,6 +1767,7 @@ async def main():
 		p.duel_circle_joinable = True
 		p.in_solo_zone = False
 		p.wizard_name = None
+		p.character_level = await p.stats.reference_level()
 		p.discard_duplicate_cards = discard_duplicate_cards
 		p.kill_minions_first = kill_minions_first
 		p.automatic_team_based_combat = automatic_team_based_combat
