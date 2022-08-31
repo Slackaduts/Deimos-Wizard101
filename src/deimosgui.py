@@ -13,7 +13,7 @@ class GUICommandType(Enum):
 	ToggleOption = auto()
 	Copy = auto()
 	SelectEnemy = auto()
-	
+
 	Teleport = auto()
 	CustomTeleport = auto()
 	EntityTeleport = auto()
@@ -32,9 +32,10 @@ class GUICommandType(Enum):
 	SetCamDistance = auto()
 
 	ExecuteFlythrough = auto()
+	KillFlythrough = auto()
+
 	ExecuteBot = auto()
 	KillBot = auto()
-
 
 	# deimos -> window
 	UpdateWindow = auto()
@@ -54,7 +55,7 @@ def hotkey_button(name: str, auto_size: bool, text_color: str, button_color: str
 def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_version, gui_on_top):
 	gui.theme(gui_theme)
 
-	gui.popup('Deimos always be free and open-source.\nBy using Deimos, you agree to the GPL v3 license agreement.\nIf you bought this, you got scammed!', title='License Agreement', keep_on_top=True, text_color=gui_text_color, button_color=(gui_text_color, gui_button_color))
+	gui.popup('Deimos will always be free and open-source.\nBy using Deimos, you agree to the GPL v3 license agreement.\nIf you bought this, you got scammed!', title='License Agreement', keep_on_top=True, text_color=gui_text_color, button_color=(gui_text_color, gui_button_color))
 
 	global hotkey_button
 	original_hotkey_button = hotkey_button
@@ -143,7 +144,14 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 	flythrough_layout = [
 		[gui.Text('The utils shown below are for advanced users and no support will be provided on them.', text_color=gui_text_color)],
 		[gui.Multiline(key='flythrough_creator', size=(66, 11), text_color=gui_text_color, horizontal_scroll=True)],
-		[hotkey_button('Execute Flythrough', True)],
+		[
+			gui.Input(key='flythrough_file_path', visible=False), 
+			gui.FileBrowse('Import Flythrough', file_types=(("Text Files", "*.txt"),), auto_size_button=True, button_color=(gui_text_color, gui_button_color)),
+			gui.Input(key='flythrough_save_path', visible=False),
+			gui.FileSaveAs('Export Flythrough', file_types=(("Text Files", "*.txt"),), auto_size_button=True, button_color=(gui_text_color, gui_button_color)),
+			hotkey_button('Execute Flythrough', True),
+			hotkey_button('Kill Flythrough', True)
+			],
 	]
 
 	framed_flythrough_layout = gui.Frame('Flythrough Creator', flythrough_layout, title_color=gui_text_color)
@@ -151,7 +159,14 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 	bot_creator_layout = [
 		[gui.Text('The utils shown below are for advanced users and no support will be provided on them.', text_color=gui_text_color)],
 		[gui.Multiline(key='bot_creator', size=(66, 11), text_color=gui_text_color, horizontal_scroll=True)],
-		[hotkey_button('Execute Bot Commands', True), hotkey_button('Kill Bot')]
+		[
+			gui.Input(key='bot_file_path', visible=False), 
+			gui.FileBrowse('Import Bot', file_types=(("Text Files", "*.txt"),), auto_size_button=True, button_color=(gui_text_color, gui_button_color)),
+			gui.Input(key='bot_save_path', visible=False),
+			gui.FileSaveAs('Export Bot', file_types=(("Text Files", "*.txt"),), auto_size_button=True, button_color=(gui_text_color, gui_button_color)),
+			hotkey_button('Run Bot', True),
+			hotkey_button('Kill Bot', True)
+			],
 	]
 
 	framed_bot_creator_layout = gui.Frame('Bot Creator', bot_creator_layout, title_color=gui_text_color)
@@ -306,7 +321,10 @@ def manage_gui(send_queue: queue.Queue, recv_queue: queue.Queue, gui_theme, gui_
 			case 'Execute Flythrough':
 				send_queue.put(GUICommand(GUICommandType.ExecuteFlythrough, inputs['flythrough_creator']))
 
-			case 'Execute Bot Commands':
+			case 'Kill Flythrough':
+				send_queue.put(GUICommand(GUICommandType.KillFlythrough))
+
+			case 'Run Bot':
 				send_queue.put(GUICommand(GUICommandType.ExecuteBot, inputs['bot_creator']))
 
 			case 'Kill Bot':
@@ -317,6 +335,26 @@ def manage_gui(send_queue: queue.Queue, recv_queue: queue.Queue, gui_theme, gui_
 				if 'Enemy ' in event:
 					send_queue.put(GUICommand(GUICommandType.SelectEnemy, event[-1]))
 
+		def import_check(input_window_str: str, output_window_str: str):
+			if inputs and inputs[input_window_str]:
+				with open(inputs[input_window_str]) as file:
+					file_data = file.readlines()
+					file_str = ''.join(file_data)
+					window[output_window_str].update(file_str)
+					window[input_window_str].update('')
+					file.close()
 
-	
+		def export_check(path_window_str: str, content_window_str: str):
+			if inputs and inputs[path_window_str]:
+				file = open(inputs[path_window_str], 'w')
+				file.write(inputs[content_window_str])
+				file.close()
+				window[path_window_str].update('')
+
+		import_check('flythrough_file_path', 'flythrough_creator')
+		export_check('flythrough_save_path', 'flythrough_creator')
+
+		import_check('bot_file_path', 'bot_creator')
+		export_check('bot_save_path', 'bot_creator')
+
 	window.close()

@@ -222,7 +222,8 @@ hotkeys_blocked = False
 sigil_leader_pid: int = None
 questing_leader_pid: int = None
 
-bot_task: asyncio.Task = None
+bot_task: asyncio.Task = None 
+flythrough_task: asyncio.Task = None
 
 def file_len(filepath):
 	# return the number of lines in a file
@@ -536,7 +537,7 @@ async def main():
 	global tool_status
 	global original_client_locations
 	listener = HotkeyListener()
-	foreground_client = None
+	foreground_client: Client = None
 	background_clients = []
 	await asyncio.sleep(0)
 	listener.start()
@@ -1101,6 +1102,7 @@ async def main():
 		if show_gui:
 			global gui_send_queue
 			global bot_task
+			global flythrough_task
 			gui_send_queue = queue.Queue()
 			recv_queue = queue.Queue()
 
@@ -1399,8 +1401,19 @@ async def main():
 									await asyncio.gather(*[auto_potions_force_buy(client, True) for client in clients])
 
 							case deimosgui.GUICommandType.ExecuteFlythrough:
-								if foreground_client:
+								async def _flythrough():
 									await execute_flythrough(foreground_client, com.data)
+									await foreground_client.camera_elastic()
+
+								if foreground_client:
+									flythrough_task = asyncio.create_task(_flythrough())
+
+							case deimosgui.GUICommandType.KillFlythrough:
+								if flythrough_task is not None:
+									flythrough_task.cancel()
+									flythrough_task = None
+									await asyncio.sleep(0)
+									await foreground_client.camera_elastic()
 
 							case deimosgui.GUICommandType.ExecuteBot:
 								command_data: str = com.data
