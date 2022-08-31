@@ -1,4 +1,5 @@
 import asyncio
+import ctypes
 import time
 import traceback
 
@@ -319,8 +320,12 @@ async def spiral_door(client: Client, open_window: bool = True, cycles: int = 0,
 async def navigate_to_ravenwood(client: Client):
 	# navigates to commons from anywhere in the game
 
+	print('sending home')
 	await client.send_key(Keycode.HOME, 0.1)
+	await client.send_key(Keycode.HOME, 0.1)
+	print('waiting')
 	await wait_for_zone_change(client)
+	print('past waiting')
 	use_spiral_door = False
 	bartleby_navigation = True
 	match await client.zone_name():
@@ -445,9 +450,14 @@ async def is_potion_needed(client: Client, minimum_mana: int = 16):
 async def auto_potions_force_buy(client: Client, mark: bool = False, minimum_mana: int = 16):
 	# If we have any missing potions, get potions
 	if await client.stats.potion_charge() < await client.stats.potion_max():
-		# mark if needed
-		if mark:
-			await client.send_key(Keycode.PAGE_DOWN, 0.1)
+		# do not recall from potion buy if we were already in the commons - wait for zone change will fail
+		if await client.zone_name() == 'WizardCity/WC_Hub':
+			recall = False
+		else:
+			recall = True
+			# mark if needed
+			if mark:
+				await client.send_key(Keycode.PAGE_DOWN, 0.1)
 		# Navigate to ravenwood
 		await navigate_to_ravenwood(client)
 		# Navigate to commons
@@ -455,7 +465,7 @@ async def auto_potions_force_buy(client: Client, mark: bool = False, minimum_man
 		# Navigate to hilda brewer
 		await navigate_to_potions(client)
 		# Buy potions
-		await buy_potions(client)
+		await buy_potions(client, recall=recall)
 
 		if await is_potion_needed(client, minimum_mana):
 			await use_potion(client)
@@ -500,54 +510,69 @@ async def change_equipment_set(client: Client, set_number: int, handle_mouseless
 		await client.mouse_handler.deactivate_mouseless()
 
 
-async def safe_wait_for_zone_change(self, name: Optional[str] = None, *, sleep_time: Optional[float] = 0.5):
+
+class FriendBusyOrInstanceClosed(Exception):
+	def __init__(self, msg='Friend was busy / has teleports disabled, or you attempted to enter an area that is no longer accessible', *args, **kwargs):
+		super().__init__(msg, *args, **kwargs)
+
+
+
+class LoadingScreenNotFound(Exception):
+	def __init__(self, msg='The client never entered a loading screen and safe_wait_for_zone_change timed out', *args, **kwargs):
+		super().__init__(msg, *args, **kwargs)
+
+
+
+async def safe_wait_for_zone_change(self: Client, name: Optional[str] = None, *, sleep_time: Optional[float] = 0.5, timeout=10.0, handle_hooks_if_needed=True):
+	# you should generally provide a zone name via the parameter to prevent a race condition
 	if name is None:
 		name = await self.zone_name()
 
-	# distance = 0.0
-	# original_location = await self.body.position()
 	start_time = time.time()
-	zone_change_failed = False
+	client_was_in_loading = False
 	while await self.zone_name() == name:
-		print('waiting for zone change')
+		# check so we know if the client ever actually entered a loading screen
+		if await self.is_loading():
+			client_was_in_loading = True
+
+		if await is_visible_by_path(self, friend_is_busy_and_dungeon_reset_path):
+			if handle_hooks_if_needed:
+				await self.mouse_handler.activate_mouseless()
+
+			await click_window_by_path(self, friend_is_busy_and_dungeon_reset_path)
+
+			if handle_hooks_if_needed:
+				await self.mouse_handler.deactivate_mouseless()
+
+			raise FriendBusyOrInstanceClosed
+
+		if timeout is not None:
+			# X seconds have passed
+			if time.time() > start_time + timeout and not client_was_in_loading:
+				if await self.is_loading():
+					client_was_in_loading = True
+				# if after X seconds we have not entered a loading screen and have not seen a friend is busy popup, we're in the same zone
+				else:
+					raise LoadingScreenNotFound
+
 		await asyncio.sleep(sleep_time)
-		if await is_visible_by_path(self, friend_is_busy_path):
-			zone_change_failed = True
-			await click_window_by_path(self, friend_is_busy_path)
-			break
 
-		# 5 seconds have passed
-		if time.time() > start_time + 10:
-			if await self.is_loading():
-				break
-			# if after 5 seconds we have not entered a loading screen and have not seen a friend is busy popup, we're in the same zone
-			else:
-				zone_change_failed = True
-				break
 
-		# distance = calc_Distance(await self.body.position, XYZ(0.0, 0.0, 0.0))
-		#
-		# # we likely moved to a different location within our current zone (perhaps through friend teleport)
-		# if await self.zone_name() == name and distance > 20:
-		# 	exit_function = True
-		# 	break
+async def click_window_until_closed(client: Client, path):
+	if await is_visible_by_path(client, path):
+		await client.mouse_handler.activate_mouseless()
 
-	if not zone_change_failed:
-		while await self.is_loading():
-			print('waiting in loading')
-			await asyncio.sleep(sleep_time)
-			if await is_visible_by_path(self, friend_is_busy_path):
-				zone_change_failed = True
-				await click_window_by_path(self, friend_is_busy_path)
+		while await is_visible_by_path(client, path):
+			await click_window_by_path(client, path)
 
-	if zone_change_failed:
-		print('returning false')
-		return False
-	else:
+		await client.mouse_handler.deactivate_mouseless()
+
 		return True
+	else:
+		return False
 
 
-async def refill_potions(client: Client, mark: bool = False):
+async def refill_potions(client: Client, mark: bool = False, recall: bool = True):
 	if await client.stats.reference_level() >= 5:
 		# mark if needed
 		if mark:
@@ -559,10 +584,7 @@ async def refill_potions(client: Client, mark: bool = False):
 		# Navigate to hilda brewer
 		await navigate_to_potions(client)
 		# Buy potions
-		await buy_potions(client)
-		# Teleport back
-		if mark:
-			await client.send_key(Keycode.PAGE_UP, 0.1)
+		await buy_potions(client, recall)
 
 
 async def auto_potions(client: Client, mark: bool = False, minimum_mana: int = 16, buy: bool = True):
@@ -578,6 +600,32 @@ async def wait_for_window_by_path(client: Client, path: list[str], hooks: bool =
 		await asyncio.sleep(0.1)
 	if click or hooks:
 		await click_window_by_path(client, path, hooks)
+
+
+# From peechez's dance game bot
+async def maybe_find_window_by_name(parent, name):
+	for child in await parent.children():
+		if await child.name() == name:
+			return child
+	return None
+
+
+# From peechez's dance game bot
+async def wait_and_return_window_by_path(parent, *path):
+	window = parent
+	for name in path:
+		while (maybe_window := await maybe_find_window_by_name(window, name)) is None:
+			pass
+		window = maybe_window
+	return window
+
+
+async def post_keys(client, keys):
+	user32_dance = ctypes.windll.user32
+
+	for key in keys:
+		user32_dance.PostMessageW(client.window_handle, 0x100, ord(key), 0)
+		user32_dance.PostMessageW(client.window_handle, 0x101, ord(key), 0)
 
 
 async def logout_and_in(client: Client):
@@ -813,13 +861,9 @@ async def check_for_friend_in_list(client: Client, friend_name: str):
 	else:
 		return True
 
-
-async def set_wizard_name(client: Client):
-	await client.send_key(Keycode.C, 0.1)
-	await asyncio.sleep(.2)
-
+# requires that the character screen is already open
+async def set_wizard_name_from_character_screen(client: Client):
 	option_window = await client.root_window.get_windows_with_name('TitleScroll')
-
 	assert len(option_window) == 1, str(option_window)
 
 	# for child in await option_window[0].children():
@@ -827,10 +871,21 @@ async def set_wizard_name(client: Client):
 	wizard_name = await children[0].maybe_text()
 	wizard_name = wizard_name[8:-9]
 
-	await asyncio.sleep(.2)
-	await client.send_key(Keycode.C, 0.1)
-
 	client.wizard_name = wizard_name
+
+# requires that the character screen is already open
+async def return_wizard_energy_from_character_screen(client: Client):
+	energy_txt_window = await get_window_from_path(client.root_window, energy_amount_path)
+
+	energy_txt = await energy_txt_window.maybe_text()
+	current_energy = energy_txt[8:]
+	total_energy = energy_txt[8:]
+	current_energy = current_energy.split('/', 1)[0]
+	total_energy = total_energy.split('/', 1)[1]
+	current_energy = int(current_energy)
+	total_energy = int(total_energy)
+
+	return current_energy, total_energy
 
 
 async def get_friend_popup_wizard_name(client: Client):

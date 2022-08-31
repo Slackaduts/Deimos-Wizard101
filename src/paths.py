@@ -88,8 +88,8 @@ chat_window_path = ['WorldView', 'WizardChatBox', 'chatContainer', 'chatLogConta
 # Popup Message Path
 popup_msgtext_path = ["WorldView", "NPCRangeWin", "imgBackground", "NPCRangeTxtMessage"]
 
-# Friend Busy (on teleport) Path
-friend_is_busy_path = ['MessageBoxModalWindow', 'messageBoxBG', 'messageBoxLayout', 'AdjustmentWindow', 'Layout', 'rightButton']
+# Friend Busy (on teleport) Path / Dungeon Reset Path
+friend_is_busy_and_dungeon_reset_path = ['MessageBoxModalWindow', 'messageBoxBG', 'messageBoxLayout', 'AdjustmentWindow', 'Layout', 'rightButton']
 
 # Friend List / Friend Popup Paths
 add_remove_friend_path = ['WorldView', 'windowHUD', 'wndCharacter', 'ButtonLayout', 'btnAddRemoveFriend']
@@ -119,7 +119,7 @@ exit_dungeon_path = ['MessageBoxModalWindow', 'messageBoxBG', 'messageBoxLayout'
 # Zafaria Class Picture Exit Path
 exit_zafaria_class_picture_button = ['WorldView', 'ClassPicture', 'exit']
 
-# Check Backpack Open Path
+# Check Backpack Open
 backpack_is_visible_path = ['WorldView', 'DeckConfiguration', 'InventorySpellbookPage', 'EquipmentManager']
 
 # Equipment Set Manager Paths
@@ -135,3 +135,34 @@ exit_pet_leveled_up_button_path = ['WorldView', 'PetLevelUpWindow', 'wndPetLevel
 
 # Exit Avalon Badge Popup
 avalon_badge_exit_button_path = ['WorldView', 'HelpHousingTips2', 'toolbar', 'exit']
+
+# Pet Game Paths
+pet_feed_window_visible_path = ['WorldView', 'PetGameTracks']
+pet_feed_window_cancel_button_path = ['WorldView', 'PetGameTracks', 'btnBack']
+wizard_city_dance_game_path = ['WorldView', 'PetGameTracks', 'wndBkgTracks', 'wndTracks', 'btnTrack0']
+play_dance_game_button_path = ['WorldView', 'PetGameTracks', 'btnNext']
+skip_pet_game_button_path = ['WorldView', 'PetGameTracks', 'SkipGameButton']
+won_pet_game_rewards_window_path = ['WorldView', 'PetGameSplash', '', 'PetGameRewards']
+skipped_pet_game_rewards_window_path = ['WorldView', '', 'PetGameRewards']
+won_pet_game_continue_and_feed_button_path = ['WorldView', 'PetGameSplash', '', 'PetGameRewards', 'btnNext']
+skipped_pet_game_continue_and_feed_button_path = ['WorldView', '', 'PetGameRewards', 'btnNext']
+skipped_first_pet_snack_path = ['WorldView', '', 'PetGameRewards', 'wndBkgBottom', 'wndCards', 'chkSnackCard0']
+won_first_pet_snack_path = ['WorldView', 'PetGameSplash', '', 'PetGameRewards', 'wndBkgBottom', 'wndCards', 'chkSnackCard0']
+won_pet_game_play_again_button_path = ['WorldView', 'PetGameSplash', '', 'PetGameRewards', 'btnPlayAgain']
+won_finish_pet_button = ['WorldView', 'PetGameSplash', '', 'PetGameRewards', 'btnBack']
+skipped_finish_pet_button = ['WorldView', '', 'PetGameRewards', 'btnBack']
+skipped_pet_game_play_again_button_path = ['WorldView', '', 'PetGameRewards', 'btnPlayAgain']
+pet_feed_window_energy_cost_textbox_path = ['WorldView', 'PetGameTracks', 'wndBkgEnergy', 'txtEnergyCost']
+pet_feed_window_your_energy_textbox_path = ['WorldView', 'PetGameTracks', 'wndBkgEnergy', 'txtYourEnergy']
+skipped_pet_leveled_up_window_path = ['WorldView', '', 'PetLevelUpWindow']
+won_pet_leveled_up_window_path = ['WorldView', 'PetGameSplash', '', 'PetLevelUpWindow']
+won_pet_leveled_up_announcement_txt_path = ['WorldView', 'PetGameSplash', '', 'PetLevelUpWindow', 'wndPetLevelBkg', 'txtAnnounceText']
+skipped_pet_leveled_up_announcement_txt_path = ['WorldView', '', 'PetLevelUpWindow', 'wndPetLevelBkg', 'txtTitle']
+won_pet_leveled_up_talent_txt_path = ['WorldView', '', 'PetLevelUpWindow', 'wndPetLevelBkg', '', 'txtName']
+skipped_pet_leveled_up_talent_txt_path = ['WorldView', 'PetGameSplash', '', 'PetLevelUpWindow', 'wndPetLevelBkg', '', 'powerGained', 'txtName']
+exit_won_pet_leveled_up_path = ['WorldView', 'PetGameSplash', '', 'PetLevelUpWindow', 'wndPetLevelBkg', 'btnPetLevelClose']
+exit_skipped_pet_leveled_up_path = ['WorldView', '', 'PetLevelUpWindow', 'wndPetLevelBkg', 'btnPetLevelClose']
+dance_game_action_textbox_path = ['WorldView', 'PetGameSplash', '', 'PetGameDance', 'wndControls', 'wndActionBkg', 'txtAction']
+
+# Character Screen Energy Amount
+energy_amount_path = ['WorldView', 'DeckConfiguration', '', 'ControlSprite', 'wndEnergyFrame', 'Layout', 'txtEnergy']
