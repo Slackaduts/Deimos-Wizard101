@@ -22,6 +22,7 @@ from configparser import ConfigParser
 import statistics
 import re
 from pypresence import AioPresence
+from src.command_parser import execute_flythrough, parse_command
 from src.drop_logger import logging_loop
 from src.combat import Fighter
 from src.stat_viewer import total_stats_from_id
@@ -41,7 +42,7 @@ from typing import List, Tuple
 from src import deimosgui
 
 
-tool_version = '3.6.0'
+tool_version = '3.7.0'
 tool_name = 'Deimos'
 repo_name = tool_name + '-Wizard101'
 branch = 'master'
@@ -209,6 +210,8 @@ hotkeys_blocked = False
 
 sigil_leader_pid: int = None
 questing_leader_pid: int = None
+
+bot_task: asyncio.Task = None
 
 def file_len(filepath):
 	# return the number of lines in a file
@@ -1086,6 +1089,7 @@ async def main():
 	async def handle_gui():
 		if show_gui:
 			global gui_send_queue
+			global bot_task
 			gui_send_queue = queue.Queue()
 			recv_queue = queue.Queue()
 
@@ -1382,6 +1386,25 @@ async def main():
 											clients.append(c)
 
 									await asyncio.gather(*[auto_potions_force_buy(client, True) for client in clients])
+
+							case deimosgui.GUICommandType.ExecuteFlythrough:
+								if foreground_client:
+									await execute_flythrough(foreground_client, com.data)
+
+							case deimosgui.GUICommandType.ExecuteBot:
+								command_data: str = com.data
+
+								async def run_bot(command_data: str = command_data):
+									while True:
+										split_commands = command_data.split('\n')
+										for command_str in split_commands:
+											await parse_command(walker.clients, command_str)
+
+								bot_task = asyncio.create_task(run_bot())
+
+							case deimosgui.GUICommandType.KillBot:
+								bot_task.cancel()
+								bot_task = None
 
 				except queue.Empty:
 					pass

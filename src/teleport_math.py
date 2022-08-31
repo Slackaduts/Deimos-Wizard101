@@ -1,5 +1,4 @@
 import asyncio
-
 from wizwalker import XYZ, Client, Keycode
 from wizwalker.file_readers.wad import Wad
 import math
@@ -8,6 +7,7 @@ from io import BytesIO
 from typing import Tuple, Union
 from src.utils import is_free, get_quest_name, is_visible_by_path, get_popup_title
 from src.paths import npc_range_path
+from src.types import Orientation
 
 type_format_dict = {
 "char": "<c",
@@ -641,53 +641,34 @@ def calculate_pitch(xyz_1: XYZ, xyz_2: XYZ) -> float:
     return -math.atan2(z, math.sqrt(x ** 2 + y ** 2))
 
 
-
-class YPR:
-    # Object for Yaw, Roll, and Pitch
-    def __init__(self, y: float, p: float, r: float):
-        self.y = y
-        self.p = p
-        self.r = r
-
-    def __str__(self):
-        return f"<YPR ({self.y}, {self.p}, {self.r})>"
-
-    def __repr__(self):
-        return str(self)
-
-    def __iter__(self):
-        return iter((self.y, self.p, self.r))
+async def write_orientation(client: Client, orientation: Orientation):
+    # Writes the Orientation to a client (Yaw, Roll, Pitch)
+    await client.body.write_yaw(orientation.yaw)
+    await client.body.write_pitch(orientation.pitch)
+    await client.body.write_roll(orientation.roll)
 
 
-
-async def write_ypr(client: Client, ypr: YPR):
-    # Writes the YPR to a client (Yaw, Roll, Pitch)
-    await client.body.write_yaw(ypr.y)
-    await client.body.write_pitch(ypr.p)
-    await client.body.write_roll(ypr.r)
-
-
-async def get_rotations(client: Client) -> YPR:
-    # Returns a YPR for the client body
+async def get_orientation(client: Client) -> Orientation:
+    # Returns a Orientation for the client body
     y = await client.body.yaw()
     p = await client.body.pitch()
     r = await client.body.roll()
 
-    return YPR(y, p, r)
+    return Orientation(y, p, r)
 
-async def get_degree_rotations(client: Client) -> YPR:
-    # Returns a YPR for the client body
+async def get_degree_orientation(client: Client) -> Orientation:
+    # Returns a Orientation for the client body
     y = await client.body.yaw()
     p = await client.body.pitch()
     r = await client.body.roll()
 
-    return YPR(math.degrees(y), math.degrees(p), math.degrees(r))
+    return Orientation(math.degrees(y), math.degrees(p), math.degrees(r))
 
-def calc_frontal_XYZ(xyz: XYZ, ypr: YPR, distance: float) -> XYZ:
+
+def calc_frontal_XYZ(xyz: XYZ, ypr: Orientation, distance: float) -> XYZ:
     # Simpler version of calc_FrontalVector that is meant for just pure math stuff. This should honestly be used instead but I lack the time to spend redoing old stuff. -slack
-
-    x = distance * math.cos(ypr.y) * math.sin(ypr.p)
-    y = distance * math.sin(ypr.y) * math.sin(ypr.p)
-    z = distance * math.cos(ypr.p)
+    x = distance * math.cos(Orientation.yaw) * math.sin(Orientation.pitch)
+    y = distance * math.sin(Orientation.yaw) * math.sin(Orientation.pitch)
+    z = distance * math.cos(Orientation.pitch)
 
     return XYZ(xyz.x + x, xyz.y + y, xyz.z + z)

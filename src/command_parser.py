@@ -1,64 +1,60 @@
-from importlib.resources import path
 from typing import List, Tuple, Coroutine
 import asyncio
-from wizwalker import Client, XYZ
+from wizwalker import Client, XYZ, Keycode
+from wizwalker.memory.memory_objects.camera_controller import CameraController
 from src.gui_inputs import param_input
 from src.utils import use_potion, buy_potions, is_free, logout_and_in, wait_for_visible_by_path, click_window_by_path, attempt_activate_mouseless, attempt_deactivate_mouseless
-from src.teleport_math import YPR, write_ypr
+from src.teleport_math import get_orientation, navmap_tp, write_orientation
+from src.camera_utils import get_camera_orientation, glide_to, point_to_xyz, rotating_glide_to, orbit, write_camera_orientation, measure_interval
+from src.types import Orientation
 import re
-
-# THIS WHOLE THING IS UNFINISHED - slack
-
-async def parse_input(client: Client, clients: List[Client], raw_commands: str, line_seperator: str = '\n'):
-    # Calls wizwalker functions based on text commands in the GUI.
-    command_list = raw_commands.split(line_seperator)
+from loguru import logger
 
 
-def parse_number(input_str: str, default: float) -> float:
-    if '(' in input_str:
-        input_str = input_str.strip('()')
+def index_with_str(input: List[str], desired_str: str) -> int:
+    for i, s in enumerate(input):
+        if desired_str in s.lower():
+            return i
 
-        return param_input(input_str, default)
-
-    else:
-        return float(input_str)
+    return None
 
 
-async def parse_location(client: Client, location_str: str, use_camera: bool = False) -> Tuple[XYZ, YPR]:
-    if '(' in location_str:
-        location_str_cut: str = re.findall('\([^\)]+\)')[0]
-        location = location_str_cut.split(', ')
-
-    else:
-        location = ['quest']
-
-    location_type = location_str.split(' ')[0]
-
+async def parse_location(commands: List[str], camera: CameraController = None, client: Client = None) -> Tuple[XYZ, Orientation]:
+    # Takes in a camera or client along with a command string, and returns the location. Uses the same input parsing the GUI does, allowing for equation support.
     xyz = XYZ
-    ypr = YPR
+    orientation = Orientation
 
-    if 'quest' not in location:
-        if use_camera:
-            camera = await client.game_client.selected_camera_controller()
-            default_xyz = await camera.position()
-            default_ypr = YPR(await camera.yaw(), await camera.pitch(), await camera.roll())
-        else:
-            default_xyz = await client.body.position()
-            default_ypr = YPR(await client.body.yaw(), await client.body.pitch(), await client.body.roll())
+    location: List[str] = [s.replace(')', '').lower() for s in commands]
 
-        if 'xyz' in location_type.lower():
-            xyz = XYZ(parse_number(location[0], default_xyz.x), parse_number(location[1], default_xyz.y), parse_number(location[2], default_xyz.z))
-
-            if 'ypr' in location_type.lower():
-                ypr = YPR(parse_number(location[3], default_ypr.y), parse_number(location[4], default_ypr.p), parse_number(location[5], default_ypr.r))
-
-        elif 'ypr' in location_type.lower():
-            ypr = YPR(parse_number(location[0], default_ypr.y), parse_number(location[1], default_ypr.p), parse_number(location[2], default_ypr.r))
+    if camera:
+        default_xyz = await camera.position()
+        default_orientation = await get_camera_orientation(camera)
 
     else:
-        xyz = await client.quest_position.position()
+        default_xyz = await client.body.position()
+        default_orientation = await get_orientation(client)
 
-    return (xyz, ypr)
+    xyz_index = index_with_str(location, 'xyz(')
+    if xyz_index is not None:
+        xyz = XYZ(
+            param_input(location[xyz_index].replace('xyz(', ''), default_xyz.x), 
+            param_input(location[xyz_index + 1], default_xyz.y), 
+            param_input(location[xyz_index + 2], default_xyz.z)
+            )
+
+    else:
+        xyz = default_xyz
+    orientation_index = index_with_str(location, 'orientation(')
+    if orientation_index is not None:
+        orientation = Orientation(
+            param_input(location[orientation_index].replace('orientation(', ''), default_orientation.yaw), 
+            param_input(location[orientation_index + 1], default_orientation.pitch), 
+            param_input(location[orientation_index + 2], default_orientation.roll)
+            )
+
+    else:
+        orientation = default_orientation
+    return (xyz, orientation)
 
 
 def client_from_titles(clients: List[Client], title_str: str = 'p1') -> Client:
@@ -83,62 +79,68 @@ def find_path(input_str: str) -> List[str]:
     return window_path
 
 
-async def parse_command(clients: List[Client], commands: str):
-    split_command = commands.split(' ')
-    if split_command[-1].lower() == 'mass':
-        mass = True
-        desired_client = client_from_titles(clients)
+def split_line(input_str: str, seperator: str = ',') -> List[str]:
+    input_str = input_str.replace(f'{seperator} ', seperator)
+    split_str = input_str.split(seperator)
+
+    return split_str
+
+
+async def parse_command(clients: List[Client], command_str: str):
+    command_str = command_str.replace(', ', ',')
+    command_str = command_str.replace('_', '')
+    split_command = split_line(command_str)
+
+    # Get the desired client, will default to p1 if mass or no client is specified
+    client_str = split_command[0]
+    mass = client_str == 'mass'
+    if client_str[1:].isdigit() and not mass:
+        desired_client = client_from_titles(clients, client_str)
+        mass = False
 
     else:
-        mass = False
-        client_str = split_command[-1]
-        if client_str[0].lower() == 'p' and client_str[2].isdigit():
-            desired_client = client_from_titles(clients, split_command[-1])
+        desired_client = clients[0]
 
-        else:
-            desired_client = client_from_titles(clients)
+    match split_command[1].lower():
+        case 'teleport' | 'tp':
+            xyz, _ = await parse_location(split_command, client=desired_client)
+            await desired_client.teleport(xyz) if not mass else await asyncio.gather(*[client.teleport(xyz) for client in clients])
 
-    match split_command[0].lower():
-        case 'freecam':
-            await desired_client.camera_swap() if mass else await asyncio.gather(*[client.camera_swap() for client in clients])
+        case 'navmapteleport | navmaptp':
+            xyz, _ = await parse_location(split_command, client=desired_client)
+            await navmap_tp(desired_client, xyz) if not mass else await asyncio.gather(*[navmap_tp(client, xyz) for client in clients])
 
-        case 'use_potion':
-            await use_potion(desired_client) if mass else await asyncio.gather(*[use_potion(client) for client in clients])
+        case 'walkto' | 'goto':
+            xyz, _ = await parse_location(split_command, client=desired_client)
+            await desired_client.goto(xyz.x, xyz.y) if not mass else await asyncio.gather(*[client.goto(xyz.x, xyz.y) for client in clients])
 
-        case 'buy_potions':
-            await buy_potions(desired_client) if mass else await asyncio.gather(*[buy_potions(client) for client in clients])
+        case 'sendkey' | 'press' | 'presskey':
+            key = split_command[2]
+            time = 0.1
+            if len(split_command) >= 4:
+                time = float(split_command[3])
 
-        case 'speed':
-            default_speed = await desired_client.client_object.speed_multiplier()
-            await desired_client.client_object.write_speed_multiplier(parse_number(split_command[1], default_speed)) if mass else await asyncio.gather(*[client.client_object.write_speed_multiplier(parse_number(split_command[1], default_speed)) for client in clients])
+            await desired_client.send_key(Keycode[key], time)
 
-        case 'teleport':
-            xyz, ypr = await parse_location(desired_client, ' '.join(split_command[2L]))
-            await desired_client.teleport(xyz) if mass else await asyncio.gather(*[client.teleport(xyz) for client in clients])
-            await write_ypr(desired_client, ypr) if mass else await asyncio.gather(*[write_ypr(client, ypr) for client in clients])
-
-        case 'walk_to':
-            xyz, _ = await parse_location(desired_client, split_command[1])
-            await desired_client.goto(xyz.x, xyz.y) if mass else await asyncio.gather(*[client.goto(xyz.x, xyz.y) for client in clients])
-
-        case 'wait_for_combat':
-            await wait_for_coro(desired_client.in_battle) if mass else await asyncio.gather(*[wait_for_coro(client.in_battle) for client in clients])
-
-            if len(split_command) >= 2 and split_command[1].lower() == 'completion':
-                await wait_for_coro(desired_client.in_battle, True) if mass else await asyncio.gather(*[wait_for_coro(client.in_battle, True) for client in clients])
-
-        case 'wait_for_zone_change':
-            await desired_client.wait_for_zone_change() if mass else await asyncio.gather(*[client.wait_for_zone_change() for client in clients])
-
-            if len(split_command) >= 2 and split_command[1].lower() == 'completion':
-                await wait_for_coro(desired_client.is_loading) if mass else await asyncio.gather(*[wait_for_coro(client.is_loading) for client in clients])
-
-        case 'wait_for_dialogue' | 'wait_for_dialog':
+        case 'waitfordialog' | 'waitfordialogue':
             await wait_for_coro(desired_client.is_in_dialog) if mass else await asyncio.gather(*[wait_for_coro(client.is_in_dialog) for client in clients])
-            if len(split_command) >= 2 and split_command[1].lower() == 'completion':
+
+            if split_command[1].lower() == 'completion':
                 await wait_for_coro(desired_client.is_in_dialog, True) if mass else await asyncio.gather(*[wait_for_coro(client.is_in_dialog, True) for client in clients])
 
-        case 'wait_for_free':
+        case 'waitforbattle' | 'waitforcombat':
+            await wait_for_coro(desired_client.in_battle) if mass else await asyncio.gather(*[wait_for_coro(client.in_battle) for client in clients])
+
+            if split_command[-1].lower() == 'completion':
+                await wait_for_coro(desired_client.in_battle, True) if mass else await asyncio.gather(*[wait_for_coro(client.in_battle, True) for client in clients])
+
+        case 'waitforzonechange':
+            await desired_client.wait_for_zone_change() if mass else await asyncio.gather(*[client.wait_for_zone_change() for client in clients])
+
+            if split_command[-1].lower() == 'completion':
+                await wait_for_coro(desired_client.is_loading) if mass else await asyncio.gather(*[wait_for_coro(client.is_loading) for client in clients])
+
+        case 'waitforfree':
             async def _wait_for_free(client: Client, wait_for_not: bool = False, interval: float = 0.25):
                 if wait_for_not:
                     while await is_free(client):
@@ -150,56 +152,85 @@ async def parse_command(clients: List[Client], commands: str):
 
             await _wait_for_free(desired_client) if mass else await asyncio.gather(*[_wait_for_free(client) for client in clients])
 
-            if len(split_command) >= 2 and split_command[1].lower() == 'completion':
+            if split_command[1].lower() == 'completion':
                 await _wait_for_free(desired_client, True) if mass else await asyncio.gather(*[_wait_for_free(client, True) for client in clients])
 
-        case 'relog' | 'logout_and_in':
+        case 'usepotion':
+            await use_potion(desired_client) if mass else await asyncio.gather(*[use_potion(client) for client in clients])
+
+        case 'buypotions':
+            await buy_potions(desired_client) if mass else await asyncio.gather(*[buy_potions(client) for client in clients])
+
+        case 'speed':
+            await desired_client.client_object.write_speed_multiplier(int(split_command[-1])) if mass else await asyncio.gather(*[client.client_object.write_speed_multiplier(int(split_command[-1])) for client in clients])
+
+        case 'sleep' | 'wait' | 'delay':
+            await asyncio.sleep(float(split_command[-1]))
+
+        case 'logoutandin' | 'relog':
             await logout_and_in(desired_client) if mass else await asyncio.gather(*[logout_and_in(client) for client in clients])
 
-        case 'wait_for_visible':
-            window_path = find_path(commands)
+        case _:
+            await asyncio.sleep(0.25)
 
-            await wait_for_visible_by_path(desired_client, window_path) if mass else await asyncio.gather(*[wait_for_visible_by_path(client, window_path) for client in clients])
 
-            if len(split_command) >= 2 and split_command[1].lower() == 'completion':
-                await wait_for_visible_by_path(desired_client, window_path, True) if mass else await asyncio.gather(*[wait_for_visible_by_path(client, window_path, True) for client in clients])
+async def execute_flythrough(client: Client, flythrough_data: str, line_seperator: str = '\n'):
+    flythrough_actions = flythrough_data.split(line_seperator)
 
-        case 'click_window':
-            window_path = find_path(commands)
-            if len(split_command) >= 2 and split_command[1].lower() == 'hooks':
-                hooks = True
+    if not await client.game_client.is_freecam():
+        await client.camera_freecam()
 
-            else:
-                hooks = False
+    camera = await client.game_client.free_camera_controller()
 
-            await click_window_by_path(desired_client, window_path, hooks) if mass else await asyncio.gather(*[click_window_by_path(client, window_path, hooks) for client in clients])
+    for action in flythrough_actions:
+        await parse_camera_command(camera, action)
 
-        case 'click' | 'right_click':
-            if split_command[0].lower() == 'right_click':
-                right_click = True
 
-            else:
-                right_click = False
+async def parse_camera_command(camera: CameraController, command_str: str):
+    command_str = command_str.replace(', ', ',')
+    split_command = split_line(command_str)
 
-            if len(split_command) >= 4 and split_command[1].lower() == 'hooks':
-                await attempt_activate_mouseless(desired_client) if mass else await asyncio.gather(*[attempt_activate_mouseless(client) for client in clients])
+    origin_pos = await camera.position()
+    xyz, orientation = await parse_location(split_command, camera)
+    focus_xyz: XYZ = None
 
-                location = parse_location(desired_client, commands)
-                await desired_client.mouse_handler.click(int(location.x), int(location.y), right_click=right_click)
+    if split_command[-1].isdigit():
+        time = float(split_command[-1])
 
-                await attempt_deactivate_mouseless(desired_client) if mass else await asyncio.gather(*[attempt_deactivate_mouseless(client) for client in clients])
+    else:
+        time = 0
 
-        case 'mouseless':
-            if len(split_command) >= 2:
-                on_words = ['on', 'true', 'hook']
-                if split_command[1].lower() in on_words:
-                    await attempt_activate_mouseless(desired_client) if mass else await asyncio.gather(*[attempt_activate_mouseless(client) for client in clients])
-
-                else:
-                    await attempt_deactivate_mouseless(desired_client) if mass else await asyncio.gather(*[attempt_deactivate_mouseless(client) for client in clients])
+    match split_command[0].lower():
+        case 'glideto':
+            focus_index = index_with_str(split_command, 'lookat')
+            if focus_index is not None:
+                focus_xyz, _ = await parse_location(split_command[focus_index:-1], camera)
+                logger.debug(f'Gliding freecam from {origin_pos} to {xyz} while looking at {focus_xyz} over {time} seconds')
 
             else:
-                await attempt_activate_mouseless(desired_client) if mass else await asyncio.gather(*[attempt_activate_mouseless(client) for client in clients])
+                logger.debug(f'Gliding freecam from {origin_pos} to {xyz} while orientated as {orientation} over {time} seconds')
 
-        case 'wait':
-            await asyncio.sleep(float(split_command[1]))
+            await glide_to(camera, origin_pos, xyz, orientation, time, focus_xyz)
+
+        case 'rotatingglideto':
+            logger.debug(f'Gliding freecam from {origin_pos} to {xyz} while rotating {orientation} degrees over {time} seconds')
+            await rotating_glide_to(camera, origin_pos, xyz, time, orientation)
+
+        case 'orbit':
+            degrees = param_input(split_command[-2], 360)
+            logger.debug(f'Orbiting freecam {degrees} degrees from {origin_pos} around {xyz} over {time} seconds')
+            await orbit(camera, origin_pos, xyz, degrees, time)
+
+        case 'lookat':
+            logger.debug(f'Pointing freecam at {xyz}')
+            await point_to_xyz(camera, xyz)
+
+        case 'setpos':
+            logger.debug(f'Moving freecam to {xyz}')
+            await camera.write_position(xyz)
+
+        case 'setorientation':
+            await write_camera_orientation(camera, orientation)
+
+        case _:
+            pass

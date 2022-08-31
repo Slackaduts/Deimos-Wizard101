@@ -31,6 +31,11 @@ class GUICommandType(Enum):
 	SetCamPosition = auto()
 	SetCamDistance = auto()
 
+	ExecuteFlythrough = auto()
+	ExecuteBot = auto()
+	KillBot = auto()
+
+
 	# deimos -> window
 	UpdateWindow = auto()
 
@@ -51,7 +56,7 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 
 	global hotkey_button
 	original_hotkey_button = hotkey_button
-	def hotkey_button(name, auto_size=True, text_color=gui_text_color, button_color=gui_button_color):
+	def hotkey_button(name, auto_size=False, text_color=gui_text_color, button_color=gui_button_color):
 		return original_hotkey_button(name, auto_size, text_color, button_color)
 
 
@@ -133,12 +138,30 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 
 	framed_stat_viewer_layout = gui.Frame('Stat Viewer', stat_viewer_layout, title_color=gui_text_color)
 
+	flythrough_layout = [
+		[gui.Text('The utils shown below are for advanced users and no support will be provided on them.', text_color=gui_text_color)],
+		[gui.Multiline(key='flythrough_creator', size=(66, 11), text_color=gui_text_color, horizontal_scroll=True)],
+		[hotkey_button('Execute Flythrough', True)],
+	]
+
+	framed_flythrough_layout = gui.Frame('Flythrough Creator', flythrough_layout, title_color=gui_text_color)
+
+	bot_creator_layout = [
+		[gui.Text('The utils shown below are for advanced users and no support will be provided on them.', text_color=gui_text_color)],
+		[gui.Multiline(key='bot_creator', size=(66, 11), text_color=gui_text_color, horizontal_scroll=True)],
+		[hotkey_button('Execute Bot Commands', True), hotkey_button('Kill Bot')]
+	]
+
+	framed_bot_creator_layout = gui.Frame('Bot Creator', bot_creator_layout, title_color=gui_text_color)
+
 	tabs = [
 		[
 			gui.Tab('Hotkeys', [[framed_toggles_layout, framed_hotkeys_layout, framed_mass_hotkeys_layout, framed_utils_layout]], title_color=gui_text_color),
 			gui.Tab('Camera Utils', [[framed_camera_controls_layout]], title_color=gui_text_color),
 			gui.Tab('Dev Utils', [[framed_custom_tp_layout], [framed_dev_utils_layout]], title_color=gui_text_color),
-			gui.Tab('Stat Viewer', [[framed_stat_viewer_layout]], title_color=gui_text_color)
+			gui.Tab('Stat Viewer', [[framed_stat_viewer_layout]], title_color=gui_text_color),
+			gui.Tab('Flythrough', [[framed_flythrough_layout]], title_color=gui_text_color),
+			gui.Tab('Bot Creator', [[framed_bot_creator_layout]], title_color=gui_text_color)
 		]
 	]
 
@@ -151,7 +174,7 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 	return window
 
 
-def manage_gui(send_queue, recv_queue: queue.Queue, gui_theme, gui_text_color, gui_button_color, tool_name, tool_version, gui_on_top):
+def manage_gui(send_queue: queue.Queue, recv_queue: queue.Queue, gui_theme, gui_text_color, gui_button_color, tool_name, tool_version, gui_on_top):
 	window = create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_version, gui_on_top)
 
 	running = True
@@ -184,7 +207,6 @@ def manage_gui(send_queue, recv_queue: queue.Queue, gui_theme, gui_text_color, g
 			case gui.WINDOW_CLOSE_ATTEMPTED_EVENT:
 				running = False
 				send_queue.put(GUICommand(GUICommandType.Close))
-
 
 			# Toggles
 			case 'Speedhack' | 'Combat' | 'Dialogue' | 'Sigil' | 'Questing' | 'Freecam' | \
@@ -254,6 +276,7 @@ def manage_gui(send_queue, recv_queue: queue.Queue, gui_theme, gui_text_color, g
 			case 'Go To Zone':
 				if inputs[15]:
 					send_queue.put(GUICommand(GUICommandType.GoToZone, (False, str(inputs[15]))))
+
 			case 'Mass Go To Zone':
 				if inputs[15]:
 					send_queue.put(GUICommand(GUICommandType.GoToZone, (True, str(inputs[15]))))
@@ -261,12 +284,14 @@ def manage_gui(send_queue, recv_queue: queue.Queue, gui_theme, gui_text_color, g
 			case 'Go To World':
 				if inputs[16]:
 					send_queue.put(GUICommand(GUICommandType.GoToWorld, (False, inputs[16])))
+
 			case 'Mass Go To World':
 				if inputs[16]:
 					send_queue.put(GUICommand(GUICommandType.GoToWorld, (True, inputs[16])))
 
 			case 'Go To Bazaar':
 				send_queue.put(GUICommand(GUICommandType.GoToBazaar, False))
+
 			case 'Mass Go To Bazaar':
 				send_queue.put(GUICommand(GUICommandType.GoToBazaar, True))
 
@@ -274,6 +299,15 @@ def manage_gui(send_queue, recv_queue: queue.Queue, gui_theme, gui_text_color, g
 				send_queue.put(GUICommand(GUICommandType.RefillPotions, False))
 			case 'Mass Refill Potions':
 				send_queue.put(GUICommand(GUICommandType.RefillPotions, True))
+
+			case 'Execute Flythrough':
+				send_queue.put(GUICommand(GUICommandType.ExecuteFlythrough, inputs['flythrough_creator']))
+
+			case 'Execute Bot Commands':
+				send_queue.put(GUICommand(GUICommandType.ExecuteBot, inputs['bot_creator']))
+
+			case 'Kill Bot':
+				send_queue.put(GUICommand(GUICommandType.KillBot))
 
 			# Other
 			case _:
