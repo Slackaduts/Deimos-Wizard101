@@ -2,11 +2,10 @@ import asyncio
 import math
 from time import perf_counter
 from typing import List
-from wizwalker import XYZ, Client
+from wizwalker import XYZ, Orient, Client
 from wizwalker.memory.memory_objects.camera_controller import CameraController
 from src.teleport_math import calculate_yaw, calculate_pitch, calc_multiplerPointOn3DLine, rotate_point
 from src.sprinty_client import SprintyClient
-from src.types import Orientation
 
 
 async def point_to_xyz(camera: CameraController, xyz: XYZ):
@@ -38,25 +37,8 @@ async def toggle_player_invis(client: Client, default_scale: float = 1.0):
         await client.body.write_scale(default_scale)
 
 
-async def write_camera_orientation(camera: CameraController, orientation: Orientation, update: bool = True):
-    # Writes the orientation of the camera controller, then updates the orientation matrix.
-    await camera.write_yaw(orientation.yaw)
-    await camera.write_pitch(orientation.pitch)
-    await camera.write_roll(orientation.roll)
-
-    if update:
-        await camera.update_orientation()
-
-
-async def get_camera_orientation(camera: CameraController) -> Orientation:
-    yaw = await camera.yaw()
-    pitch = await camera.pitch()
-    roll = await camera.roll()
-
-    return Orientation(yaw, pitch, roll)
-
-
-async def glide_to(camera: CameraController, xyz_1: XYZ, xyz_2: XYZ, orientation: Orientation, time: float, focus_xyz: XYZ = None):
+async def glide_to(camera: CameraController, xyz_1: XYZ, xyz_2: XYZ, orientation: Orient, time: float, focus_xyz: XYZ = None):
+    pitch, roll, yaw = orientation
     roll = await camera.roll()
 
     velocity = XYZ(
@@ -84,25 +66,23 @@ async def glide_to(camera: CameraController, xyz_1: XYZ, xyz_2: XYZ, orientation
         if focus_xyz:
             yaw = calculate_yaw(cur_xyz, focus_xyz)
             pitch = calculate_pitch(cur_xyz, focus_xyz)
-            await write_camera_orientation(camera, Orientation(yaw, pitch, roll))
+            await camera.update_orientation(Orient(pitch, roll, yaw))
         else:
-            await write_camera_orientation(camera, orientation)
+            await camera.update_orientation(Orient(pitch, roll, yaw))
 
         await camera.write_position(cur_xyz)
 
         await asyncio.sleep(0)
 
 
-async def rotating_glide_to(camera: CameraController, xyz_1: XYZ, xyz_2: XYZ, time: float, degrees: Orientation = Orientation(0, 0, 0)):
-    rotation_velocity = Orientation(
-        math.radians(degrees.yaw) / time,
+async def rotating_glide_to(camera: CameraController, xyz_1: XYZ, xyz_2: XYZ, time: float, degrees = Orient(0, 0, 0)):
+    rotation_velocity = Orient(
         math.radians(degrees.pitch) / time,
-        math.radians(degrees.roll) / time
+        math.radians(degrees.roll) / time,
+        math.radians(degrees.yaw) / time,
     )
 
-    yaw = await camera.yaw()
-    pitch = await camera.pitch()
-    roll = await camera.roll()
+    pitch, roll, yaw = await camera.orientation()
 
     velocity = XYZ(
         (xyz_2.x - xyz_1.x) / time,
@@ -131,7 +111,7 @@ async def rotating_glide_to(camera: CameraController, xyz_1: XYZ, xyz_2: XYZ, ti
         roll += rotation_velocity.roll * dt
 
         await camera.write_position(cur_xyz)
-        await write_camera_orientation(camera, Orientation(yaw, pitch, roll))
+        await camera.update_orientation(Orient(pitch, roll, yaw))
 
         await asyncio.sleep(0)
 
@@ -163,6 +143,6 @@ async def orbit(camera: CameraController, xyz_1: XYZ, xyz_2: XYZ, degrees: float
 
         yaw = calculate_yaw(cur_xyz, xyz_2)
         pitch = calculate_pitch(cur_xyz, xyz_2)
-        await write_camera_orientation(camera, Orientation(yaw, pitch, roll))
+        await camera.update_orientation(Orient(pitch, roll, yaw))
 
         await asyncio.sleep(0)
