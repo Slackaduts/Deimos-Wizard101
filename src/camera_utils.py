@@ -38,18 +38,25 @@ async def toggle_player_invis(client: Client, default_scale: float = 1.0):
         await client.body.write_scale(default_scale)
 
 
-async def measure_interval(camera: CameraController) -> float:
+async def measure_interval(camera: CameraController, iterations: int = 1000, xyz: bool = True, orientation: bool = True) -> float:
     xyz = await camera.position()
     ypr = await get_camera_orientation(camera)
 
-    start = perf_counter()
+    times: List[float] = []
+    for _ in range(iterations):
+        start = perf_counter()
 
-    await camera.write_position(xyz)
-    await write_camera_orientation(camera, ypr)
+        if xyz:
+            await camera.write_position(xyz)
 
-    end = perf_counter()
+        if orientation:
+            await write_camera_orientation(camera, ypr)
 
-    return end - start
+        end = perf_counter()
+
+        times.append(end - start)
+
+    return sum(times) / len(times)
 
 
 async def write_camera_orientation(camera: CameraController, orientation: Orientation, update: bool = True):
@@ -70,25 +77,62 @@ async def get_camera_orientation(camera: CameraController) -> Orientation:
     return Orientation(yaw, pitch, roll)
 
 
-async def glide_to(camera: CameraController, xyz_1: XYZ, xyz_2: XYZ, orientation: Orientation, time: float, focus_xyz: XYZ = None, interval: float = 0.00015):
-    cam_path: List[XYZ] = []
+# async def glide_to(camera: CameraController, xyz_1: XYZ, xyz_2: XYZ, orientation: Orientation, time: float, focus_xyz: XYZ = None, interval: float = 0.00015):
+#     cam_path: List[XYZ] = []
 
-    for i in range(int(time / interval)):
-        path_xyz = calc_multiplerPointOn3DLine(xyz_1, xyz_2, i / (time / interval))
-        cam_path.append(path_xyz)
+#     for i in range(int(time / interval)):
+#         path_xyz = calc_multiplerPointOn3DLine(xyz_1, xyz_2, i / (time / interval))
+#         cam_path.append(path_xyz)
 
+#     roll = await camera.roll()
+
+#     for xyz in cam_path:
+#         if focus_xyz:
+#             yaw = calculate_yaw(xyz, focus_xyz)
+#             pitch = calculate_pitch(xyz, focus_xyz)
+
+#             await camera.write_position(xyz)
+#             await write_camera_orientation(camera, Orientation(yaw, pitch, roll))
+
+#         else:
+#             await camera.write_position(xyz, orientation)
+
+#         await asyncio.sleep(0)
+
+
+async def glide_to(camera: CameraController, xyz_1: XYZ, xyz_2: XYZ, orientation: Orientation, ttime: float, focus_xyz: XYZ = None):
     roll = await camera.roll()
 
-    for xyz in cam_path:
+    velocity = XYZ(
+        (xyz_2.x - xyz_1.x) / ttime,
+        (xyz_2.y - xyz_1.y) / ttime,
+        (xyz_2.z - xyz_1.z) / ttime,
+    )
+
+    cur_xyz = xyz_1
+    await camera.write_position(cur_xyz)
+
+    start_time = perf_counter()
+    prev_time = start_time
+    while perf_counter() - start_time < ttime:
+        now = perf_counter()
+        dt = now - prev_time
+        prev_time = now
+
+        cur_xyz = XYZ(
+            cur_xyz.x + (velocity.x * dt),
+            cur_xyz.y + (velocity.y * dt),
+            cur_xyz.z + (velocity.z * dt),
+        )
+
         if focus_xyz:
-            yaw = calculate_yaw(xyz, focus_xyz)
-            pitch = calculate_pitch(xyz, focus_xyz)
-
-            await camera.write_position(xyz)
+            yaw = calculate_yaw(cur_xyz, focus_xyz)
+            pitch = calculate_pitch(cur_xyz, focus_xyz)
             await write_camera_orientation(camera, Orientation(yaw, pitch, roll))
-
         else:
-            await camera.write_position(xyz, orientation)
+            await write_camera_orientation(camera, orientation)
+
+        await camera.write_position(cur_xyz)
 
         await asyncio.sleep(0)
 

@@ -3,6 +3,7 @@ import asyncio
 from wizwalker import Client, XYZ, Keycode
 from wizwalker.errors import HookNotActive
 from wizwalker.memory.memory_objects.camera_controller import CameraController
+from wizwalker.extensions.scripting import teleport_to_friend_from_list
 from src.gui_inputs import is_numeric, param_input
 from src.utils import auto_potions_force_buy, use_potion, buy_potions, is_free, logout_and_in, wait_for_visible_by_path, click_window_by_path, attempt_activate_mouseless, attempt_deactivate_mouseless
 from src.teleport_math import get_orientation, navmap_tp, write_orientation
@@ -179,6 +180,10 @@ async def parse_command(clients: List[Client], command_str: str):
             desired_path: str = path_str.strip('[]"').replace("'", "").split(',')
             await click_window_by_path(desired_client, desired_path, True) if not mass else await asyncio.gather(*[await click_window_by_path(client, desired_path, True) for client in clients])
 
+        case 'friendtp' | 'friendteleport':
+            clients = [c for c in clients.copy() if c.title != desired_client.title]
+            await asyncio.gather(*[teleport_to_friend_from_list(client) for client in clients])
+
         case _:
             await asyncio.sleep(0.25)
 
@@ -190,12 +195,13 @@ async def execute_flythrough(client: Client, flythrough_data: str, line_seperato
         await client.camera_freecam()
 
     camera = await client.game_client.free_camera_controller()
+    interval = round(await measure_interval(camera), 5)
 
     for action in flythrough_actions:
-        await parse_camera_command(camera, action)
+        await parse_camera_command(camera, action, interval)
 
 
-async def parse_camera_command(camera: CameraController, command_str: str):
+async def parse_camera_command(camera: CameraController, command_str: str, interval: int = 0.00015):
     command_str = command_str.replace(', ', ',')
     command_str = command_str.replace('_', '')
     split_command = split_line(command_str)
@@ -224,12 +230,12 @@ async def parse_camera_command(camera: CameraController, command_str: str):
 
         case 'rotatingglideto':
             logger.debug(f'Gliding freecam from {origin_pos} to {xyz} while rotating {orientation} degrees over {time} seconds')
-            await rotating_glide_to(camera, origin_pos, xyz, time, orientation)
+            await rotating_glide_to(camera, origin_pos, xyz, time, orientation, interval)
 
         case 'orbit':
             degrees = param_input(split_command[-2], 360)
             logger.debug(f'Orbiting freecam {degrees} degrees from {origin_pos} around {xyz} over {time} seconds')
-            await orbit(camera, origin_pos, xyz, degrees, time)
+            await orbit(camera, origin_pos, xyz, degrees, time, interval)
 
         case 'lookat':
             logger.debug(f'Pointing freecam at {xyz}')

@@ -1660,7 +1660,7 @@ async def main():
 			ban_task.daemon = True # make thread die with deimos if it exist
 			ban_task.start()
 			while ban_task.is_alive():
-				await asyncio.sleep(0.01)
+				await asyncio.sleep(1)
 		try:
 			rkey = winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, r"SOFTWARE\Slackaduts\Deimos", access=winreg.KEY_ALL_ACCESS)
 			winreg.SetValueEx(rkey, "badboy", 0, winreg.REG_DWORD, 1)
