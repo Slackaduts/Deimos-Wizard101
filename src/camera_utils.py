@@ -100,13 +100,13 @@ async def get_camera_orientation(camera: CameraController) -> Orientation:
 #         await asyncio.sleep(0)
 
 
-async def glide_to(camera: CameraController, xyz_1: XYZ, xyz_2: XYZ, orientation: Orientation, ttime: float, focus_xyz: XYZ = None):
+async def glide_to(camera: CameraController, xyz_1: XYZ, xyz_2: XYZ, orientation: Orientation, time: float, focus_xyz: XYZ = None):
     roll = await camera.roll()
 
     velocity = XYZ(
-        (xyz_2.x - xyz_1.x) / ttime,
-        (xyz_2.y - xyz_1.y) / ttime,
-        (xyz_2.z - xyz_1.z) / ttime,
+        (xyz_2.x - xyz_1.x) / time,
+        (xyz_2.y - xyz_1.y) / time,
+        (xyz_2.z - xyz_1.z) / time,
     )
 
     cur_xyz = xyz_1
@@ -114,7 +114,7 @@ async def glide_to(camera: CameraController, xyz_1: XYZ, xyz_2: XYZ, orientation
 
     start_time = perf_counter()
     prev_time = start_time
-    while perf_counter() - start_time < ttime:
+    while perf_counter() - start_time < time:
         now = perf_counter()
         dt = now - prev_time
         prev_time = now
@@ -137,45 +137,120 @@ async def glide_to(camera: CameraController, xyz_1: XYZ, xyz_2: XYZ, orientation
         await asyncio.sleep(0)
 
 
-async def rotating_glide_to(camera: CameraController, xyz_1: XYZ, xyz_2: XYZ, time: float, degrees: Orientation = Orientation(0, 0, 0), interval: float = 0.00015):
-    cam_path: List[XYZ] = []
-    iterations = int(time / interval)
+# async def rotating_glide_to(camera: CameraController, xyz_1: XYZ, xyz_2: XYZ, time: float, degrees: Orientation = Orientation(0, 0, 0), interval: float = 0.00015):
+#     cam_path: List[XYZ] = []
+#     iterations = int(time / interval)
 
-    for i in range(iterations):
-        path_xyz = calc_multiplerPointOn3DLine(xyz_1, xyz_2, i / (time / interval))
-        cam_path.append(path_xyz)
+#     for i in range(iterations):
+#         path_xyz = calc_multiplerPointOn3DLine(xyz_1, xyz_2, i / (time / interval))
+#         cam_path.append(path_xyz)
 
-    degrees_intervals = Orientation(math.radians(degrees.yaw / iterations), math.radians(degrees.pitch / iterations), math.radians(degrees.roll / iterations))
+#     degrees_intervals = Orientation(math.radians(degrees.yaw / iterations), math.radians(degrees.pitch / iterations), math.radians(degrees.roll / iterations))
+
+#     yaw = await camera.yaw()
+#     pitch = await camera.pitch()
+#     roll = await camera.roll()
+
+#     for xyz in cam_path:
+#         yaw += degrees_intervals.yaw
+#         pitch += degrees_intervals.pitch
+#         roll += degrees_intervals.roll
+
+#         await camera.write_position(xyz)
+#         await write_camera_orientation(camera, Orientation(yaw, pitch, roll))
+
+#         await asyncio.sleep(0)
+
+
+async def rotating_glide_to(camera: CameraController, xyz_1: XYZ, xyz_2: XYZ, time: float, degrees: Orientation = Orientation(0, 0, 0)):
+    rotation_velocity = Orientation(
+        math.radians(degrees.yaw) / time,
+        math.radians(degrees.pitch) / time,
+        math.radians(degrees.roll) / time
+    )
 
     yaw = await camera.yaw()
     pitch = await camera.pitch()
     roll = await camera.roll()
 
-    for xyz in cam_path:
-        yaw += degrees_intervals.yaw
-        pitch += degrees_intervals.pitch
-        roll += degrees_intervals.roll
+    velocity = XYZ(
+        (xyz_2.x - xyz_1.x) / time,
+        (xyz_2.y - xyz_1.y) / time,
+        (xyz_2.z - xyz_1.z) / time,
+    )
 
-        await camera.write_position(xyz)
+    cur_xyz = xyz_1
+    await camera.write_position(cur_xyz)
+
+    start_time = perf_counter()
+    prev_time = start_time
+    while perf_counter() - start_time < time:
+        now = perf_counter()
+        dt = now - prev_time
+        prev_time = now
+
+        cur_xyz = XYZ(
+            cur_xyz.x + (velocity.x * dt),
+            cur_xyz.y + (velocity.y * dt),
+            cur_xyz.z + (velocity.z * dt),
+        )
+
+        yaw += rotation_velocity.yaw * dt
+        pitch += rotation_velocity.pitch * dt
+        roll += rotation_velocity.roll * dt
+
+        await camera.write_position(cur_xyz)
         await write_camera_orientation(camera, Orientation(yaw, pitch, roll))
 
         await asyncio.sleep(0)
 
 
-async def orbit(camera: CameraController, xyz_1: XYZ, xyz_2: XYZ, degrees: float, time: float, interval: float = 0.00015):
-    cam_path: List[XYZ] = []
+# async def orbit(camera: CameraController, xyz_1: XYZ, xyz_2: XYZ, degrees: float, time: float, interval: float = 0.00015):
+#     cam_path: List[XYZ] = []
 
-    for i in range(int(time / interval)):
-        path_xyz = rotate_point(xyz_2, xyz_1, (i / (time / interval)) * degrees)
-        cam_path.append(path_xyz)
+#     for i in range(int(time / interval)):
+#         path_xyz = rotate_point(xyz_2, xyz_1, (i / (time / interval)) * degrees)
+#         cam_path.append(path_xyz)
 
+#     roll = await camera.roll()
+
+#     for xyz in cam_path:
+#         yaw = calculate_yaw(xyz, xyz_2)
+#         pitch = calculate_pitch(xyz, xyz_2)
+
+#         await camera.write_position(xyz)
+#         await write_camera_orientation(camera, Orientation(yaw, pitch, roll))
+
+#         await asyncio.sleep(0)
+
+
+async def orbit(camera: CameraController, xyz_1: XYZ, xyz_2: XYZ, degrees: float, time: float):
     roll = await camera.roll()
 
-    for xyz in cam_path:
-        yaw = calculate_yaw(xyz, xyz_2)
-        pitch = calculate_pitch(xyz, xyz_2)
+    xy_radius = math.sqrt((xyz_2.x - xyz_1.x) ** 2 + (xyz_2.y - xyz_1.y) ** 2)
 
-        await camera.write_position(xyz)
+    angle_velocity = math.radians(degrees) / time
+    cur_angle = math.atan2((xyz_2.y - xyz_1.y), (xyz_2.x - xyz_1.x))
+
+    start_time = perf_counter()
+    prev_time = start_time
+    while perf_counter() - start_time < time:
+        now = perf_counter()
+        dt = now - prev_time
+        prev_time = now
+
+        cur_angle += angle_velocity * dt
+
+        cur_xyz = XYZ(
+            xyz_2.x - xy_radius * math.cos(cur_angle),
+            xyz_2.y - xy_radius * math.sin(cur_angle),
+            xyz_1.z
+        )
+
+        await camera.write_position(cur_xyz)
+
+        yaw = calculate_yaw(cur_xyz, xyz_2)
+        pitch = calculate_pitch(cur_xyz, xyz_2)
         await write_camera_orientation(camera, Orientation(yaw, pitch, roll))
 
         await asyncio.sleep(0)
