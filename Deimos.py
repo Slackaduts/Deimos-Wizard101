@@ -1656,8 +1656,8 @@ async def main():
 			winreg.SetValueEx(rkey, "badboy", 0, winreg.REG_DWORD, 1)
 		except:
 			pass
-		cMessageBox(None, "Deimos has encountered a fatal error (Code 0C24). Please contact slackaduts#3864 on discord for more info.", "Deimos error", 0)
-		quit(0)
+		cMessageBox(None, "Deimos has encountered a fatal error (Code 0C24). Please contact slackaduts#3864 on discord for more info.", "Deimos error", 0x10 | 0x1000)
+		await kill_tool_hotkey()
 	ban_watcher_task = asyncio.create_task(ban_watcher())
 
 	async def hooking_logic(default_logic : bool = False):
