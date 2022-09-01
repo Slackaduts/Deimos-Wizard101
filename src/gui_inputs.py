@@ -1,147 +1,106 @@
 import math
+from typing import List
+
+symbols = ['pi', 'tau', 'e']
 
 
-def param_input(input: str, default):
-	# Logic for interpreting number field inputs in the Deimos gui.
-	# Arguments can be chained together, always seperated by spaces.
-	# If you want to add 90 degrees, you would do "+ rad 90". This converts the 90 to radians, then adds it to the current value.
-	# These arguments can also accept numbers, like "* 2 + 5" would add 5, then multiply by 2.
-	# Some arguments can also be used alone, like "pi" and regular numbers or operaters like "+", which would add itself.
+def to_number(input_str: str) -> float:
+	match input_str:
+		case 'pi':
+			return math.pi
 
-	# Insane example: "rad + 5 * 3 / 15 ** 2 deg pi"
-	# This ludicrous example would set to pi, convert it to degrees, square it, divide by 15, multiply by 3, add 5, then convert back to radians. You should never do this, but it can be done.
+		case 'tau':
+			return math.tau
 
-	# Note: Keep in mind what values you're actually setting. Rotational values of yaw, roll, and pitch use radians, while everything else uses distances. 
-	# Places where names can be entered are not compatible with this system for obvious reasons.
-	adjusted_param = float(default)
-	if ' ' in input:
-		symbol_params = input.split(' ')
-		symbol_params.reverse()
-		for i, param in enumerate(symbol_params):
-			match param:
-				case '+':
-					adjusted_param += prev_param
+		case 'e':
+			return math.e
 
-				case '-':
-					adjusted_param = prev_param - adjusted_param
+		case _:
+			return float(input_str)
 
-				case '*':
-					adjusted_param *= prev_param
 
-				case '/':
-					adjusted_param = prev_param / adjusted_param
+def next_value(input_list: List[str], index: int, default: float, additional: int = 1) -> float:
+	if len(input_list) >= index + additional:
+		next = input_list[index + additional]
 
-				case '**':
-					adjusted_param = adjusted_param ** prev_param
+	else: 
+		next = input_list[index - additional]
 
-				case 'sqrt':
-					adjusted_param = math.sqrt(adjusted_param)
+	if next.isnumeric() or next in symbols:
+		return to_number(next)
 
-				case 'rad':
-					if i == len(symbol_params) - 1:
-						adjusted_param = math.radians(prev_param)
-					else:
-						prev_param = math.radians(prev_param)
+	else:
+		return default
 
-				case 'deg':
-					if i == len(symbol_params) - 1:
-						adjusted_param = math.degrees(prev_param)
-					else:
-						prev_param = math.degrees(prev_param)
 
-				case 'abs':
-					if i == len(symbol_params) - 1:
-						adjusted_param = abs(prev_param)
-					else:
-						prev_param = abs(prev_param)
+def param_input(input_str: str, default: float) -> float:
+	if input_str.isnumeric() or input_str in symbols:
+		return to_number(input_str)
 
-				case 'sin':
-					if i == len(symbol_params) - 1:
-						adjusted_param = math.sin(prev_param)
-					else:
-						prev_param = math.sin(prev_param)
+	else:
+		return parse_input(input_str, default)
 
-				case 'cos':
-					if i == len(symbol_params) - 1:
-						adjusted_param = math.cos(prev_param)
-					else:
-						prev_param = math.cos(prev_param)
 
-				case 'tan':
-					if i == len(symbol_params) - 1:
-						adjusted_param = math.tan(prev_param)
-					else:
-						prev_param = math.tan(prev_param)
+def parse_input(input_str: str, default: float) -> float:
+	if not input_str.split(' ')[0].isnumeric():
+		input_str = f'{default} ' + input_str
 
-				case 'pi':
-					prev_param = math.pi
+	print(input_str)
 
-				case 'tau':
-					prev_param = math.tau
+	split_equation = input_str.split(' ')
+	value = float(split_equation[0])
 
-				case 'e':
-					prev_param = math.e
-
-				case 'floor':
-					if i == len(symbol_params) - 1:
-						adjusted_param = math.floor(prev_param)
-					else:
-						prev_param = math.floor(prev_param)
-
-				case 'ceiling':
-					if i == len(symbol_params) - 1:
-						adjusted_param = math.ceil(prev_param)
-					else:
-						prev_param = math.ceil(prev_param)
-
-				case _:
-					prev_param = float(param)
-
-	elif input:
-		match input:
+	for i, param in enumerate(split_equation):
+		match param:
 			case '+':
-				return adjusted_param * 2
+				value += float(next_value(split_equation, i, value))
+
+			case '-':
+				value -= float(next_value(split_equation, i, value))
 
 			case '*':
-				return adjusted_param ** 2
+				value *= float(next_value(split_equation, i, value))
+
+			case '/':
+				value /= float(next_value(split_equation, i, value))
+
+			case '//':
+				value //= float(next_value(split_equation, i, value))
+
+			case '**':
+				value **= float(next_value(split_equation, i, value))
+
+			case 'mod' | '%' | 'modulus':
+				value &= float(next_value(split_equation, i, value))
 
 			case 'sqrt':
-				return math.sqrt(adjusted_param)
-
-			case 'rad':
-				return math.radians(adjusted_param)
-
-			case 'deg':
-				return math.degrees(adjusted_param)
+				value = math.sqrt(value)
 
 			case 'abs':
-				return abs(adjusted_param)
-
-			case 'sin':
-				return math.sin(adjusted_param)
-
-			case 'cos':
-				return math.cos(adjusted_param)
-
-			case 'tan':
-				return math.tan(adjusted_param)
-
-			case 'pi':
-				return math.pi
-
-			case 'tau':
-				return math.tau
-
-			case 'e':
-				return math.e
+				value = abs(value)
 
 			case 'floor':
-				return math.floor(adjusted_param)
+				value = math.floor(value)
 
-			case 'ceiling':
-				return math.ceil(adjusted_param)
+			case 'ceil' | 'ceiling':
+				value = math.ceil(value)
+
+			case 'deg' | 'degrees':
+				value = math.degrees(value)
+
+			case 'rad' | 'radians':
+				value = math.radians(value)
+
+			case 'sin' | 'sine':
+				value = math.sin(value)
+
+			case 'cos' | 'cosine':
+				value = math.cos(value)
+
+			case 'tan' | 'tangent':
+				value = math.sin(value)
 
 			case _:
-				adjusted_param = float(input)
+				pass
 
-	return adjusted_param
+	return value
