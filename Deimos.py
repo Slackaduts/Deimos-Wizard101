@@ -35,7 +35,7 @@ from src.teleport_math import navmap_tp, calc_Distance
 # from src.questing import Quester
 from src.questing_new import Quester
 from src.sigil import Sigil
-from src.utils import is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world, collect_wisps, collect_wisps_with_limit
+from src.utils import attempt_deactivate_mouseless, is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world, collect_wisps, collect_wisps_with_limit
 from src.paths import advance_dialog_path, decline_quest_path
 import PySimpleGUI as gui
 import pyperclip
@@ -1429,7 +1429,17 @@ async def main():
 										for command_str in split_commands:
 											await parse_command(walker.clients, command_str)
 
-								bot_task = asyncio.create_task(run_bot())
+								async def try_bot():
+									try:
+										await run_bot()
+
+									except asyncio.CancelledError:
+										pass
+
+									finally:
+										await asyncio.gather(*[attempt_deactivate_mouseless(client) for client in walker.clients])
+
+								bot_task = asyncio.create_task(try_bot())
 
 							case deimosgui.GUICommandType.KillBot:
 								if bot_task is not None:

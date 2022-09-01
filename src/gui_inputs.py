@@ -33,8 +33,19 @@ def next_value(input_list: List[str], index: int, default: float, additional: in
 		return default
 
 
+def is_numeric(input_str: str) -> bool:
+	try:
+		float(input_str)
+
+	except ValueError:
+		return False
+
+	else:
+		return True
+
+
 def param_input(input_str: str, default: float) -> float:
-	if input_str.isnumeric() or input_str in symbols:
+	if is_numeric(input_str) or input_str in symbols:
 		return to_number(input_str)
 
 	else:
@@ -42,12 +53,11 @@ def param_input(input_str: str, default: float) -> float:
 
 
 def parse_input(input_str: str, default: float) -> float:
-	if not input_str.split(' ')[0].isnumeric():
+	if not is_numeric(input_str.split(' ')[0]):
 		input_str = f'{default} ' + input_str
 
-	print(input_str)
-
-	split_equation = input_str.split(' ')
+	split_equation_raw = input_str.split(' ')
+	split_equation = [e.replace(' ', '') for e in split_equation_raw]
 	value = float(split_equation[0])
 
 	for i, param in enumerate(split_equation):

@@ -1,9 +1,10 @@
 from typing import List, Tuple, Coroutine
 import asyncio
 from wizwalker import Client, XYZ, Keycode
+from wizwalker.errors import HookNotActive
 from wizwalker.memory.memory_objects.camera_controller import CameraController
-from src.gui_inputs import param_input
-from src.utils import use_potion, buy_potions, is_free, logout_and_in, wait_for_visible_by_path, click_window_by_path, attempt_activate_mouseless, attempt_deactivate_mouseless
+from src.gui_inputs import is_numeric, param_input
+from src.utils import auto_potions_force_buy, use_potion, buy_potions, is_free, logout_and_in, wait_for_visible_by_path, click_window_by_path, attempt_activate_mouseless, attempt_deactivate_mouseless
 from src.teleport_math import get_orientation, navmap_tp, write_orientation
 from src.camera_utils import get_camera_orientation, glide_to, point_to_xyz, rotating_glide_to, orbit, write_camera_orientation, measure_interval
 from src.types import Orientation
@@ -11,7 +12,7 @@ import re
 from loguru import logger
 
 
-def index_with_str(input: List[str], desired_str: str) -> int:
+def index_with_str(input, desired_str: str) -> int:
     for i, s in enumerate(input):
         if desired_str in s.lower():
             return i
@@ -138,7 +139,7 @@ async def parse_command(clients: List[Client], command_str: str):
             await desired_client.wait_for_zone_change() if not mass else await asyncio.gather(*[client.wait_for_zone_change() for client in clients])
 
             if split_command[-1].lower() == 'completion':
-                await wait_for_coro(desired_client.is_loading) if not mass else await asyncio.gather(*[wait_for_coro(client.is_loading) for client in clients])
+                await wait_for_coro(desired_client.is_loading, True) if not mass else await asyncio.gather(*[wait_for_coro(client.is_loading, True) for client in clients])
 
         case 'waitforfree':
             async def _wait_for_free(client: Client, wait_for_not: bool = False, interval: float = 0.25):
@@ -152,23 +153,31 @@ async def parse_command(clients: List[Client], command_str: str):
 
             await _wait_for_free(desired_client) if not mass else await asyncio.gather(*[_wait_for_free(client) for client in clients])
 
-            if split_command[1].lower() == 'completion':
+            if split_command[-1].lower() == 'completion':
                 await _wait_for_free(desired_client, True) if not mass else await asyncio.gather(*[_wait_for_free(client, True) for client in clients])
 
         case 'usepotion':
             await use_potion(desired_client) if not mass else await asyncio.gather(*[use_potion(client) for client in clients])
 
         case 'buypotions':
-            await buy_potions(desired_client) if not mass else await asyncio.gather(*[buy_potions(client) for client in clients])
-
-        case 'speed':
-            await desired_client.client_object.write_speed_multiplier(int(split_command[-1])) if not mass else await asyncio.gather(*[client.client_object.write_speed_multiplier(int(split_command[-1])) for client in clients])
+            await auto_potions_force_buy(desired_client, True) if not mass else await asyncio.gather(*[buy_potions(client) for client in clients])
 
         case 'sleep' | 'wait' | 'delay':
             await asyncio.sleep(float(split_command[-1]))
 
         case 'logoutandin' | 'relog':
             await logout_and_in(desired_client) if not mass else await asyncio.gather(*[logout_and_in(client) for client in clients])
+
+        case 'click':
+            await attempt_activate_mouseless(desired_client) if not mass else await asyncio.gather(*[attempt_activate_mouseless(client) for client in clients])
+            await desired_client.mouse_handler.click(int(split_command[2]), int(split_command[3])) if not mass else await asyncio.gather(*[client.mouse_handler.click(int(split_command[2], int(split_command[3]))) for client in clients])
+            await attempt_deactivate_mouseless(desired_client) if not mass else await asyncio.gather(*[attempt_deactivate_mouseless(client) for client in clients])
+
+        case 'clickwindow':
+            relevant_strings: str = split_command[2:]
+            path_str: str = re.findall('\[(.*?)\]|$', ','.join(relevant_strings))[0]
+            desired_path: str = path_str.strip('[]"').replace("'", "").split(',')
+            await click_window_by_path(desired_client, desired_path, True) if not mass else await asyncio.gather(*[await click_window_by_path(client, desired_path, True) for client in clients])
 
         case _:
             await asyncio.sleep(0.25)
@@ -188,6 +197,7 @@ async def execute_flythrough(client: Client, flythrough_data: str, line_seperato
 
 async def parse_camera_command(camera: CameraController, command_str: str):
     command_str = command_str.replace(', ', ',')
+    command_str = command_str.replace('_', '')
     split_command = split_line(command_str)
 
     origin_pos = await camera.position()
