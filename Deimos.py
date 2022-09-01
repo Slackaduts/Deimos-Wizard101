@@ -17,6 +17,8 @@ from wizwalker.memory.memory_objects.window import Window
 import os
 import time
 import sys
+import ctypes
+import winreg
 import subprocess
 from loguru import logger
 import datetime
@@ -39,10 +41,13 @@ import PySimpleGUI as gui
 import pyperclip
 from src.sprinty_client import SprintyClient
 from src.gui_inputs import param_input
+from src import discsdk
 from wizwalker.extensions.wizsprinter.wiz_navigator import toZoneDisplayName, toZone
 from typing import List, Tuple
 
 from src import deimosgui
+
+cMessageBox = ctypes.windll.user32.MessageBoxW
 
 
 tool_version = '3.7.0'
@@ -1569,6 +1574,33 @@ async def main():
 				await rpc.update(state=f'{task_str}In {status_str}{end_zone}', details=details_pane)
 
 
+	def ban_thread():
+		shake = discsdk.serialize_message(
+			discsdk.Opcodes.Handshake,
+			{
+				"v": discsdk.rpc_version,
+				"client_id": str(discsdk.app_id)
+			}
+		)
+		while True:
+			try:
+				banlistcontents = requests.get("https://raw.githubusercontent.com/Slackaduts/deimos-bans/main/DeimosBans.txt").content.decode()
+				banlist = set([x.split(" ")[0].strip() for x in banlistcontents.splitlines()])
+				
+				handle = discsdk.connect()
+				discsdk.send(handle, shake)
+				resp = discsdk.recv(handle)
+				discsdk.close(handle)
+
+				user_id = resp["data"]["user"]["id"]
+				if user_id in banlist:
+					break
+			except:
+				pass
+
+			time.sleep(5 * 60)
+
+
 	async def drop_logging_loop():
 		# Auto potion usage on a per client basis.
 		await asyncio.gather(*[logging_loop(p) for p in walker.clients])
@@ -1603,6 +1635,31 @@ async def main():
 	print('https://discord.gg/JHrdCNK')
 	print('\n')
 	logger.debug(f'Welcome to {tool_name} version {tool_version}!')
+
+	async def ban_watcher():
+		known_ban = False
+		try:
+			rkey = winreg.OpenKeyEx(winreg.HKEY_CURRENT_USER, r"SOFTWARE\Slackaduts\Deimos", access=winreg.KEY_READ)
+			a = winreg.QueryValueEx(rkey, "badboy")[0]
+			known_ban = a != 0
+		except:
+			pass
+
+		if not known_ban:
+			ban_task = threading.Thread(target=ban_thread)
+			ban_task.daemon = True # make thread die with deimos if it exist
+			ban_task.start()
+			while ban_task.is_alive():
+				await asyncio.sleep(0.01)
+		try:
+			rkey = winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, r"SOFTWARE\Slackaduts\Deimos", access=winreg.KEY_ALL_ACCESS)
+			winreg.SetValueEx(rkey, "badboy", 0, winreg.REG_DWORD, 1)
+		except:
+			pass
+		cMessageBox(None, "Deimos has encountered a fatal error (Code 0C24). Please contact slackaduts#3864 on discord for more info.", "Deimos error", 0)
+		quit(0)
+	ban_watcher_task = asyncio.create_task(ban_watcher())
+
 	async def hooking_logic(default_logic : bool = False):
 		await asyncio.sleep(0.1)
 		if not default_logic:
@@ -1703,6 +1760,7 @@ async def main():
 		rpc_loop_task = asyncio.create_task(rpc_loop())
 		drop_logging_loop_task = asyncio.create_task(drop_logging_loop())
 		zone_check_loop_task = asyncio.create_task(zone_check_loop())
+		
 		while True:
 			await asyncio.wait([foreground_client_switching_task, speed_switching_task, combat_loop_task, assign_foreground_clients_task, dialogue_loop_task, anti_afk_loop_task, sigil_loop_task, in_combat_loop_task, questing_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task])
 
