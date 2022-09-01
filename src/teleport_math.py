@@ -1,5 +1,5 @@
 import asyncio
-from wizwalker import XYZ, Client, Keycode
+from wizwalker import XYZ, Orient, Client, Keycode
 from wizwalker.file_readers.wad import Wad
 import math
 import struct
@@ -7,7 +7,6 @@ from io import BytesIO
 from typing import Tuple, Union
 from src.utils import is_free, get_quest_name, is_visible_by_path, get_popup_title
 from src.paths import npc_range_path
-from src.types import Orientation
 
 type_format_dict = {
 "char": "<c",
@@ -638,34 +637,16 @@ def calculate_pitch(xyz_1: XYZ, xyz_2: XYZ) -> float:
     return -math.atan2(z, math.sqrt(x ** 2 + y ** 2))
 
 
-async def write_orientation(client: Client, orientation: Orientation):
-    # Writes the Orientation to a client (Yaw, Roll, Pitch)
-    await client.body.write_yaw(orientation.yaw)
-    await client.body.write_pitch(orientation.pitch)
-    await client.body.write_roll(orientation.roll)
+async def get_degree_orientation(client: Client) -> Orient:
+    # Returns a Orient for the client body
+    p, r, y = await client.body.orientation()
+    return Orient(math.degrees(p), math.degrees(r), math.degrees(y))
 
 
-async def get_orientation(client: Client) -> Orientation:
-    # Returns a Orientation for the client body
-    y = await client.body.yaw()
-    p = await client.body.pitch()
-    r = await client.body.roll()
-
-    return Orientation(y, p, r)
-
-async def get_degree_orientation(client: Client) -> Orientation:
-    # Returns a Orientation for the client body
-    y = await client.body.yaw()
-    p = await client.body.pitch()
-    r = await client.body.roll()
-
-    return Orientation(math.degrees(y), math.degrees(p), math.degrees(r))
-
-
-def calc_frontal_XYZ(xyz: XYZ, ypr: Orientation, distance: float) -> XYZ:
+def calc_frontal_XYZ(xyz: XYZ, orientation: Orient, distance: float) -> XYZ:
     # Simpler version of calc_FrontalVector that is meant for just pure math stuff. This should honestly be used instead but I lack the time to spend redoing old stuff. -slack
-    x = distance * math.cos(Orientation.yaw) * math.sin(Orientation.pitch)
-    y = distance * math.sin(Orientation.yaw) * math.sin(Orientation.pitch)
-    z = distance * math.cos(Orientation.pitch)
+    x = distance * math.cos(orientation.yaw) * math.sin(orientation.pitch)
+    y = distance * math.sin(orientation.yaw) * math.sin(orientation.pitch)
+    z = distance * math.cos(orientation.pitch)
 
     return XYZ(xyz.x + x, xyz.y + y, xyz.z + z)

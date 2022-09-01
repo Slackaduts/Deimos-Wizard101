@@ -1,14 +1,13 @@
 from typing import List, Tuple, Coroutine
 import asyncio
-from wizwalker import Client, XYZ, Keycode
+from wizwalker import Client, XYZ, Orient, Keycode
 from wizwalker.errors import HookNotActive
 from wizwalker.memory.memory_objects.camera_controller import CameraController
 from wizwalker.extensions.scripting import teleport_to_friend_from_list
 from src.gui_inputs import is_numeric, param_input
 from src.utils import auto_potions_force_buy, use_potion, buy_potions, is_free, logout_and_in, wait_for_visible_by_path, click_window_by_path, attempt_activate_mouseless, attempt_deactivate_mouseless
-from src.teleport_math import get_orientation, navmap_tp, write_orientation
-from src.camera_utils import get_camera_orientation, glide_to, point_to_xyz, rotating_glide_to, orbit, write_camera_orientation
-from src.types import Orientation
+from src.teleport_math import navmap_tp
+from src.camera_utils import glide_to, point_to_xyz, rotating_glide_to, orbit
 import re
 from loguru import logger
 
@@ -21,20 +20,20 @@ def index_with_str(input, desired_str: str) -> int:
     return None
 
 
-async def parse_location(commands: List[str], camera: CameraController = None, client: Client = None) -> Tuple[XYZ, Orientation]:
+async def parse_location(commands: List[str], camera: CameraController = None, client: Client = None) -> Tuple[XYZ, Orient]:
     # Takes in a camera or client along with a command string, and returns the location. Uses the same input parsing the GUI does, allowing for equation support.
     xyz = XYZ
-    orientation = Orientation
+    orientation: Orient
 
     location: List[str] = [s.replace(')', '').lower() for s in commands]
 
     if camera:
         default_xyz = await camera.position()
-        default_orientation = await get_camera_orientation(camera)
+        default_orientation = await camera.orientation()
 
     else:
         default_xyz = await client.body.position()
-        default_orientation = await get_orientation(client)
+        default_orientation = await client.body.orientation()
 
     xyz_index = index_with_str(location, 'xyz(')
     if xyz_index is not None:
@@ -46,12 +45,12 @@ async def parse_location(commands: List[str], camera: CameraController = None, c
 
     else:
         xyz = default_xyz
-    orientation_index = index_with_str(location, 'orientation(')
+    orientation_index = index_with_str(location, 'orient(')
     if orientation_index is not None:
-        orientation = Orientation(
-            param_input(location[orientation_index].replace('orientation(', ''), default_orientation.yaw), 
-            param_input(location[orientation_index + 1], default_orientation.pitch), 
-            param_input(location[orientation_index + 2], default_orientation.roll)
+        orientation = Orient(
+            param_input(location[orientation_index].replace('orient(', ''), default_orientation.pitch), 
+            param_input(location[orientation_index + 1], default_orientation.roll), 
+            param_input(location[orientation_index + 2], default_orientation.yaw)
             )
 
     else:
@@ -243,8 +242,8 @@ async def parse_camera_command(camera: CameraController, command_str: str):
             logger.debug(f'Moving freecam to {xyz}')
             await camera.write_position(xyz)
 
-        case 'setorientation':
-            await write_camera_orientation(camera, orientation)
+        case 'setorient':
+            await camera.update_orientation(orientation)
 
         case _:
             pass
