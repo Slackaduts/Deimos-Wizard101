@@ -7,7 +7,7 @@ import requests
 import queue
 import threading
 import wizwalker
-from wizwalker import Keycode, HotkeyListener, ModifierKeys, utils, XYZ
+from wizwalker import Keycode, HotkeyListener, ModifierKeys, utils, XYZ, Orient
 from wizwalker.client_handler import ClientHandler, Client
 from wizwalker.extensions.scripting import teleport_to_friend_from_list
 from wizwalker.combat import CombatMember, CombatHandler
@@ -1219,12 +1219,10 @@ async def main():
 									case 'Camera Rotation':
 										if foreground_client:
 											camera = await foreground_client.game_client.selected_camera_controller()
-											camera_yaw = await camera.yaw()
-											camera_roll = await camera.roll()
-											camera_pitch = await camera.pitch()
+											camera_pitch, camera_roll, camera_yaw = await camera.orientation()
 
 											logger.debug('Copied Camera Rotations')
-											pyperclip.copy(f'Yaw={camera_yaw}\nRoll={camera_roll}\nPitch={camera_pitch}')
+											pyperclip.copy(f'Orient(pitch={camera_pitch}, roll={camera_roll}, yaw={camera_pitch})')
 									case 'UI Tree':
 										foreground: Client = foreground_client
 										if foreground_client:
@@ -1321,9 +1319,7 @@ async def main():
 
 									camera: DynamicCameraController = await foreground_client.game_client.selected_camera_controller()
 									camera_pos: XYZ = await camera.position()
-									camera_yaw = await camera.yaw()
-									camera_roll = await camera.roll()
-									camera_pitch = await camera.pitch()
+									camera_pitch, camera_roll, camera_yaw = await camera.orientation()
 
 									x_input = param_input(com.data['X'], camera_pos.x)
 									y_input = param_input(com.data['Y'], camera_pos.y)
@@ -1336,9 +1332,7 @@ async def main():
 									logger.debug(f'Teleporting Camera to {input_pos}, yaw={yaw_input}, roll={roll_input}, pitch={pitch_input}')
 
 									await camera.write_position(input_pos)
-									await camera.write_yaw(yaw_input)
-									await camera.write_roll(roll_input)
-									await camera.write_pitch(pitch_input)
+									await camera.update_orientation(Orient(pitch_input, roll_input, yaw_input))
 
 							case deimosgui.GUICommandType.SetCamDistance:
 								if foreground_client:
