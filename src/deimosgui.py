@@ -315,6 +315,7 @@ def manage_gui(send_queue: queue.Queue, recv_queue: queue.Queue, gui_theme, gui_
 
 			case 'Refill Potions':
 				send_queue.put(GUICommand(GUICommandType.RefillPotions, False))
+
 			case 'Mass Refill Potions':
 				send_queue.put(GUICommand(GUICommandType.RefillPotions, True))
 
