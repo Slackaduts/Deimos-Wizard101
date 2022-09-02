@@ -4,8 +4,9 @@ from wizwalker import Client, XYZ, Orient, Keycode
 from wizwalker.errors import HookNotActive
 from wizwalker.memory.memory_objects.camera_controller import CameraController
 from wizwalker.extensions.scripting import teleport_to_friend_from_list
+from src.sprinty_client import SprintyClient
 from src.gui_inputs import is_numeric, param_input
-from src.utils import auto_potions_force_buy, use_potion, buy_potions, is_free, logout_and_in, wait_for_visible_by_path, click_window_by_path, attempt_activate_mouseless, attempt_deactivate_mouseless
+from src.utils import auto_potions_force_buy, use_potion, buy_potions, is_free, logout_and_in, click_window_by_path, attempt_activate_mouseless, attempt_deactivate_mouseless
 from src.teleport_math import navmap_tp
 from src.camera_utils import glide_to, point_to_xyz, rotating_glide_to, orbit
 import re
@@ -174,7 +175,7 @@ async def parse_command(clients: List[Client], command_str: str):
             await attempt_deactivate_mouseless(desired_client) if not mass else await asyncio.gather(*[attempt_deactivate_mouseless(client) for client in clients])
 
         case 'clickwindow':
-            relevant_strings: str = split_command[2:]
+            relevant_strings: List[str] = split_command[2:]
             path_str: str = re.findall('\[(.*?)\]|$', ','.join(relevant_strings))[0]
             desired_path: str = path_str.strip('[]"').replace("'", "").split(',')
             await click_window_by_path(desired_client, desired_path, True) if not mass else await asyncio.gather(*[await click_window_by_path(client, desired_path, True) for client in clients])
@@ -182,6 +183,13 @@ async def parse_command(clients: List[Client], command_str: str):
         case 'friendtp' | 'friendteleport':
             clients = [c for c in clients.copy() if c.title != desired_client.title]
             await asyncio.gather(*[teleport_to_friend_from_list(client) for client in clients])
+
+        case 'entitytp' | 'entityteleport':
+            await SprintyClient(desired_client).tp_to_closest_by_vague_name(split_command[2]) if not mass else await asyncio.gather(*[SprintyClient(client).tp_to_closest_by_vague_name(split_command[2]) for client in clients])
+
+        case 'log' | 'debug' | 'print':
+            relevant_string: str = ' '.join(split_command[2:])
+            logger.debug(relevant_string)
 
         case _:
             await asyncio.sleep(0.25)
