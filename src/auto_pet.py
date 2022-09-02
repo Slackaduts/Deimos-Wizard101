@@ -9,7 +9,7 @@ from wizwalker.memory import HookHandler, SimpleHook
 
 from src.paths import *
 from src.teleport_math import navmap_tp_leader_quest
-from src.utils import navigate_to_ravenwood, click_window_by_path, is_visible_by_path, navigate_to_commons_from_ravenwood, post_keys, get_window_from_path, safe_wait_for_zone_change, LoadingScreenNotFound, FriendBusyOrInstanceClosed
+from src.utils import navigate_to_ravenwood, click_window_by_path, is_visible_by_path, navigate_to_commons_from_ravenwood, post_keys, get_window_from_path, safe_wait_for_zone_change, LoadingScreenNotFound, FriendBusyOrInstanceClosed, get_popup_title, attempt_activate_mouseless, attempt_deactivate_mouseless
 
 _dance_moves_transtable = str.maketrans("abcd", "WDSA")
 
@@ -66,6 +66,28 @@ async def deactivate_dance_game_moves_hook(self):
 
 HookHandler.deactivate_dance_game_moves_hook = deactivate_dance_game_moves_hook
 
+async def attempt_activate_dance_hook(client: Client, sleep_time: float = 0.1):
+    # Attempts to activate dance hook, in a try block in case it's already off for this client
+    if not client.dance_hook_status:
+        try:
+            await client.hook_handler.activate_dance_game_moves_hook()
+        except:
+            pass
+
+        client.dance_hook_status = True
+    await asyncio.sleep(sleep_time)
+
+async def attempt_deactivate_dance_hook(client: Client, sleep_time: float = 0.1):
+    # Attempts to deactivate dance hook, in a try block in case it's already off for this client
+    if client.dance_hook_status:
+        try:
+            await client.hook_handler.deactivate_dance_game_moves_hook()
+        except:
+            pass
+
+        client.dance_hook_status = False
+    await asyncio.sleep(sleep_time)
+
 
 async def read_current_dance_game_moves(self) -> str:
     try:
@@ -104,21 +126,34 @@ async def navigate_to_dance_game(cl: Client):
 async def nomnom(client: Client, ignore_pet_level_up: bool, play_dance_game: bool):
     finished_feeding = False
     dance_hook_activated = False
+    mouseless_active = False
 
-    await client.mouse_handler.activate_mouseless()
     while not finished_feeding:
-        # wait for sigil popup
-        while not await client.is_in_npc_range():
-            await asyncio.sleep(.1)
+        popup_title = await get_popup_title(client)
+        while not popup_title == 'Dance Game':
+            await asyncio.sleep(.125)
+            popup_title = await get_popup_title(client)
 
+        # wait for dance game popup, and click until the popup goes away and the pet window opens
+        while not await is_visible_by_path(client, pet_feed_window_visible_path):
+            while popup_title == 'Dance Game':
+                await client.send_key(Keycode.X, 0.1)
+                popup_title = await get_popup_title(client)
+                await asyncio.sleep(.125)
+            popup_title = await get_popup_title(client)
+            await asyncio.sleep(.125)
+
+        if not mouseless_active:
+            mouseless_active = True
+            await attempt_activate_mouseless(client)
         # click until feeder opens
-        while await client.is_in_npc_range():
-            await client.send_key(Keycode.X, 0.1)
-            await asyncio.sleep(.2)
+        # while await client.is_in_npc_range():
+        #     await client.send_key(Keycode.X, 0.1)
+        #     await asyncio.sleep(.2)
 
         # wait for pet window to open
-        while not await is_visible_by_path(client, pet_feed_window_visible_path):
-            await asyncio.sleep(.1)
+        # while not await is_visible_by_path(client, pet_feed_window_visible_path):
+        #     await asyncio.sleep(.1)
 
         energy_cost_txt = await get_window_from_path(client.root_window, pet_feed_window_energy_cost_textbox_path)
         total_energy_txt = await get_window_from_path(client.root_window, pet_feed_window_your_energy_textbox_path)
@@ -137,10 +172,10 @@ async def nomnom(client: Client, ignore_pet_level_up: bool, play_dance_game: boo
             # if the config forces us to play the dance game or we are unable to skip games yet - and the hook is not already active - activate the hook
             if (play_dance_game or not await is_visible_by_path(client, skip_pet_game_button_path)) and not dance_hook_activated:
                 logger.debug('Client ' + client.title + ': Activating dance game hook.')
-                await client.hook_handler.activate_dance_game_moves_hook()
-                dance_hook_activated = True
                 # dance hook seems to need time to activate fully - without a sleep, it will miss turns in the game
-                await asyncio.sleep(5.0)
+                await attempt_activate_dance_hook(client, sleep_time=5.0)
+                dance_hook_activated = True
+
 
             # skip game if it is an option and the user's config for always playing the game is off
             if await is_visible_by_path(client, skip_pet_game_button_path) and not play_dance_game:
@@ -174,7 +209,9 @@ async def nomnom(client: Client, ignore_pet_level_up: bool, play_dance_game: boo
                         # otherwise, leave it up and force user to close it themselves
                         if await is_visible_by_path(client, skipped_pet_leveled_up_window_path):
                             if not ignore_pet_level_up:
-                                await client.mouse_handler.deactivate_mouseless()
+                                if mouseless_active:
+                                    mouseless_active = False
+                                    await attempt_deactivate_mouseless(client)
                                 logger.info('Auto Pet - Client ' + client.title + '\'s pet leveled uclient.  Please close the window to continue, or exit Deimos if you wish to stop questing.')
                                 logger.info('These pauses can be disabled in the config file by setting ignore_pet_level_up = True')
 
@@ -182,7 +219,9 @@ async def nomnom(client: Client, ignore_pet_level_up: bool, play_dance_game: boo
                                 while await is_visible_by_path(client, skipped_pet_leveled_up_window_path):
                                     await asyncio.sleep(1.0)
 
-                                await client.mouse_handler.activate_mouseless()
+                                if not mouseless_active:
+                                    mouseless_active = True
+                                    await attempt_activate_mouseless(client)
                             else:
                                 # while pet leveled up window is open, continually click exit button
                                 while await is_visible_by_path(client, skipped_pet_leveled_up_window_path):
@@ -280,18 +319,18 @@ async def nomnom(client: Client, ignore_pet_level_up: bool, play_dance_game: boo
             await asyncio.sleep(.2)
 
 
-
-    await client.mouse_handler.deactivate_mouseless()
+    if mouseless_active:
+        await attempt_deactivate_mouseless(client)
 
     if dance_hook_activated:
         logger.debug('Client ' + client.title + ': Deactivating dance game hook.')
-        await client.hook_handler.deactivate_dance_game_moves_hook()
+        await attempt_deactivate_dance_hook(client)
 
     # home button can in rare cases be greyed out after auto_buy - wait some time to make sure that clients don't get stuck if other code tries to send them home
     await asyncio.sleep(6.5)
 
 
-# Thanks to Peechez for this function from wizdancer
+# Thanks to Peechez for this code from wizdancer
 async def dancedance(client: Client):
     # wait for the dance game text box to appear
     while not await is_visible_by_path(client, dance_game_action_textbox_path):
