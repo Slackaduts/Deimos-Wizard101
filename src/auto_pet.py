@@ -123,7 +123,7 @@ async def navigate_to_dance_game(cl: Client):
     await cl.goto(x=-4449.36669921875, y=-992.9967651367188)
 
 
-async def nomnom(client: Client, ignore_pet_level_up: bool, play_dance_game: bool):
+async def nomnom(client: Client, ignore_pet_level_up: bool, only_play_dance_game: bool):
     finished_feeding = False
     dance_hook_activated = False
     mouseless_active = False
@@ -170,7 +170,7 @@ async def nomnom(client: Client, ignore_pet_level_up: bool, play_dance_game: boo
         # if player has enough energy to play the game
         if total_energy >= energy_cost:
             # if the config forces us to play the dance game or we are unable to skip games yet - and the hook is not already active - activate the hook
-            if (play_dance_game or not await is_visible_by_path(client, skip_pet_game_button_path)) and not dance_hook_activated:
+            if (only_play_dance_game or not await is_visible_by_path(client, skip_pet_game_button_path)) and not dance_hook_activated:
                 logger.debug('Client ' + client.title + ': Activating dance game hook.')
                 # dance hook seems to need time to activate fully - without a sleep, it will miss turns in the game
                 await attempt_activate_dance_hook(client, sleep_time=5.0)
@@ -178,7 +178,7 @@ async def nomnom(client: Client, ignore_pet_level_up: bool, play_dance_game: boo
 
 
             # skip game if it is an option and the user's config for always playing the game is off
-            if await is_visible_by_path(client, skip_pet_game_button_path) and not play_dance_game:
+            if await is_visible_by_path(client, skip_pet_game_button_path) and not only_play_dance_game:
                 # click skip game button until window changes
                 while await is_visible_by_path(client, pet_feed_window_visible_path):
                     if await is_visible_by_path(client, skip_pet_game_button_path):
@@ -371,7 +371,7 @@ async def won_game_leveled_up(client: Client, auto_pet_ignore_pet_level_up):
                     await asyncio.sleep(.2)
 
 
-async def auto_pet(client: Client, ignore_pet_level_up: bool, play_dance_game: bool, questing: bool = False):
+async def auto_pet(client: Client, ignore_pet_level_up: bool, only_play_dance_game: bool, questing: bool = False):
     started_at_pavilion = False
     if await client.zone_name() != 'WizardCity/WC_Streets/Interiors/WC_PET_Park':
         await client.send_key(Keycode.PAGE_DOWN, 0.1)
@@ -418,7 +418,7 @@ async def auto_pet(client: Client, ignore_pet_level_up: bool, play_dance_game: b
 
     await asyncio.sleep(1.0)
     # feed the pet
-    await nomnom(client, ignore_pet_level_up, play_dance_game)
+    await nomnom(client, ignore_pet_level_up, only_play_dance_game)
 
     if not started_at_pavilion:
         # return to last location

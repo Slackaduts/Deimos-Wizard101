@@ -191,9 +191,9 @@ def read_config(config_name : str):
 
 	# Auto Pet Settings
 	global ignore_pet_level_up
-	global play_dance_game
+	global only_play_dance_game
 	ignore_pet_level_up = parser.getboolean('auto pet', 'ignore_pet_level_up', fallback=False)
-	play_dance_game = parser.getboolean('auto pet', 'play_dance_game', fallback=False)
+	only_play_dance_game = parser.getboolean('auto pet', 'only_play_dance_game', fallback=False)
 
 
 while True:
@@ -713,11 +713,8 @@ async def main():
 				# kill task
 				else:
 					if inner_questing_loop_task is not None:
-						try:
-							inner_questing_loop_task.cancel()
-							inner_questing_loop_task = None
-						except:
-							print(traceback.print_exc())
+						inner_questing_loop_task.cancel()
+						inner_questing_loop_task = None
 
 			await toggle_questing(debug=True)
 
@@ -734,11 +731,8 @@ async def main():
 				# kill task
 				else:
 					if inner_auto_pet_task is not None:
-						try:
-							inner_auto_pet_task.cancel()
-							inner_auto_pet_task = None
-						except:
-							print(traceback.print_exc())
+						inner_auto_pet_task.cancel()
+						inner_auto_pet_task = None
 
 			await toggle_auto_pet(debug=True)
 
@@ -908,12 +902,12 @@ async def main():
 							# if follow leader is off, quest on all clients, passing through only the leader
 							logger.debug(f'Client {client.title} - Handling questing for all clients.')
 							questing = Quester(client, walker.clients, questing_leader_pid)
-							await questing.auto_quest_leader(questing_friend_tp, gear_switching_in_solo_zones, hitter_client, auto_pet_questing, ignore_pet_level_up, play_dance_game)
+							await questing.auto_quest_leader(questing_friend_tp, gear_switching_in_solo_zones, hitter_client, auto_pet_questing, ignore_pet_level_up, only_play_dance_game)
 					else:
 						# if follow leader is off, quest on all clients, passing through only the leader
 						logger.debug(f'Client {client.title} - Handling questing.')
 						questing = Quester(client, walker.clients, None)
-						await questing.auto_quest(auto_pet_questing, ignore_pet_level_up, play_dance_game)
+						await questing.auto_quest(auto_pet_questing, ignore_pet_level_up, only_play_dance_game)
 
 		await asyncio.gather(*[async_questing(p) for p in walker.clients])
 
@@ -940,14 +934,13 @@ async def main():
 
 			while True:
 				if client.auto_pet_status:
-					print('auto petting')
-					await nomnom(client, ignore_pet_level_up=ignore_pet_level_up, play_dance_game=play_dance_game)
+					await nomnom(client, ignore_pet_level_up=ignore_pet_level_up, only_play_dance_game=only_play_dance_game)
 
 				await asyncio.sleep(1.0)
 
 		await asyncio.gather(*[async_auto_pet(p) for p in walker.clients])
 
-		# await nomnom(client, ignore_pet_level_up=ignore_pet_level_up, play_dance_game=play_dance_game)
+		# await nomnom(client, ignore_pet_level_up=ignore_pet_level_up, only_play_dance_game=only_play_dance_game)
 
 	async def auto_pet_loop_handler():
 		global inner_auto_pet_task
