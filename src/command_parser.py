@@ -88,33 +88,48 @@ def split_line(input_str: str, seperator: str = ',') -> List[str]:
     return split_str
 
 
+async def parse_locations(clients: List[Client], commands: List[str]) -> List[XYZ]:
+    xyzs = []
+    for client in clients:
+        pos, _ = await parse_location(commands, client=client)
+        xyzs.append(pos)
+
+    return xyzs
+
+
 async def parse_command(clients: List[Client], command_str: str):
     command_str = command_str.replace(', ', ',')
     command_str = command_str.replace('_', '')
     split_command = split_line(command_str)
 
-    # Get the desired client, will default to p1 if mass or no client is specified
-    client_str = split_command[0]
-    mass = client_str == 'mass'
-    if client_str[1:].isdigit() and not mass:
-        desired_client = client_from_titles(clients, client_str)
-        mass = False
+    client_str = split_command[0].replace(' ', '')
 
-    else:
-        desired_client = clients[0]
+    if ':' in client_str:
+        exclude = False
+        if 'except' in client_str:
+            client_str = client_str.replace('except', '')
+            exclude = True
+
+        split_clients = client_str.split(':')
+        matched_clients = [client_from_titles(clients.copy(), title) for title in split_clients]
+
+        if exclude:
+            clients = [client for client in clients.copy() if client not in matched_clients]
+
+        else:
+            clients = matched_clients
+
+    elif is_numeric(client_str[1]):
+        clients = [client_from_titles(clients, client_str)]
 
     match split_command[1].lower():
-        case 'teleport' | 'tp':
-            xyz, _ = await parse_location(split_command, client=desired_client)
-            await desired_client.teleport(xyz) if not mass else await asyncio.gather(*[client.teleport(xyz) for client in clients])
-
-        case 'navmapteleport | navmaptp':
-            xyz, _ = await parse_location(split_command, client=desired_client)
-            await navmap_tp(desired_client, xyz) if not mass else await asyncio.gather(*[navmap_tp(client, xyz) for client in clients])
+        case 'teleport' | 'tp' | 'setpos':
+            xyzs = await parse_locations(clients, split_command)
+            await asyncio.gather(*[client.teleport(xyz) for client, xyz in zip(clients, xyzs)])
 
         case 'walkto' | 'goto':
-            xyz, _ = await parse_location(split_command, client=desired_client)
-            await desired_client.goto(xyz.x, xyz.y) if not mass else await asyncio.gather(*[client.goto(xyz.x, xyz.y) for client in clients])
+            xyzs = await parse_locations(clients, split_command)
+            await asyncio.gather(*[client.goto(xyz.x, xyz.y) for client, xyz in zip(clients, xyzs)])
 
         case 'sendkey' | 'press' | 'presskey':
             key = split_command[2]
@@ -122,25 +137,25 @@ async def parse_command(clients: List[Client], command_str: str):
             if len(split_command) >= 4:
                 time = float(split_command[3])
 
-            await desired_client.send_key(Keycode[key], time)
+            await asyncio.gather(*[await client.send_key(Keycode[key], time) for client in clients])
 
         case 'waitfordialog' | 'waitfordialogue':
-            await wait_for_coro(desired_client.is_in_dialog) if not mass else await asyncio.gather(*[wait_for_coro(client.is_in_dialog) for client in clients])
+            await asyncio.gather(*[wait_for_coro(client.is_in_dialog) for client in clients])
 
             if split_command[1].lower() == 'completion':
-                await wait_for_coro(desired_client.is_in_dialog, True) if not mass else await asyncio.gather(*[wait_for_coro(client.is_in_dialog, True) for client in clients])
+                await asyncio.gather(*[wait_for_coro(client.is_in_dialog, True) for client in clients])
 
         case 'waitforbattle' | 'waitforcombat':
-            await wait_for_coro(desired_client.in_battle) if not mass else await asyncio.gather(*[wait_for_coro(client.in_battle) for client in clients])
+            await asyncio.gather(*[wait_for_coro(client.in_battle) for client in clients])
 
             if split_command[-1].lower() == 'completion':
-                await wait_for_coro(desired_client.in_battle, True) if not mass else await asyncio.gather(*[wait_for_coro(client.in_battle, True) for client in clients])
+                await asyncio.gather(*[wait_for_coro(client.in_battle, True) for client in clients])
 
         case 'waitforzonechange':
-            await desired_client.wait_for_zone_change() if not mass else await asyncio.gather(*[client.wait_for_zone_change() for client in clients])
+            await asyncio.gather(*[client.wait_for_zone_change() for client in clients])
 
             if split_command[-1].lower() == 'completion':
-                await wait_for_coro(desired_client.is_loading, True) if not mass else await asyncio.gather(*[wait_for_coro(client.is_loading, True) for client in clients])
+                await asyncio.gather(*[wait_for_coro(client.is_loading, True) for client in clients])
 
         case 'waitforfree':
             async def _wait_for_free(client: Client, wait_for_not: bool = False, interval: float = 0.25):
@@ -152,40 +167,40 @@ async def parse_command(clients: List[Client], command_str: str):
                     while not await is_free(client):
                         await asyncio.sleep(interval)
 
-            await _wait_for_free(desired_client) if not mass else await asyncio.gather(*[_wait_for_free(client) for client in clients])
+            await asyncio.gather(*[_wait_for_free(client) for client in clients])
 
             if split_command[-1].lower() == 'completion':
-                await _wait_for_free(desired_client, True) if not mass else await asyncio.gather(*[_wait_for_free(client, True) for client in clients])
+                await asyncio.gather(*[_wait_for_free(client, True) for client in clients])
 
         case 'usepotion':
-            await use_potion(desired_client) if not mass else await asyncio.gather(*[use_potion(client) for client in clients])
+            await asyncio.gather(*[use_potion(client) for client in clients])
 
         case 'buypotions':
-            await auto_potions_force_buy(desired_client, True) if not mass else await asyncio.gather(*[buy_potions(client) for client in clients])
+            await asyncio.gather(*[buy_potions(client) for client in clients])
 
         case 'sleep' | 'wait' | 'delay':
             await asyncio.sleep(float(split_command[-1]))
 
         case 'logoutandin' | 'relog':
-            await logout_and_in(desired_client) if not mass else await asyncio.gather(*[logout_and_in(client) for client in clients])
+            await asyncio.gather(*[logout_and_in(client) for client in clients])
 
         case 'click':
-            await attempt_activate_mouseless(desired_client) if not mass else await asyncio.gather(*[attempt_activate_mouseless(client) for client in clients])
-            await desired_client.mouse_handler.click(int(split_command[2]), int(split_command[3])) if not mass else await asyncio.gather(*[client.mouse_handler.click(int(split_command[2], int(split_command[3]))) for client in clients])
-            await attempt_deactivate_mouseless(desired_client) if not mass else await asyncio.gather(*[attempt_deactivate_mouseless(client) for client in clients])
+            await asyncio.gather(*[attempt_activate_mouseless(client) for client in clients])
+            await asyncio.gather(*[client.mouse_handler.click(int(split_command[2], int(split_command[3]))) for client in clients])
+            await asyncio.gather(*[attempt_deactivate_mouseless(client) for client in clients])
 
         case 'clickwindow':
             relevant_strings: List[str] = split_command[2:]
             path_str: str = re.findall('\[(.*?)\]|$', ','.join(relevant_strings))[0]
             desired_path: str = path_str.strip('[]"').replace("'", "").split(',')
-            await click_window_by_path(desired_client, desired_path, True) if not mass else await asyncio.gather(*[await click_window_by_path(client, desired_path, True) for client in clients])
+            await asyncio.gather(*[await click_window_by_path(client, desired_path, True) for client in clients])
 
         case 'friendtp' | 'friendteleport':
-            clients = [c for c in clients.copy() if c.title != desired_client.title]
+            clients = [c for c in clients.copy() if c.title != clients[0].title]
             await asyncio.gather(*[teleport_to_friend_from_list(client) for client in clients])
 
         case 'entitytp' | 'entityteleport':
-            await SprintyClient(desired_client).tp_to_closest_by_vague_name(split_command[2]) if not mass else await asyncio.gather(*[SprintyClient(client).tp_to_closest_by_vague_name(split_command[2]) for client in clients])
+            await asyncio.gather(*[SprintyClient(client).tp_to_closest_by_vague_name(split_command[2]) for client in clients])
 
         case 'log' | 'debug' | 'print':
             relevant_string: str = ' '.join(split_command[2:])
@@ -193,6 +208,8 @@ async def parse_command(clients: List[Client], command_str: str):
 
         case _:
             await asyncio.sleep(0.25)
+
+    await asyncio.sleep(0)
 
 
 async def execute_flythrough(client: Client, flythrough_data: str, line_seperator: str = '\n'):
