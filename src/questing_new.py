@@ -339,8 +339,8 @@ class Quester():
         #     #print(traceback.print_exc())
         #     amount_to_get_parsed = 1
         #     amount_gotten_parsed = 0
-
-        return questnameparsed, f"{amount_gotten_parsed} / {amount_to_get_parsed}"
+        b = f"{amount_gotten_parsed} / {amount_to_get_parsed}"
+        return questnameparsed, b
 
     async def load_wad(self, path: str):
         return Wad.from_game_data(path.replace("/", "-"))
@@ -817,7 +817,6 @@ class Quester():
                     await safe_wait_for_zone_change(p, name='WizardCity/WC_Hub', handle_hooks_if_needed=True)
                 # something went wrong when placing the mark
                 except LoadingScreenNotFound:
-                    print('loading not found')
                     pass
                 # our teleport mark was in a closed off area / instance
                 except FriendBusyOrInstanceClosed:
@@ -1116,11 +1115,15 @@ class Quester():
     async def auto_collect_rewrite(self, client: Client):
         quest_name_path = ["WorldView", "windowHUD", "QuestHelperHud", "ElementWindow", "",
                            "txtGoalName"]  # path to the yellow text under arrow which tells you your quest
-        quest_item_list = await self.parse_quest_stuff(
-            quest_name_path)  # gets quest name from path and parses it for collect quest item name
-        print(quest_item_list[0])
+        quest_item_list, b = await self.parse_quest_stuff(quest_name_path)  # gets quest name from path and parses it for collect quest item name
 
+        entities_to_skip = ['Basic Positional', 'WispHealth', 'WispMana', 'KT_WispHealth', 'KT_WispMana', 'WispGold', 'DuelCircle', 'Player Object', 'SkeletonKeySigilArt', 'Basic Ambient', 'TeleportPad']
+
+        # method for hard coding collect quests
+        quest_and_name = {'Find Stolen Food in Saltmeadow Swamp ': 'Food Stores'} # , 'TEST': 'TEST'}
         chunk_cords = await self.Nav_Hull()  # list of cords that load in chunk
+        quest_obv = await self.get_truncated_quest_objectives(client)
+
         for points in chunk_cords:  # loops through the points
             points = XYZ(points.x, points.y, points.z - 550)  # sets cord to underground to avoid pull / detection
             await client.teleport(points, move_after=False, wait_on_inuse=True)  # teleports under the area
@@ -1132,14 +1135,23 @@ class Quester():
                     object_template = await e.object_template()  # gets entity template
                     display_name_code = await object_template.display_name()  # gets display name code
                     display_name = await self.client.cache_handler.get_langcode_name(display_name_code)  # uses display name code to get display name text
-                    match = fuzz.ratio(display_name.lower(), str(quest_item_list[0]).lower())  # fuzzywuzzy check if display name matches quest item.
+                    match = fuzz.ratio(display_name.lower(), str(quest_item_list).lower())  # fuzzywuzzy check if display name matches quest item.
+
                     if match > 80:  # if strings match greater than 80 it means that it's most likely the item
                         while not await is_free(self.client) or self.client.entity_detect_combat_status:
                             await asyncio.sleep(.1)
 
-                        print('display name: ' + display_name)
+                        # print('display name: ' + display_name)
                         if await self.collect_entity(e):  # grabs enity
                             return
+                    elif quest_obv in quest_and_name:
+                            if display_name == quest_and_name.get(quest_obv):
+                                while not await is_free(self.client) or self.client.entity_detect_combat_status:
+                                    await asyncio.sleep(.1)
+
+                                if await self.collect_entity(e):  # grabs enity
+                                    return
+
                 except ValueError:
                     pass
                 except MemoryReadError:
@@ -1155,16 +1167,21 @@ class Quester():
                     entities_to_skip = ['Basic Positional', 'WispHealth', 'WispMana', 'KT_WispHealth', 'KT_WispMana', 'WispGold', 'DuelCircle', 'Player Object', 'SkeletonKeySigilArt', 'Basic Ambient']
                     if e_name not in entities_to_skip:  # helps speed things up
                         name_list = e_name.split('_')
+                        if len(name_list) == 1:
+                            name_list = name_list[0].split('-')
+
                         edited_name = ''.join(name_list[1:])
                         # do stripping symbols stuff with edited_name
                         edit_name2 = ''.join([i for i in edited_name if not i.isdigit()])
                         edit_name3 = str(edit_name2).replace("_", "")
-                        match = fuzz.ratio(edit_name3.lower(), str(quest_item_list[0]).lower())
+
+                        match = fuzz.ratio(edit_name3.lower(), str(quest_item_list).lower())
+                        # print('file name: ' + edit_name3)
+                        # print('fuzz levels: ' + str(match))
                         if int(match) > 50:
                             while not await is_free(self.client) or self.client.entity_detect_combat_status:
                                 await asyncio.sleep(.1)
 
-                            print('file name: ' + edit_name3)
                             if await self.collect_entity(e):  # grabs enity
                                 return
                 except:
@@ -1202,7 +1219,8 @@ class Quester():
 
 
 
-    async def dungeon_recall(self, p: Client, original_zone: str):
+    async def dungeon_recall(self, p: Client):
+        original_zone = await p.zone_name()
         dungeon_recalled = await click_window_until_closed(p, dungeon_recall_path)
 
         if dungeon_recalled:
@@ -1211,7 +1229,19 @@ class Quester():
                 dungeon_full = await click_window_until_closed(p, friend_is_busy_and_dungeon_reset_path)
                 if dungeon_full:
                     await asyncio.sleep(1.0)
-                    break
+                    return False
+
+            return True
+
+    async def open_character_screen(self, p: Client):
+        while not await is_visible_by_path(p, close_spellbook_path):
+            await p.send_key(Keycode.C, 0.1)
+            await asyncio.sleep(.3)
+
+    async def close_character_screen(self, p: Client):
+        while await is_visible_by_path(p, close_spellbook_path):
+            await p.send_key(Keycode.C, 0.1)
+            await asyncio.sleep(.3)
 
     # @logger.catch()
     async def auto_quest_leader(self, questing_friend_tp: bool, gear_switching_in_solo_zones: bool, hitting_client, auto_pet_enabled: bool, ignore_pet_level_up: bool, play_dance_game: bool):
@@ -1221,25 +1251,25 @@ class Quester():
         # read and store the name of the client's wizard, and check energy
         if questing_friend_tp or auto_pet_enabled:
             # open character screen
-            await asyncio.gather(*[c.send_key(Keycode.C, 0.1) for c in self.clients])
-            await asyncio.sleep(.2)
+
+            await asyncio.gather(*[self.open_character_screen(c) for c in self.clients])
 
             await asyncio.gather(*[set_wizard_name_from_character_screen(c) for c in self.clients])
             energy_info = await asyncio.gather(*[return_wizard_energy_from_character_screen(c) for c in questing_clients])
 
             # close character screen
-            await asyncio.gather(*[p.send_key(Keycode.C, 0.1) for p in self.clients])
-            await asyncio.sleep(.2)
+            await asyncio.gather(*[self.close_character_screen(c) for c in self.clients])
 
-            # potentially run auto_pet once initially, if all questing_clients have high energy
-            all_high_energy = True
-            for i, c in enumerate(questing_clients):
-                # current energy / total energy - percent of remaining energy
-                if ((energy_info[i][0] / energy_info[i][1]) * 100) < 1:
-                    all_high_energy = False
+            if auto_pet_enabled:
+                # potentially run auto_pet once initially, if all questing_clients have high energy
+                all_high_energy = True
+                for i, c in enumerate(questing_clients):
+                    # current energy / total energy - percent of remaining energy
+                    if ((energy_info[i][0] / energy_info[i][1]) * 100) < 70:
+                        all_high_energy = False
 
-            if all_high_energy and auto_pet_enabled:
-                await asyncio.gather(*[auto_pet(c, ignore_pet_level_up, play_dance_game, questing=True) for c in self.clients])
+                if all_high_energy:
+                    await asyncio.gather(*[auto_pet(c, ignore_pet_level_up, play_dance_game, questing=True) for c in self.clients])
 
             # Working but inconsistent code for checking if all clients are friends, and then automatically adding them
             # ---------------------------------------------------------------------------------------------------------
@@ -1334,7 +1364,10 @@ class Quester():
                 # Collect wisps, use potions, or get potions if necessary
                 await self.heal_and_handle_potions(questing_friend_tp)
 
-                await asyncio.gather(*[self.dungeon_recall(p, await p.zone_name()) for p in self.clients])
+                # don't recall on secondary clients unless we've already successfully recalled on the primary
+                dungeon_recalled = await self.dungeon_recall(self.current_leader_client)
+                if dungeon_recalled:
+                    await asyncio.gather(*[self.dungeon_recall(p) for p in follower_clients])
 
                 if auto_pet_enabled:
                     all_questing_clients_leveled_up = True
@@ -1342,8 +1375,8 @@ class Quester():
                         if await c.stats.reference_level() <= c.character_level:
                             all_questing_clients_leveled_up = False
                             break
-                        else:
-                            print('client: ' + c.title + ' leveled up')
+                        # else:
+                        #    print('client: ' + c.title + ' leveled up')
 
                     if all_questing_clients_leveled_up:
                         logger.debug('All questing clients leveled up - training pets on all questing clients.')
@@ -1776,7 +1809,6 @@ class Quester():
 
     async def handle_questing_zone_change(self):
         if await is_visible_by_path(self.client, exit_dungeon_path):
-            print('DUNGEON RECALL VISIBLE')
             await self.client.mouse_handler.activate_mouseless()
             await asyncio.sleep(1.0)
             await click_window_by_path(self.client, exit_dungeon_path)
@@ -1784,9 +1816,7 @@ class Quester():
             await asyncio.sleep(1.0)
             await self.client.mouse_handler.deactivate_mouseless()
         else:
-            print('checking for loading screen')
             while await self.client.is_loading():
-                print('waiting in loading')
                 await asyncio.sleep(.1)
 
     # @logger.catch()
@@ -1806,10 +1836,6 @@ class Quester():
                     if self.client.character_level <= await self.client.stats.reference_level() or a == 1:
                         logger.debug('Client ' + self.client.title + ' leveled up - training pet.')
                         await auto_pet(self.client, ignore_pet_level_up, play_dance_game, questing=True)
-                    else:
-                        print('not triggered')
-                else:
-                    print('not enabled')
 
                 distance = calc_Distance(quest_xyz, XYZ(0.0, 0.0, 0.0))
                 if distance > 1:

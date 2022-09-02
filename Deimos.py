@@ -27,7 +27,7 @@ import statistics
 import re
 from pypresence import AioPresence
 from src.command_parser import execute_flythrough, parse_command
-from src.auto_pet import activate_dance_game_moves_hook, deactivate_dance_game_moves_hook, read_current_dance_game_moves
+from src.auto_pet import activate_dance_game_moves_hook, deactivate_dance_game_moves_hook, read_current_dance_game_moves, nomnom, attempt_deactivate_dance_hook
 from src.drop_logger import logging_loop
 from src.combat import Fighter
 from src.stat_viewer import total_stats_from_id
@@ -171,7 +171,7 @@ def read_config(config_name : str):
 	questing_friend_tp = parser.getboolean('questing', 'friend_teleport', fallback=False)
 	gear_switching_in_solo_zones = parser.getboolean('questing', 'gear_switching_in_solo_zones', fallback=False)
 	hitter_client = parser.get('questing', 'hitter_client', fallback=None)
-	auto_pet_questing = parser.get('questing', 'auto_pet', fallback=False)
+	auto_pet_questing = parser.getboolean('questing', 'auto_pet', fallback=False)
 	# empty string can falsely be read as a client.  Check if the user's config entry was valid and set to None if not
 	valid_configs = ['p1', 'p2', 'p3', 'p4', '1', '2', '3', '4']
 	if any(hitter_client == option for option in valid_configs):
@@ -219,6 +219,7 @@ sigil_status = False
 freecam_status = False
 hotkey_status = False
 questing_status = False
+auto_pet_status = False
 tool_status = True
 original_client_locations = dict()
 
@@ -227,6 +228,8 @@ hotkeys_blocked = False
 sigil_leader_pid: int = None
 questing_leader_pid: int = None
 
+inner_auto_pet_task: asyncio.Task = None
+inner_questing_loop_task: asyncio.Task = None
 bot_task: asyncio.Task = None 
 flythrough_task: asyncio.Task = None
 
@@ -490,6 +493,7 @@ async def kill_tool(debug: bool):
 	raise KeyboardInterrupt
 
 
+
 async def toggle_combat(debug: bool):
 	global combat_status
 	combat_status ^= True
@@ -515,24 +519,41 @@ async def toggle_questing(debug: bool):
 	# toggles auto questing
 	global questing_status
 	global sigil_status
+	global auto_pet_status
 	questing_status ^= True
 	if debug:
 		if questing_status:
 			logger.debug(f'{toggle_auto_questing_key} key pressed, enabling auto questing.')
 			sigil_status = False
+			auto_pet_status = False
 		else:
 			logger.debug(f'{toggle_auto_questing_key} key pressed, disabling auto questing.')
 
+async def toggle_auto_pet(debug: bool):
+	# toggles auto questing
+	global auto_pet_status
+	global questing_status
+	global sigil_status
+	auto_pet_status ^= True
+	if debug:
+		if auto_pet_status:
+			logger.debug(f'Enabling Auto Pet.  Place any clients that are training pets on the dance game sigil.')
+			questing_status = False
+			sigil_status = False
+		else:
+			logger.debug(f'Disabling Auto Pet.')
 
 async def toggle_sigil(debug: bool):
 	# toggles auto sigil
 	global sigil_status
 	global questing_status
+	global auto_pet_status
 	sigil_status ^= True
 	if debug:
 		if sigil_status:
 			logger.debug(f'{toggle_auto_sigil_key} key pressed, enabling auto sigil.')
 			questing_status = False
+			auto_pet_status = False
 		else:
 			logger.debug(f'{toggle_auto_sigil_key} key pressed, disabling auto sigil.')
 
@@ -541,6 +562,8 @@ async def toggle_sigil(debug: bool):
 async def main():
 	global tool_status
 	global original_client_locations
+	global inner_auto_pet_task
+	global inner_questing_loop_task
 	listener = HotkeyListener()
 	foreground_client: Client = None
 	background_clients = []
@@ -645,6 +668,7 @@ async def main():
 				p.sigil_status ^= True
 				if p.sigil_status:
 					p.questing_status = False
+					p.auto_pet_status = False
 			await toggle_sigil(debug=True)
 
 
@@ -678,13 +702,45 @@ async def main():
 
 
 	async def toggle_questing_hotkey():
+		global inner_questing_loop_task
 		await wait_for_not_blocked()
 		if not freecam_status:
 			for p in walker.clients:
 				p.questing_status ^= True
 				if p.questing_status:
 					p.sigil_status = False
+					p.auto_pet_status = False
+				# kill task
+				else:
+					if inner_questing_loop_task is not None:
+						try:
+							inner_questing_loop_task.cancel()
+							inner_questing_loop_task = None
+						except:
+							print(traceback.print_exc())
+
 			await toggle_questing(debug=True)
+
+
+	async def toggle_auto_pet_hotkey():
+		global inner_auto_pet_task
+		await wait_for_not_blocked()
+		if not freecam_status:
+			for p in walker.clients:
+				p.auto_pet_status ^= True
+				if p.auto_pet_status:
+					p.sigil_status = False
+					p.questing_status = False
+				# kill task
+				else:
+					if inner_auto_pet_task is not None:
+						try:
+							inner_auto_pet_task.cancel()
+							inner_auto_pet_task = None
+						except:
+							print(traceback.print_exc())
+
+			await toggle_auto_pet(debug=True)
 
 
 	async def enable_hotkeys(exclude_freecam: bool = False, debug: bool = False):
@@ -859,8 +915,54 @@ async def main():
 						questing = Quester(client, walker.clients, None)
 						await questing.auto_quest(auto_pet_questing, ignore_pet_level_up, play_dance_game)
 
-					# TODO: Put SlackQuester's loop function here
 		await asyncio.gather(*[async_questing(p) for p in walker.clients])
+
+	async def questing_loop_handler():
+		global inner_questing_loop_task
+
+		while True:
+			try:
+				inner_questing_loop_task = asyncio.create_task(questing_loop())
+				await asyncio.wait({inner_questing_loop_task})
+
+			except asyncio.CancelledError:
+				break
+
+			finally:
+				await asyncio.gather(*[attempt_deactivate_mouseless(client) for client in walker.clients])
+
+
+
+	async def auto_pet_loop():
+		# Trains pets for any clients that step onto the dance game sigil.  Either plays the dance game or skips it if you have the option unlocked
+		async def async_auto_pet(client: Client):
+			global inner_auto_pet_task
+
+			while True:
+				if client.auto_pet_status:
+					print('auto petting')
+					await nomnom(client, ignore_pet_level_up=ignore_pet_level_up, play_dance_game=play_dance_game)
+
+				await asyncio.sleep(1.0)
+
+		await asyncio.gather(*[async_auto_pet(p) for p in walker.clients])
+
+		# await nomnom(client, ignore_pet_level_up=ignore_pet_level_up, play_dance_game=play_dance_game)
+
+	async def auto_pet_loop_handler():
+		global inner_auto_pet_task
+
+		while True:
+			try:
+				inner_auto_pet_task = asyncio.create_task(auto_pet_loop())
+				await asyncio.wait({inner_auto_pet_task})
+
+			except asyncio.CancelledError:
+				break
+
+			finally:
+				await asyncio.gather(*[attempt_deactivate_mouseless(client) for client in walker.clients])
+				await asyncio.gather(*[attempt_deactivate_dance_hook(client) for client in walker.clients])
 
 	async def nearest_duel_circle_distance_and_xyz(sprinter: SprintyClient):
 		min_distance = None
@@ -1173,6 +1275,8 @@ async def main():
 										await toggle_sigil_hotkey()
 									case 'Questing':
 										await toggle_questing_hotkey()
+									case 'Auto Pet':
+										await toggle_auto_pet_hotkey()
 									case 'Freecam':
 										await toggle_freecam_hotkey()
 									case 'Camera Collision':
@@ -1448,6 +1552,7 @@ async def main():
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('DialogueStatus', bool_to_string(dialogue_status))))
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('SpeedhackStatus', bool_to_string(speed_status))))
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('QuestingStatus', bool_to_string(questing_status))))
+				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Auto PetStatus', bool_to_string(auto_pet_status))))
 
 				await asyncio.sleep(0.1)
 		else:
@@ -1713,8 +1818,10 @@ async def main():
 		p.questing_status = False
 		p.sigil_status = False
 		p.questing_status = False
+		p.auto_pet_status = False
 		p.use_team_up = use_team_up
 		p.mouseless_status = False
+		p.dance_hook_status = False
 		p.entity_detect_combat_status = False
 		p.invincible_combat_timer = False
 		p.just_entered_combat = None
@@ -1758,7 +1865,8 @@ async def main():
 		sigil_loop_task = asyncio.create_task(sigil_loop())
 		in_combat_loop_task = asyncio.create_task(is_client_in_combat_loop())
 		gui_task = asyncio.create_task(handle_gui())
-		questing_loop_task = asyncio.create_task(questing_loop())
+		questing_loop_task = asyncio.create_task(questing_loop_handler())
+		auto_pet_task = asyncio.create_task(auto_pet_loop_handler())
 		questing_leader_combat_detection_task = asyncio.create_task(entity_detect_combat_loop())
 		potion_usage_loop_task = asyncio.create_task(potion_usage_loop())
 		rpc_loop_task = asyncio.create_task(rpc_loop())
@@ -1766,7 +1874,7 @@ async def main():
 		zone_check_loop_task = asyncio.create_task(zone_check_loop())
 		
 		while True:
-			await asyncio.wait([foreground_client_switching_task, speed_switching_task, combat_loop_task, assign_foreground_clients_task, dialogue_loop_task, anti_afk_loop_task, sigil_loop_task, in_combat_loop_task, questing_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task])
+			await asyncio.wait([foreground_client_switching_task, speed_switching_task, combat_loop_task, assign_foreground_clients_task, dialogue_loop_task, anti_afk_loop_task, sigil_loop_task, in_combat_loop_task, questing_loop_task, auto_pet_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task])
 
 	finally:
 		await tool_finish()

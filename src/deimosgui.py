@@ -63,7 +63,7 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 		return original_hotkey_button(name, auto_size, text_color, button_color)
 
 
-	toggles = ['Speedhack', 'Combat', 'Dialogue', 'Sigil', 'Questing']
+	toggles = ['Speedhack', 'Combat', 'Dialogue', 'Sigil', 'Questing', 'Auto Pet']
 	hotkeys = ['Quest TP', 'Freecam', 'Freecam TP']
 	mass_hotkeys = ['Mass TP', 'XYZ Sync', 'X Press']
 	toggles_layout = [[hotkey_button(name), gui.Text(f'Disabled', key=f'{name}Status', auto_size_text=False, size=(7, 1), text_color=gui_text_color)] for name in toggles]
@@ -227,7 +227,7 @@ def manage_gui(send_queue: queue.Queue, recv_queue: queue.Queue, gui_theme, gui_
 				send_queue.put(GUICommand(GUICommandType.Close))
 
 			# Toggles
-			case 'Speedhack' | 'Combat' | 'Dialogue' | 'Sigil' | 'Questing' | 'Freecam' | \
+			case 'Speedhack' | 'Combat' | 'Dialogue' | 'Sigil' | 'Questing' | 'Auto Pet' | 'Freecam' | \
 						'Toggle Camera Collision':
 				send_queue.put(GUICommand(GUICommandType.ToggleOption, event.replace('Toggle', '').strip()))
 

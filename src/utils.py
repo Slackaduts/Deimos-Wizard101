@@ -320,12 +320,10 @@ async def spiral_door(client: Client, open_window: bool = True, cycles: int = 0,
 async def navigate_to_ravenwood(client: Client):
 	# navigates to commons from anywhere in the game
 
-	print('sending home')
 	await client.send_key(Keycode.HOME, 0.1)
 	await client.send_key(Keycode.HOME, 0.1)
-	print('waiting')
+
 	await wait_for_zone_change(client)
-	print('past waiting')
 	use_spiral_door = False
 	bartleby_navigation = True
 	match await client.zone_name():
