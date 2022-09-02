@@ -7,7 +7,7 @@ from wizwalker.extensions.scripting import teleport_to_friend_from_list
 from src.gui_inputs import is_numeric, param_input
 from src.utils import auto_potions_force_buy, use_potion, buy_potions, is_free, logout_and_in, wait_for_visible_by_path, click_window_by_path, attempt_activate_mouseless, attempt_deactivate_mouseless
 from src.teleport_math import get_orientation, navmap_tp, write_orientation
-from src.camera_utils import get_camera_orientation, glide_to, point_to_xyz, rotating_glide_to, orbit, write_camera_orientation, measure_interval
+from src.camera_utils import get_camera_orientation, glide_to, point_to_xyz, rotating_glide_to, orbit, write_camera_orientation
 from src.types import Orientation
 import re
 from loguru import logger
@@ -195,13 +195,11 @@ async def execute_flythrough(client: Client, flythrough_data: str, line_seperato
         await client.camera_freecam()
 
     camera = await client.game_client.free_camera_controller()
-    interval = round(await measure_interval(camera), 5)
-
     for action in flythrough_actions:
-        await parse_camera_command(camera, action, interval)
+        await parse_camera_command(camera, action)
 
 
-async def parse_camera_command(camera: CameraController, command_str: str, interval: int = 0.00015):
+async def parse_camera_command(camera: CameraController, command_str: str):
     command_str = command_str.replace(', ', ',')
     command_str = command_str.replace('_', '')
     split_command = split_line(command_str)
@@ -230,12 +228,12 @@ async def parse_camera_command(camera: CameraController, command_str: str, inter
 
         case 'rotatingglideto':
             logger.debug(f'Gliding freecam from {origin_pos} to {xyz} while rotating {orientation} degrees over {time} seconds')
-            await rotating_glide_to(camera, origin_pos, xyz, time, orientation, interval)
+            await rotating_glide_to(camera, origin_pos, xyz, time, orientation, )
 
         case 'orbit':
             degrees = param_input(split_command[-2], 360)
             logger.debug(f'Orbiting freecam {degrees} degrees from {origin_pos} around {xyz} over {time} seconds')
-            await orbit(camera, origin_pos, xyz, degrees, time, interval)
+            await orbit(camera, origin_pos, xyz, degrees, time, )
 
         case 'lookat':
             logger.debug(f'Pointing freecam at {xyz}')
