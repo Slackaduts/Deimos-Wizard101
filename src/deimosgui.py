@@ -37,6 +37,8 @@ class GUICommandType(Enum):
 	ExecuteBot = auto()
 	KillBot = auto()
 
+	SetScale = auto()
+
 	# deimos -> window
 	UpdateWindow = auto()
 
@@ -171,6 +173,13 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 
 	framed_bot_creator_layout = gui.Frame('Bot Creator', bot_creator_layout, title_color=gui_text_color)
 
+	misc_utils_layout = [
+		[gui.Text('The utils shown below are for advanced users and no support will be provided on them.', text_color=gui_text_color)],
+		[gui.Text('Scale:', text_color=gui_text_color), gui.InputText(size=(8, 1), key='scale'), hotkey_button('Set Scale')],
+	]
+
+	framed_misc_utils_layout = gui.Frame('Misc Utils', misc_utils_layout, title_color=gui_text_color)
+
 	tabs = [
 		[
 			gui.Tab('Hotkeys', [[framed_toggles_layout, framed_hotkeys_layout, framed_mass_hotkeys_layout, framed_utils_layout]], title_color=gui_text_color),
@@ -178,7 +187,8 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 			gui.Tab('Dev Utils', [[framed_custom_tp_layout], [framed_dev_utils_layout]], title_color=gui_text_color),
 			gui.Tab('Stat Viewer', [[framed_stat_viewer_layout]], title_color=gui_text_color),
 			gui.Tab('Flythrough', [[framed_flythrough_layout]], title_color=gui_text_color),
-			gui.Tab('Bot Creator', [[framed_bot_creator_layout]], title_color=gui_text_color)
+			gui.Tab('Bot Creator', [[framed_bot_creator_layout]], title_color=gui_text_color),
+			gui.Tab('Misc Utils', [[framed_misc_utils_layout]], title_color=gui_text_color)
 		]
 	]
 
@@ -330,6 +340,9 @@ def manage_gui(send_queue: queue.Queue, recv_queue: queue.Queue, gui_theme, gui_
 
 			case 'Kill Bot':
 				send_queue.put(GUICommand(GUICommandType.KillBot))
+
+			case 'Set Scale':
+				send_queue.put(GUICommand(GUICommandType.SetScale, inputs['scale']))
 
 			# Other
 			case _:

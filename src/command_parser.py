@@ -6,7 +6,7 @@ from wizwalker.memory.memory_objects.camera_controller import CameraController
 from wizwalker.extensions.scripting import teleport_to_friend_from_list
 from src.sprinty_client import SprintyClient
 from src.gui_inputs import is_numeric, param_input
-from src.utils import auto_potions_force_buy, use_potion, buy_potions, is_free, logout_and_in, click_window_by_path, attempt_activate_mouseless, attempt_deactivate_mouseless
+from src.utils import auto_potions_force_buy, use_potion, buy_potions, is_free, logout_and_in, click_window_by_path, attempt_activate_mouseless, attempt_deactivate_mouseless, wait_for_visible_by_path
 from src.teleport_math import navmap_tp
 from src.camera_utils import glide_to, point_to_xyz, rotating_glide_to, orbit
 import re
@@ -73,12 +73,12 @@ async def wait_for_coro(coro: Coroutine, wait_for_not: bool = False, interval: f
             await asyncio.sleep(interval)
 
 
-def find_path(input_str: str) -> List[str]:
-    path_str: str = re.findall('(?<=\[).+?(?=\])', input_str)[0]
-    path_str = path_str.replace(' ', '')
-    window_path = path_str.split(',')
+def find_path(commands: List[str], starting_index: int = 2) -> List[str]:
+    relevant_strings: List[str] = commands[starting_index:]
+    path_str: str = re.findall('\[(.*?)\]|$', ','.join(relevant_strings))[0]
+    desired_path: List[str] = path_str.strip('[]"').replace("'", "").split(',')
 
-    return window_path
+    return desired_path
 
 
 def split_line(input_str: str, seperator: str = ',') -> List[str]:
@@ -175,8 +175,8 @@ async def parse_command(clients: List[Client], command_str: str):
         case 'usepotion':
             await asyncio.gather(*[use_potion(client) for client in clients])
 
-        case 'buypotions':
-            await asyncio.gather(*[buy_potions(client) for client in clients])
+        case 'buypotions' | 'refillpotions' | 'buypots' | 'refillpots':
+            await asyncio.gather(*[auto_potions_force_buy(client, True) for client in clients])
 
         case 'sleep' | 'wait' | 'delay':
             await asyncio.sleep(float(split_command[-1]))
@@ -190,10 +190,14 @@ async def parse_command(clients: List[Client], command_str: str):
             await asyncio.gather(*[attempt_deactivate_mouseless(client) for client in clients])
 
         case 'clickwindow':
-            relevant_strings: List[str] = split_command[2:]
-            path_str: str = re.findall('\[(.*?)\]|$', ','.join(relevant_strings))[0]
-            desired_path: str = path_str.strip('[]"').replace("'", "").split(',')
+            desired_path = find_path(split_command)
             await asyncio.gather(*[await click_window_by_path(client, desired_path, True) for client in clients])
+
+        case 'waitforwindow' | 'waitforpath':
+            desired_path = find_path(split_command)
+            await asyncio.gather(*[wait_for_visible_by_path(client, desired_path) for client in clients])
+            if split_command[-1].lower() == 'completion':
+                await asyncio.gather(*[wait_for_visible_by_path(client, desired_path, True) for client in clients])
 
         case 'friendtp' | 'friendteleport':
             clients = [c for c in clients.copy() if c.title != clients[0].title]
@@ -252,12 +256,12 @@ async def parse_camera_command(camera: CameraController, command_str: str):
 
         case 'rotatingglideto':
             logger.debug(f'Gliding freecam from {origin_pos} to {xyz} while rotating {orientation} degrees over {time} seconds')
-            await rotating_glide_to(camera, origin_pos, xyz, time, orientation, )
+            await rotating_glide_to(camera, origin_pos, xyz, time, orientation)
 
         case 'orbit':
             degrees = param_input(split_command[-2], 360)
             logger.debug(f'Orbiting freecam {degrees} degrees from {origin_pos} around {xyz} over {time} seconds')
-            await orbit(camera, origin_pos, xyz, degrees, time, )
+            await orbit(camera, origin_pos, xyz, degrees, time)
 
         case 'lookat':
             logger.debug(f'Pointing freecam at {xyz}')

@@ -578,6 +578,7 @@ async def main():
 			p.title = 'Wizard101'
 			if await p.game_client.is_freecam():
 				await p.camera_elastic()
+
 			else:
 				camera: ElasticCameraController = await p.game_client.elastic_camera_controller()
 				client_object = await p.body.parent_client_object()
@@ -588,6 +589,8 @@ async def main():
 				await camera.write_min_distance(150.0)
 				await camera.write_max_distance(450.0)
 				await camera.write_zoom_resolution(150.0)
+
+			await p.body.write_scale(1.0)
 
 			try:
 				await p.mouse_handler.deactivate_mouseless()
@@ -1515,10 +1518,13 @@ async def main():
 								command_data: str = com.data
 
 								async def run_bot(command_data: str = command_data):
+									logger.debug('Started Bot')
 									while True:
 										split_commands = command_data.split('\n')
 										for command_str in split_commands:
 											await parse_command(walker.clients, command_str)
+
+										await asyncio.sleep(1)
 
 								async def try_bot():
 									try:
@@ -1535,7 +1541,12 @@ async def main():
 							case deimosgui.GUICommandType.KillBot:
 								if bot_task is not None:
 									bot_task.cancel()
+									logger.debug('Bot Killed')
 									bot_task = None
+
+							case deimosgui.GUICommandType.SetScale:
+								desired_scale = param_input(com.data, 1.0)
+								await asyncio.gather(*[client.body.write_scale(desired_scale) for client in walker.clients])
 
 				except queue.Empty:
 					pass
