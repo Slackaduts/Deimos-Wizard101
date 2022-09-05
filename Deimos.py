@@ -659,7 +659,8 @@ async def main():
 		global questing_status
 		if not freecam_status:
 			questing_status ^= True
-			p.questing_status ^= True
+			for p in walker.clients:
+				p.questing_status ^= True
 
 			if p.questing_status:
 				p.sigil_status = False
