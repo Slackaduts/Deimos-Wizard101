@@ -1857,8 +1857,7 @@ class Quester():
                         await click_window_by_path(self.client, cancel_chest_roll_path)
 
                     current_pos = await self.client.body.position()
-                    if await is_visible_by_path(self.client, npc_range_path) and calc_Distance(quest_xyz,
-                                                                                               current_pos) < 750.0:
+                    if await is_visible_by_path(self.client, npc_range_path) and calc_Distance(quest_xyz, current_pos) < 750.0:
                         # Handles interactables
                         sigil_msg_check = await self.read_popup_(self.client)
                         if "to enter" in sigil_msg_check.lower():
