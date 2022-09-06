@@ -316,6 +316,12 @@ class Quester():
                         split1_qst = unsplitted.split("<center>Gather ")
                         if not len(split1_qst) > 1:
                             split1_qst = unsplitted.split("<center>Destroy ")
+                            if not len(split1_qst) > 1:
+                                split1_qst = unsplitted.split("<center>Smash ")
+                                if not len(split1_qst) > 1:
+                                    split1_qst = unsplitted.split("<center>Repair ")
+                                    if not len(split1_qst) > 1:
+                                        split1_qst = unsplitted.split("<center>Free ")
 
         print(split1_qst)
         try:
@@ -328,17 +334,19 @@ class Quester():
         # "Cog", "Triton Avenue" and "(0 of 3)" the rest is static
         # <center>Collect Cog in Triton Avenue (0 of 3)</center>
 
-        split1_amt = unsplitted.split(" (")
-        split2_amt = split1_amt[1].replace(")</center>", "")
-        amount_to_get_parsed = split2_amt.split("of ")[1]  # Parsing the amount of stuff to pick up
-        amount_gotten_parsed = split2_amt.split(" of")[0]  # Parsing the amount of stuff that has been picked up
+        if "(" in unsplitted:
+            split1_amt = unsplitted.split(" (")
+            split2_amt = split1_amt[1].replace(")</center>", "")
 
+            amount_to_get_parsed = split2_amt.split("of ")[1]  # Parsing the amount of stuff to pick up
+            amount_gotten_parsed = split2_amt.split(" of")[0]  # Parsing the amount of stuff that has been picked up
         # some collect quests do not have numbers (ex: 0 / 6) - for these only one item must be picked up
-        # while this does fix collects for these quests, it can cause non - collects to be read as collects
-        # except:
-        #     #print(traceback.print_exc())
-        #     amount_to_get_parsed = 1
-        #     amount_gotten_parsed = 0
+        else:
+            split2_amt = unsplitted.replace("</center>", "")
+
+            amount_to_get_parsed = 1
+            amount_gotten_parsed = 0
+
         b = f"{amount_gotten_parsed} / {amount_to_get_parsed}"
         return questnameparsed, b
 
@@ -809,7 +817,7 @@ class Quester():
                 for i in range(5):
                     await asyncio.gather(*[p.send_key(Keycode.PAGE_UP) for p in self.clients])
 
-                await asyncio.sleep(5.0)
+                # await asyncio.sleep(5.0)
 
                 # await asyncio.gather(*[safe_recall_teleport_mark(c, 'WizardCity/WC_Hub') for c in self.clients])
                 try:
@@ -1136,6 +1144,7 @@ class Quester():
                     display_name_code = await object_template.display_name()  # gets display name code
                     display_name = await self.client.cache_handler.get_langcode_name(display_name_code)  # uses display name code to get display name text
                     match = fuzz.ratio(display_name.lower(), str(quest_item_list).lower())  # fuzzywuzzy check if display name matches quest item.
+                    # print(display_name + ' : ' + str(match))
 
                     if match > 80:  # if strings match greater than 80 it means that it's most likely the item
                         while not await is_free(self.client) or self.client.entity_detect_combat_status:
@@ -1457,7 +1466,6 @@ class Quester():
                                     # we use a proxy leader client instead during battle teleports so that in the case that the hitting client is the leader, we can still teleport them last
                                     ignore_hitter = True
                                     proxy_leader_is_questing = True
-                                    print(hitting_client)
                                     if hitting_client is not None:
                                         if hitting_client in self.current_leader_client.title:
                                             ignore_hitter = False
@@ -1685,10 +1693,16 @@ class Quester():
                             # Key - truncated quest name
                             # Values - 0: time between entity respawns, 1-... : xyz locations of separate entities belonging to the quest
                             compatible_hardcoded_quests = {'collect sea foam crystal in the floating land': [35, XYZ(x=5330.3466796875, y=-1514.7388916015625, z=-499.20001220703125), XYZ(x=6373.23046875, y=-4622.3076171875, z=-534.3988647460938), XYZ(x=4883.55419921875, y=-5877.2265625, z=-518.2752685546875), XYZ(x=2708.878662109375, y=-4461.57568359375, z=-499.1999816894531)] }
-                            incompatible_hardcoded_quests = {'find submarine parts in the floating land': [40, XYZ(x=-17412.53515625, y=10505.794921875, z=-429.19927978515625), XYZ(x=-17088.447265625, y=12284.244140625, z=-410.1100769042969), XYZ(x=-21681.78125, y=11547.5966796875, z=-429.19927978515625)]}
+                            incompatible_hardcoded_quests = {
+                                'find submarine parts in the floating land': [40, XYZ(x=-17412.53515625, y=10505.794921875, z=-429.19927978515625), XYZ(x=-17088.447265625, y=12284.244140625, z=-410.1100769042969), XYZ(x=-21681.78125, y=11547.5966796875, z=-429.19927978515625)]
+                                , 'collect sea cucumbers in pitch black lake': [40, XYZ(x=-8995.333984375, y=-830.6781616210938, z=-97.31965637207031), XYZ(x=-9911.9404296875, y=823.7628173828125, z=-97.31971740722656), XYZ(x=-11497.998046875, y=-1030.2618408203125, z=-97.32334899902344), XYZ(x=-12099.0517578125, y=-4674.13623046875, z=-96.95536804199219), XYZ(x=-14215.37109375, y=-4371.93798828125, z=-97.32661437988281), XYZ(x=-14287.5556640625, y=-2835.4814453125, z=-97.3197021484375)]
+                                , 'catch vonda fish in pitch black lake': [3, XYZ(x=-10030.9912109375, y=-7925.51953125, z=-347.3206787109375)]
+                                , 'break mining equipment in tyrian gorge': [25, XYZ(x=-2529.12890625, y=-3015.832763671875, z=-906.33837890625), XYZ(x=-3181.15234375, y=-6233.39306640625, z=-924.6146240234375), XYZ(x=1495.8695068359375, y=-7369.19580078125, z=-905.3265380859375), XYZ(x=-204.098876953125, y=-8468.421875, z=236.10702514648438), XYZ(x=2508.4169921875, y=-4712.10302734375, z=-1232.338134765625)]
+                                , 'steal barrel of kermes fire in tyrian gorge': [35, XYZ(x=1352.575927734375, y=-4787.16552734375, z=-1098.1168212890625), XYZ(x=-1936.0185546875, y=-3954.15380859375, z=-1077.83837890625), XYZ(x=-1820.606201171875, y=-6331.4541015625, z=-1077.849853515625), XYZ(x=517.3740844726562, y=-7042.94287109375, z=-1077.84130859375), XYZ(x=-4628.16650390625, y=-5603.2578125, z=-906.51318359375), XYZ(x=-3216.014892578125, y=-5965.7412109375, z=-932.0715942382812), XYZ(x=-1106.3753662109375, y=-3800.721923828125, z=-905.3256225585938), XYZ(x=-451.9595031738281, y=-4547.75537109375, z=-905.325927734375)]
+                            }
 
-                            forbidden_quests = ['Break Mining Equipment in Tyrian Gorge',
-                                                'Steal Barrel of Kermes Fire in Tyrian Gorge']
+                            forbidden_quests = []  # ['Break Mining Equipment in Tyrian Gorge',
+                                                # 'Steal Barrel of Kermes Fire in Tyrian Gorge']
 
                             if any(map(truncated_quest_obj.__contains__, incompatible_hardcoded_quests.keys())):
                                 logger.debug('Hardcoded collect')
@@ -1821,89 +1835,85 @@ class Quester():
 
     # @logger.catch()
     async def auto_quest_solo(self, a, auto_pet_enabled: bool, ignore_pet_level_up=False, play_dance_game=False):
-        try:
-            if await is_free(self.client):
-                if await is_potion_needed(self.client) and await self.client.stats.current_mana() > 1 and await self.client.stats.current_hitpoints() > 1:
-                    await collect_wisps(self.client)
+        if await is_free(self.client):
+            if await is_potion_needed(self.client) and await self.client.stats.current_mana() > 1 and await self.client.stats.current_hitpoints() > 1:
+                await collect_wisps(self.client)
 
-            if await is_free(self.client):
-                await auto_potions(self.client, True, buy=True)
+        if await is_free(self.client):
+            await auto_potions(self.client, True, buy=True)
 
+            quest_xyz = await self.client.quest_position.position()
+
+            if auto_pet_enabled:
+                # client has leveled up
+                if self.client.character_level <= await self.client.stats.reference_level() or a == 1:
+                    logger.debug('Client ' + self.client.title + ' leveled up - training pet.')
+                    await auto_pet(self.client, ignore_pet_level_up, play_dance_game, questing=True)
+
+            distance = calc_Distance(quest_xyz, XYZ(0.0, 0.0, 0.0))
+            if distance > 1:
+                try:
+                    while self.client.entity_detect_combat_status:
+                        await asyncio.sleep(.1)
+
+                    await navmap_tp(self.client, quest_xyz)
+                except:
+                    # some level of error output may be required in navmap_tp, at the moment it is not producing output without traceback
+                    print(traceback.print_exc())
+
+                # confirm exit dungeon early button or wait for client to exit loading
+                await self.handle_questing_zone_change()
+
+                await asyncio.sleep(.5)
+                if await is_visible_by_path(self.client, cancel_chest_roll_path):
+                    # Handles chest reroll menu, will always cancel
+                    await click_window_by_path(self.client, cancel_chest_roll_path)
+
+                current_pos = await self.client.body.position()
+                if await is_visible_by_path(self.client, npc_range_path) and calc_Distance(quest_xyz, current_pos) < 750.0:
+                    # Handles interactables
+                    sigil_msg_check = await self.read_popup_(self.client)
+                    if "to enter" in sigil_msg_check.lower():
+                        # Handles entering dungeons
+                        await asyncio.gather(*[p.send_key(Keycode.X, 0.1) for p in self.clients])
+                        for c in self.clients:
+                            while not await c.is_loading():
+                                if await is_visible_by_path(c, dungeon_warning_path):
+                                    await c.send_key(Keycode.ENTER, 0.1)
+                                await asyncio.sleep(0.1)
+
+                        for c in self.clients:
+                            while await c.is_loading():
+                                await asyncio.sleep(0.1)
+                    else:
+                        await self.client.send_key(Keycode.X, 0.1)
+
+                        await asyncio.sleep(0.75)
+                        if await is_visible_by_path(self.client, spiral_door_teleport_path):
+                            # Handles spiral door navigation
+                            await spiral_door_with_quest(self.client)
+
+                quest_objective = await get_quest_name(self.client)
+
+                if "Photomance" in quest_objective:
+                    # Photomancy quests (WC, KM, LM)
+                    await self.client.send_key(key=Keycode.Z, seconds=0.1)
+                    await self.client.send_key(key=Keycode.Z, seconds=0.1)
+
+                if await is_visible_by_path(self.client, missing_area_path):
+                    # Handles when an area hasn't been downloaded yet
+                    while not await is_visible_by_path(self.client, missing_area_retry_path):
+                        await asyncio.sleep(0.1)
+                    await click_window_by_path(self.client, missing_area_retry_path, True)
+
+            else:
+                # Double check - sometimes wiz lies about quest position - a simple sleep and re-grabbing of the quest xyz seems to solve the issue
+                await asyncio.sleep(3.0)
                 quest_xyz = await self.client.quest_position.position()
-
-                if auto_pet_enabled:
-                    # client has leveled up
-                    if self.client.character_level <= await self.client.stats.reference_level() or a == 1:
-                        logger.debug('Client ' + self.client.title + ' leveled up - training pet.')
-                        await auto_pet(self.client, ignore_pet_level_up, play_dance_game, questing=True)
-
                 distance = calc_Distance(quest_xyz, XYZ(0.0, 0.0, 0.0))
-                if distance > 1:
-                    try:
-                        while self.client.entity_detect_combat_status:
-                            await asyncio.sleep(.1)
 
-                        await navmap_tp(self.client, quest_xyz)
-                    except:
-                        # some level of error output may be required in navmap_tp, at the moment it is not producing output without traceback
-                        print(traceback.print_exc())
-
-                    # confirm exit dungeon early button or wait for client to exit loading
-                    await self.handle_questing_zone_change()
-
-                    await asyncio.sleep(.5)
-                    if await is_visible_by_path(self.client, cancel_chest_roll_path):
-                        # Handles chest reroll menu, will always cancel
-                        await click_window_by_path(self.client, cancel_chest_roll_path)
-
-                    current_pos = await self.client.body.position()
-                    if await is_visible_by_path(self.client, npc_range_path) and calc_Distance(quest_xyz, current_pos) < 750.0:
-                        # Handles interactables
-                        sigil_msg_check = await self.read_popup_(self.client)
-                        if "to enter" in sigil_msg_check.lower():
-                            # Handles entering dungeons
-                            await asyncio.gather(*[p.send_key(Keycode.X, 0.1) for p in self.clients])
-                            for c in self.clients:
-                                while not await c.is_loading():
-                                    if await is_visible_by_path(c, dungeon_warning_path):
-                                        await c.send_key(Keycode.ENTER, 0.1)
-                                    await asyncio.sleep(0.1)
-
-                            for c in self.clients:
-                                while await c.is_loading():
-                                    await asyncio.sleep(0.1)
-                        else:
-                            await self.client.send_key(Keycode.X, 0.1)
-
-                            await asyncio.sleep(0.75)
-                            if await is_visible_by_path(self.client, spiral_door_teleport_path):
-                                # Handles spiral door navigation
-                                await spiral_door_with_quest(self.client)
-
-                    quest_objective = await get_quest_name(self.client)
-
-                    if "Photomance" in quest_objective:
-                        # Photomancy quests (WC, KM, LM)
-                        await self.client.send_key(key=Keycode.Z, seconds=0.1)
-                        await self.client.send_key(key=Keycode.Z, seconds=0.1)
-
-                    if await is_visible_by_path(self.client, missing_area_path):
-                        # Handles when an area hasn't been downloaded yet
-                        while not await is_visible_by_path(self.client, missing_area_retry_path):
-                            await asyncio.sleep(0.1)
-                        await click_window_by_path(self.client, missing_area_retry_path, True)
-
-                else:
-                    # Double check - sometimes wiz lies about quest position - a simple sleep and re-grabbing of the quest xyz seems to solve the issue
-                    await asyncio.sleep(3.0)
-                    quest_xyz = await self.client.quest_position.position()
-                    distance = calc_Distance(quest_xyz, XYZ(0.0, 0.0, 0.0))
-
-                    if distance < 1:
-                        await self.auto_collect_rewrite(self.client)
-        except:
-            print(traceback.print_exc())
-            raise
+                if distance < 1:
+                    await self.auto_collect_rewrite(self.client)
 
     async def auto_quest(self, auto_pet_enabled: bool, ignore_pet_level_up: bool, play_dance_game: bool):
         a = 1

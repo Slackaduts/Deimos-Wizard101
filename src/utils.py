@@ -5,9 +5,9 @@ import traceback
 
 import wizwalker.errors
 from wizwalker import Client, Keycode, XYZ, user32
-from wizwalker.extensions.scripting.utils import _maybe_get_named_window, _cycle_to_online_friends, _cycle_friends_list
+from wizwalker.extensions.scripting.utils import _maybe_get_named_window, _cycle_to_online_friends, _click_on_friend, _teleport_to_friend, _friend_list_entry
 from wizwalker.extensions.wizsprinter.wiz_navigator import toZone
-from wizwalker.memory import Window
+from wizwalker.memory import Window, WindowFlags
 from loguru import logger
 
 from src.paths import *
@@ -570,6 +570,20 @@ async def click_window_until_closed(client: Client, path):
 		return False
 
 
+async def refill_potions_if_needed(p: Client):
+	if await p.stats.potion_charge() < 1.0 and await p.stats.reference_level() >= 5:
+		for i in range(3):
+			await p.send_key(Keycode.PAGE_DOWN)
+
+		await refill_potions(p, mark=True, recall=False)
+
+		for i in range(3):
+			await p.send_key(Keycode.PAGE_UP)
+
+		await p.wait_for_zone_change(name='WizardCity/WC_Hub')
+		await asyncio.sleep(2.0)
+
+
 async def refill_potions(client: Client, mark: bool = False, recall: bool = True):
 	if await client.stats.reference_level() >= 5:
 		# mark if needed
@@ -708,6 +722,141 @@ async def sync_camera(client: Client, xyz: XYZ = None, yaw: float = None):
 	camera = await client.game_client.free_camera_controller()
 	await camera.write_position(xyz)
 	await camera.write_yaw(yaw)
+
+
+async def _cycle_friends_list(client, right_button, friends_list, icon, icon_list, name, current_page):
+
+	if name is not None:
+		name = name.lower()
+
+	list_text = await friends_list.maybe_text()
+
+	match = None
+	idx = 0
+
+	for idx, friend_entry in enumerate(list(_friend_list_entry.finditer(list_text))):
+		friend_icon = int(friend_entry.group("icon_index"))
+		friend_icon_list = int(friend_entry.group("icon_list"))
+		friend_name = (friend_entry.group("name")).lower()
+
+		if icon is not None and icon_list is not None and name:
+			if (
+				friend_icon == icon
+				and friend_icon_list == icon_list
+				and friend_name == name
+			):
+				match = friend_entry
+				break
+
+		elif icon is not None and icon_list is not None:
+			if friend_icon == icon and friend_icon_list == icon_list:
+				match = friend_entry
+				break
+
+		elif name:
+			if friend_name == name:
+				match = friend_entry
+				break
+
+		else:
+			raise RuntimeError("Invalid args")
+
+	if match:
+		target_page = (idx // 10) + 1
+
+		if target_page != current_page:
+			for _ in range(target_page - current_page):
+				await client.mouse_handler.click_window(right_button)
+
+	return match, idx
+
+
+# TODO: add error if friend is busy message pops up
+async def teleport_to_friend_from_list(
+	client, *, icon_list: int = None, icon_index: int = None, name: str = None
+):
+	"""
+	Teleport to a friend from the client's friend list
+
+	Args:
+		client: Client to teleport
+		icon_list: Icon list the icon is from (1 or 2) or None
+		icon_index: Index of the icon or None
+		name: Name of the player or None
+	"""
+	if (
+		icon_list is None
+		and icon_index is not None
+		or icon_list is not None
+		and icon_index is None
+	):
+		raise ValueError("Icon list and icon index must both be defined or not defined")
+
+	if all(i is None for i in (icon_list, icon_index, name)):
+		raise ValueError("Must specify icon_list and icon_index or name or all")
+
+	try:
+		friends_window = await _maybe_get_named_window(
+			client.root_window, "NewFriendsListWindow"
+		)
+	except ValueError:
+		# friend's list isn't open so open it
+		friend_button = await _maybe_get_named_window(client.root_window, "btnFriends")
+		await client.mouse_handler.click_window(friend_button)
+
+		friends_window = await _maybe_get_named_window(
+			client.root_window, "NewFriendsListWindow"
+		)
+	else:
+		if not await friends_window.is_visible():
+			# friend's list isn't open so open it
+			friend_button = await _maybe_get_named_window(client.root_window, "btnFriends")
+			await client.mouse_handler.click_window(friend_button)
+
+	await _cycle_to_online_friends(client, friends_window)
+
+	friends_list_window = await _maybe_get_named_window(friends_window, "listFriends")
+	friends_list_text = await friends_list_window.maybe_text()
+
+	# no friends online
+	if not friends_list_text:
+		raise ValueError("No friends online")
+
+	right_button = await _maybe_get_named_window(friends_window, "btnArrowDown")
+	page_number = await _maybe_get_named_window(friends_window, "PageNumber")
+
+	page_number_text = await page_number.maybe_text()
+
+	current_page, _ = map(
+		int,
+		page_number_text.replace("<center>", "")
+		.replace("</center>", "")
+		.replace(" ", "")
+		.split("/"),
+	)
+
+	friend, friend_index = await _cycle_friends_list(
+		client,
+		right_button,
+		friends_list_window,
+		icon_index,
+		icon_list,
+		name,
+		current_page,
+	)
+
+	if friend is None:
+		raise ValueError(
+			f"Could not find friend with icon {icon_index} icon list {icon_list} and/or name {name}"
+		)
+
+	await _click_on_friend(client, friends_list_window, friend_index)
+
+	character_window = await _maybe_get_named_window(client.root_window, "wndCharacter")
+	await _teleport_to_friend(client, character_window)
+
+	# close friends window
+	await friends_window.write_flags(WindowFlags(2147483648))
 
 
 # returns True if all provided friends are in the list, and False if any single friend is not

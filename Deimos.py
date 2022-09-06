@@ -107,7 +107,7 @@ def read_config(config_name : str):
 	auto_updating = parser.getboolean('settings', 'auto_updating', fallback=True)
 	speed_multiplier = parser.getfloat('settings', 'speed_multiplier', fallback=5.0)
 	wiz_path = parser.get('settings', 'wiz_path', fallback=None)
-	use_potions = parser.get('settings', 'use_potions', fallback=True)
+	use_potions = parser.getboolean('settings', 'use_potions', fallback=True)
 	rpc_status = parser.getboolean('settings', 'rich_presence', fallback=True)
 	drop_status = parser.getboolean('settings', 'drop_logging', fallback=True)
 
@@ -927,7 +927,7 @@ async def main():
 			just_left_combat = False
 			just_entered_combat = False
 			while True:
-				await asyncio.sleep(0.2)
+				await asyncio.sleep(.5)
 
 				if p.questing_status:
 					if p.just_entered_combat is not None:
@@ -999,7 +999,6 @@ async def main():
 
 													if hitter_client is not None:
 														if all_already_in_battle and hitter_client in c.title:
-															print('already in battle')
 															# slight delay to ensure hitter makes it to the circle last
 															await asyncio.sleep(1.0)
 
@@ -1475,10 +1474,11 @@ async def main():
 	async def potion_usage_loop():
 		# Auto potion usage on a per client basis.
 		async def async_potion(client: Client):
-			while True:
-				await asyncio.sleep(1)
-				if await is_free(client) and not any([freecam_status, client.sigil_status, client.questing_status]):
-					await auto_potions(client, buy = False)
+			if use_potions:
+				while True:
+					await asyncio.sleep(1)
+					if await is_free(client) and not any([freecam_status, client.sigil_status, client.questing_status]):
+						await auto_potions(client, buy = False)
 
 		await asyncio.gather(*[async_potion(p) for p in walker.clients])
 

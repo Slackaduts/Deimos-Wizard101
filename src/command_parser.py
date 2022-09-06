@@ -1,12 +1,15 @@
+import traceback
+from asyncio import CancelledError
 from typing import List, Tuple, Coroutine
 import asyncio
 from wizwalker import Client, XYZ, Orient, Keycode
 from wizwalker.errors import HookNotActive
+from wizwalker.extensions.wizsprinter.wiz_navigator import toZone
 from wizwalker.memory.memory_objects.camera_controller import CameraController
-from wizwalker.extensions.scripting import teleport_to_friend_from_list
+from src.utils import teleport_to_friend_from_list
 from src.sprinty_client import SprintyClient
 from src.gui_inputs import is_numeric, param_input
-from src.utils import auto_potions_force_buy, use_potion, is_free, logout_and_in, click_window_by_path, attempt_activate_mouseless, attempt_deactivate_mouseless, wait_for_visible_by_path
+from src.utils import auto_potions_force_buy, use_potion, is_free, logout_and_in, click_window_by_path, attempt_activate_mouseless, attempt_deactivate_mouseless, wait_for_visible_by_path, refill_potions, refill_potions_if_needed
 from src.camera_utils import glide_to, point_to_xyz, rotating_glide_to, orbit
 import re
 from loguru import logger
@@ -97,120 +100,164 @@ async def parse_locations(clients: List[Client], commands: List[str]) -> List[XY
 
 
 async def parse_command(clients: List[Client], command_str: str):
+    all_clients = clients.copy()
     command_str = command_str.replace(', ', ',')
-    command_str = command_str.replace('_', '')
+
+    if 'tozone' not in command_str and 'to_zone' not in command_str:
+        command_str = command_str.replace('_', '')
+
     split_command = split_line(command_str)
 
-    client_str = split_command[0].replace(' ', '')
+    match split_command[0].lower():
+        case 'kill':
+            raise CancelledError
 
-    if ':' in client_str:
-        exclude = False
-        if 'except' in client_str:
-            client_str = client_str.replace('except', '')
-            exclude = True
-
-        split_clients = client_str.split(':')
-        matched_clients = [client_from_titles(clients.copy(), title) for title in split_clients]
-
-        if exclude:
-            clients = [client for client in clients.copy() if client not in matched_clients]
-
-        else:
-            clients = matched_clients
-
-    elif is_numeric(client_str[1]):
-        clients = [client_from_titles(clients, client_str)]
-
-    match split_command[1].lower():
-        case 'teleport' | 'tp' | 'setpos':
-            xyzs = await parse_locations(clients, split_command)
-            await asyncio.gather(*[client.teleport(xyz) for client, xyz in zip(clients, xyzs)])
-
-        case 'walkto' | 'goto':
-            xyzs = await parse_locations(clients, split_command)
-            await asyncio.gather(*[client.goto(xyz.x, xyz.y) for client, xyz in zip(clients, xyzs)])
-
-        case 'sendkey' | 'press' | 'presskey':
-            key = split_command[2]
-            time = 0.1
-            if len(split_command) >= 4:
-                time = float(split_command[3])
-
-            await asyncio.gather(*[await client.send_key(Keycode[key], time) for client in clients])
-
-        case 'waitfordialog' | 'waitfordialogue':
-            await asyncio.gather(*[wait_for_coro(client.is_in_dialog) for client in clients])
-
-            if split_command[1].lower() == 'completion':
-                await asyncio.gather(*[wait_for_coro(client.is_in_dialog, True) for client in clients])
-
-        case 'waitforbattle' | 'waitforcombat':
-            await asyncio.gather(*[wait_for_coro(client.in_battle) for client in clients])
-
-            if split_command[-1].lower() == 'completion':
-                await asyncio.gather(*[wait_for_coro(client.in_battle, True) for client in clients])
-
-        case 'waitforzonechange':
-            await asyncio.gather(*[client.wait_for_zone_change() for client in clients])
-
-            if split_command[-1].lower() == 'completion':
-                await asyncio.gather(*[wait_for_coro(client.is_loading, True) for client in clients])
-
-        case 'waitforfree':
-            async def _wait_for_free(client: Client, wait_for_not: bool = False, interval: float = 0.25):
-                if wait_for_not:
-                    while await is_free(client):
-                        await asyncio.sleep(interval)
-
-                else:
-                    while not await is_free(client):
-                        await asyncio.sleep(interval)
-
-            await asyncio.gather(*[_wait_for_free(client) for client in clients])
-
-            if split_command[-1].lower() == 'completion':
-                await asyncio.gather(*[_wait_for_free(client, True) for client in clients])
-
-        case 'usepotion':
-            await asyncio.gather(*[use_potion(client) for client in clients])
-
-        case 'buypotions' | 'refillpotions' | 'buypots' | 'refillpots':
-            await asyncio.gather(*[auto_potions_force_buy(client, True) for client in clients])
-
-        case 'sleep' | 'wait' | 'delay':
+        case 'sleep':
             await asyncio.sleep(float(split_command[-1]))
 
-        case 'logoutandin' | 'relog':
-            await asyncio.gather(*[logout_and_in(client) for client in clients])
-
-        case 'click':
-            await asyncio.gather(*[attempt_activate_mouseless(client) for client in clients])
-            await asyncio.gather(*[client.mouse_handler.click(int(split_command[2], int(split_command[3]))) for client in clients])
-            await asyncio.gather(*[attempt_deactivate_mouseless(client) for client in clients])
-
-        case 'clickwindow':
-            desired_path = find_path(split_command)
-            await asyncio.gather(*[await click_window_by_path(client, desired_path, True) for client in clients])
-
-        case 'waitforwindow' | 'waitforpath':
-            desired_path = find_path(split_command)
-            await asyncio.gather(*[wait_for_visible_by_path(client, desired_path) for client in clients])
-            if split_command[-1].lower() == 'completion':
-                await asyncio.gather(*[wait_for_visible_by_path(client, desired_path, True) for client in clients])
-
-        case 'friendtp' | 'friendteleport':
-            clients = [c for c in clients.copy() if c.title != clients[0].title]
-            await asyncio.gather(*[teleport_to_friend_from_list(client) for client in clients])
-
-        case 'entitytp' | 'entityteleport':
-            await asyncio.gather(*[SprintyClient(client).tp_to_closest_by_vague_name(split_command[2]) for client in clients])
-
-        case 'log' | 'debug' | 'print':
-            relevant_string: str = ' '.join(split_command[2:])
-            logger.debug(relevant_string)
-
         case _:
-            await asyncio.sleep(0.25)
+            client_str = split_command[0].replace(' ', '')
+            exclude = False
+            if 'except' in client_str:
+                client_str = client_str.replace('except', '')
+                exclude = True
+
+            if 'mass' not in client_str:
+                if ':' in client_str:
+                    split_clients = client_str.split(':')
+                    provided_clients = [client_from_titles(all_clients.copy(), title) for title in split_clients]
+                else:
+                    provided_clients = [client_from_titles(all_clients, client_str)]
+
+                if is_numeric(client_str[1]):
+                    if exclude:
+                        clients = [client for client in all_clients.copy() if client not in provided_clients]
+                    else:
+                        clients = provided_clients
+
+
+                match split_command[1].lower():
+
+                    case 'teleport' | 'tp' | 'setpos':
+                        if split_command[2] == 'closestmob':
+                            await asyncio.gather(*[SprintyClient(p).tp_to_closest_mob() for p in clients])
+                        else:
+                            client_location = None
+                            for p in all_clients:
+                                if p.title == split_command[2]:
+                                    client_location = await p.body.position()
+                                    await asyncio.gather(*[client.teleport(client_location) for client in clients])
+                                    break
+
+                            # a client title was not provided - user likely listed an actual XYZ coordinate
+                            if client_location is None:
+                                xyzs = await parse_locations(clients, split_command)
+                                await asyncio.gather(*[client.teleport(xyz) for client, xyz in zip(clients, xyzs)])
+
+                    case 'walkto' | 'goto':
+                        xyzs = await parse_locations(clients, split_command)
+                        await asyncio.gather(*[client.goto(xyz.x, xyz.y) for client, xyz in zip(clients, xyzs)])
+
+                    case 'sendkey' | 'press' | 'presskey':
+                        key = split_command[2]
+                        time = 0.1
+                        if len(split_command) >= 4:
+                            time = float(split_command[3])
+
+                        await asyncio.gather(*[client.send_key(Keycode[key], time) for client in clients])
+
+                    case 'waitfordialog' | 'waitfordialogue':
+                        await asyncio.gather(*[wait_for_coro(client.is_in_dialog) for client in clients])
+
+                        if split_command[1].lower() == 'completion':
+                            await asyncio.gather(*[wait_for_coro(client.is_in_dialog, True) for client in clients])
+
+                    case 'waitforbattle' | 'waitforcombat':
+                        await asyncio.gather(*[wait_for_coro(client.in_battle) for client in clients])
+
+                        if split_command[-1].lower() == 'completion':
+                            await asyncio.gather(*[wait_for_coro(client.in_battle, True) for client in clients])
+
+                    case 'waitforzonechange':
+                        await asyncio.gather(*[client.wait_for_zone_change() for client in clients])
+
+                        if split_command[-1].lower() == 'completion':
+                            await asyncio.gather(*[wait_for_coro(client.is_loading, True) for client in clients])
+
+                    case 'waitforfree':
+                        async def _wait_for_free(client: Client, wait_for_not: bool = False, interval: float = 0.25):
+                            if wait_for_not:
+                                while await is_free(client):
+                                    await asyncio.sleep(interval)
+
+                            else:
+                                while not await is_free(client):
+                                    await asyncio.sleep(interval)
+
+                        await asyncio.gather(*[_wait_for_free(client) for client in clients])
+
+                        if split_command[-1].lower() == 'completion':
+                            await asyncio.gather(*[_wait_for_free(client, True) for client in clients])
+
+                    case 'usepotion':
+                        if len(split_command) > 3:
+                            await asyncio.gather(*[SprintyClient(p).use_potion_if_needed(health_percent=int(split_command[2]), mana_percent=int(split_command[3]), handle_hooks=True) for p in clients])
+                        else:
+                            await asyncio.gather(*[use_potion(client) for client in clients])
+
+                    case 'buypotions' | 'refillpotions' | 'buypots' | 'refillpots':
+                        if len(split_command) > 2:
+                            if split_command[2] == 'ifneeded':
+                                await asyncio.gather(*[refill_potions_if_needed(client) for client in clients])
+                        else:
+                            await asyncio.gather(*[refill_potions(client, mark=True, recall=True) for client in clients])
+
+                    case 'logoutandin' | 'relog':
+                        await asyncio.gather(*[logout_and_in(client) for client in clients])
+
+                    case 'click':
+                        await asyncio.gather(*[attempt_activate_mouseless(client) for client in clients])
+                        await asyncio.gather(*[client.mouse_handler.click(int(split_command[2], int(split_command[3]))) for client in clients])
+                        await asyncio.gather(*[attempt_deactivate_mouseless(client) for client in clients])
+
+                    case 'clickwindow':
+                        desired_path = find_path(split_command)
+                        await asyncio.gather(*[await click_window_by_path(client, desired_path, True) for client in clients])
+
+                    case 'waitforwindow' | 'waitforpath':
+                        desired_path = find_path(split_command)
+                        await asyncio.gather(*[wait_for_visible_by_path(client, desired_path) for client in clients])
+                        if split_command[-1].lower() == 'completion':
+                            await asyncio.gather(*[wait_for_visible_by_path(client, desired_path, True) for client in clients])
+
+                    case 'friendtp' | 'friendteleport':
+                        await asyncio.gather(*[client.mouse_handler.activate_mouseless() for client in clients])
+                        await asyncio.sleep(.25)
+
+                        if split_command[2] == 'icon':
+                            await asyncio.gather(*[teleport_to_friend_from_list(client, icon_list=2, icon_index=0) for client in clients])
+                        else:
+                            await asyncio.gather(*[teleport_to_friend_from_list(client, name=split_command[2]) for client in clients])
+
+                        await asyncio.gather(*[client.mouse_handler.deactivate_mouseless() for client in clients])
+
+                    case 'entitytp' | 'entityteleport':
+                        await asyncio.gather(*[SprintyClient(client).tp_to_closest_by_vague_name(split_command[2]) for client in clients])
+
+                    case 'tozone' | 'to_zone':
+                        zoneChanged = await toZone(clients, split_command[2])
+
+                        if zoneChanged == 0:
+                            logger.debug('Reached destination zone: ' + await clients[0].zone_name())
+                        else:
+                            logger.error('Failed to go to zone.  It may be spelled incorrectly, or may not be supported.')
+
+                    case 'log' | 'debug' | 'print':
+                        relevant_string: str = ' '.join(split_command[2:])
+                        logger.debug(relevant_string)
+
+                    case _:
+                        await asyncio.sleep(0.25)
 
     await asyncio.sleep(0)
 
