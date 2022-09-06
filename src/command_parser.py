@@ -6,10 +6,10 @@ from wizwalker import Client, XYZ, Orient, Keycode
 from wizwalker.errors import HookNotActive
 from wizwalker.extensions.wizsprinter.wiz_navigator import toZone
 from wizwalker.memory.memory_objects.camera_controller import CameraController
-from src.utils import teleport_to_friend_from_list
+
 from src.sprinty_client import SprintyClient
 from src.gui_inputs import is_numeric, param_input
-from src.utils import auto_potions_force_buy, use_potion, is_free, logout_and_in, click_window_by_path, attempt_activate_mouseless, attempt_deactivate_mouseless, wait_for_visible_by_path, refill_potions, refill_potions_if_needed
+from src.utils import teleport_to_friend_from_list, auto_potions_force_buy, use_potion, is_free, logout_and_in, click_window_by_path, attempt_activate_mouseless, attempt_deactivate_mouseless, wait_for_visible_by_path, refill_potions, refill_potions_if_needed
 from src.camera_utils import glide_to, point_to_xyz, rotating_glide_to, orbit
 import re
 from loguru import logger

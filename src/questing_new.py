@@ -797,40 +797,50 @@ class Quester():
 
 
     async def heal_and_handle_potions(self, questing_friend_tp: bool):
-        for p in self.clients:
-            if await is_free(p):
-                if await is_potion_needed(p) and await p.stats.current_mana() > 1 and await p.stats.current_hitpoints() > 1:
-                    await collect_wisps(p)
-
-            if await is_free(p):
-                if await is_potion_needed(p, minimum_mana=16):
-                    await use_potion(p)
+        await asyncio.gather(*[self.collect_wisps(p) for p in self.clients])
+        await asyncio.gather(*[self.guarantee_use_potion(p) for p in self.clients])
 
         for p in self.clients:
             # If we have less than 1 potion left, send all clients to get potions (even if some don't need it).  Only do this once per questing loop
             if await p.stats.potion_charge() < 1.0 and await p.stats.reference_level() >= 5:
-                for i in range(3):
-                    await asyncio.gather(*[p.send_key(Keycode.PAGE_DOWN) for p in self.clients])
+                if await p.zone_name() != 'WizardCity/WC_Hub':
+                    original_mana = await p.stats.current_mana()
+                    while await p.stats.current_mana() == original_mana:
+                        logger.debug(f'Client {p.title} - Marking Location')
+                        await p.send_key(Keycode.PAGE_DOWN, 0.1)
+                        await asyncio.sleep(.75)
 
-                await asyncio.gather(*[refill_potions(p, mark=False, recall=False) for p in self.clients])
-
-                for i in range(5):
-                    await asyncio.gather(*[p.send_key(Keycode.PAGE_UP) for p in self.clients])
-
-                # await asyncio.sleep(5.0)
-
-                # await asyncio.gather(*[safe_recall_teleport_mark(c, 'WizardCity/WC_Hub') for c in self.clients])
-                try:
-                    logger.debug('Waiting for zone change on all clients.')
-                    await safe_wait_for_zone_change(p, name='WizardCity/WC_Hub', handle_hooks_if_needed=True)
-                # something went wrong when placing the mark
-                except LoadingScreenNotFound:
-                    pass
-                # our teleport mark was in a closed off area / instance
-                except FriendBusyOrInstanceClosed:
-                    pass
-
+                await asyncio.gather(*[refill_potions(c, mark=False, recall=False, original_zone=await c.zone_name()) for c in self.clients])
+                await asyncio.gather(*[self.gather_clients_from_potion_buy(c) for c in self.clients])
                 break
+
+    async def collect_wisps(self, p: Client):
+        if await is_free(p):
+            if await is_potion_needed(p) and await p.stats.current_mana() > 1 and await p.stats.current_hitpoints() > 1:
+                await collect_wisps(p)
+
+    async def guarantee_use_potion(self, p: Client):
+        if await is_free(p):
+            if await is_potion_needed(p, minimum_mana=16):
+                original_potion_count = await p.stats.potion_charge()
+                while await p.stats.potion_charge() == original_potion_count:
+                    logger.debug(f'Client {p.title} - Using potion')
+                    await click_window_by_path(p, potion_usage_path, True)
+                    await asyncio.sleep(.6)
+
+    async def gather_clients_from_potion_buy(self, p: Client):
+        try:
+            await p.send_key(Keycode.PAGE_UP)
+            logger.debug('Waiting for zone change on all clients.')
+            await safe_wait_for_zone_change(p, name='WizardCity/WC_Hub', handle_hooks_if_needed=True)
+        # something went wrong when placing the mark or recalling / our teleport mark was in a closed off area / instance
+        # send all to the commons and let auto quest handle the rest
+        except (LoadingScreenNotFound, FriendBusyOrInstanceClosed):
+            for c in self.clients:
+                while await c.zone_name() != 'WizardCity/WC_Hub':
+                    await navigate_to_ravenwood(c)
+                    await navigate_to_commons_from_ravenwood(c)
+                    await asyncio.sleep(.5)
 
     # if followers in different zone, try X presses (for X zone changes that require delayed presses between clients)
     async def X_press_zone_recorrect(self):

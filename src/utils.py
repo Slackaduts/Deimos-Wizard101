@@ -360,9 +360,16 @@ async def navigate_to_ravenwood(client: Client):
 	# Navigate through bartleby if needed
 	if bartleby_navigation:
 		await client.goto(-9.711, -2987.212)
-		await client.send_key(Keycode.W, 0.1)
-		await wait_for_zone_change(client)
+		await client.send_key(Keycode.W, 0.3)
 
+		while True:
+			try:
+				await safe_wait_for_zone_change(client, name='WizardCity/WC_Ravenwood_Teleporter', handle_hooks_if_needed=True)
+				break
+			# backup since the above method fails sometimes
+			except LoadingScreenNotFound:
+				await client.teleport(XYZ(x=18.072603225708008, y=-3250.805419921875, z=244.01708984375))
+				await client.send_key(Keycode.W, 0.5)
 
 
 async def navigate_to_commons_from_ravenwood(client: Client):
@@ -378,32 +385,64 @@ async def navigate_to_potions(client: Client):
 	# Teleport to hilda brewer
 	Hilda_XYZ = XYZ(-4398.70654296875, 1016.1954345703125, 229.00079345703125)
 	await client.teleport(Hilda_XYZ)
-	await client.send_key(Keycode.S, 0.1)
+	# await client.send_key(Keycode.S, 0.1)
 
 
-async def buy_potions(client: Client, recall: bool = True):
-	# buy potions and close the potions menu, and recall if needed
-	for i in range(2):
-		while not await is_visible_by_path(client, potion_shop_base_path):
-			await client.send_key(Keycode.X, 0.1)
-		await asyncio.sleep(0.4)
-		await click_window_by_path(client, potion_fill_all_path, True)
-		await asyncio.sleep(0.4)
-		await click_window_by_path(client, potion_buy_path, True)
-		await asyncio.sleep(0.4)
-		while await is_visible_by_path(client, potion_shop_base_path):
-			await asyncio.sleep(0.4)
-			await click_window_by_path(client, potion_exit_path, True)
-			await asyncio.sleep(0.5)
-		if i == 0:
-			await use_potion(client)
-			await asyncio.sleep(0.5)
+async def buy_potions(client: Client, recall: bool = True, original_zone=None):
+	try:
+		await client.mouse_handler.activate_mouseless()
+
+		# buy potions and close the potions menu, and recall if needed
+		for i in range(2):
+			original_potion_count = await client.stats.potion_charge()
+			while await client.stats.potion_charge() == original_potion_count:
+				while not await is_visible_by_path(client, potion_shop_base_path):
+					await client.send_key(Keycode.X, 0.1)
+				await asyncio.sleep(0.5)
+
+				await click_window_by_path(client, potion_fill_all_path)
+				await asyncio.sleep(0.25)
+
+				await click_window_by_path(client, potion_buy_path)
+				await asyncio.sleep(0.25)
+
+				while await is_visible_by_path(client, potion_shop_base_path):
+					await click_window_by_path(client, potion_exit_path)
+					await asyncio.sleep(0.125)
+
+				await asyncio.sleep(.25)
+
+			if i == 0:
+				if await client.stats.potion_charge() >= 1.0:
+					original_potion_count = await client.stats.potion_charge()
+
+					while await client.stats.potion_charge() == original_potion_count:
+						logger.debug(f'Client {client.title} - Using potion')
+						await click_window_by_path(client, potion_usage_path)
+						await asyncio.sleep(.5)
+
+		await client.mouse_handler.deactivate_mouseless()
+	except:
+		print(traceback.print_exc())
+		await asyncio.sleep(1000000)
 
 	# Put an extra check here in case Starrfox becomes a time traveller or someone is using cheat engine at 100x speed, causing this logic to somehow fail
-	if recall and not await client.is_loading():
-		await client.send_key(Keycode.PAGE_UP, 0.1)
-		await wait_for_zone_change(client)
-		await client.send_key(Keycode.PAGE_DOWN, 0.1)
+	if recall:
+		current_zone = await client.zone_name()
+
+		# only recall if we're actually going to a new zone
+		if original_zone != current_zone:
+			while True:
+				await client.send_key(Keycode.PAGE_UP, 0.1)
+				await client.send_key(Keycode.PAGE_UP, 0.1)
+
+				try:
+					await safe_wait_for_zone_change(client, name=current_zone, handle_hooks_if_needed=True)
+					break
+				# if we timed out, loop and try again
+				except LoadingScreenNotFound:
+					pass
+
 
 
 async def to_world(clients, destinationWorld):
@@ -584,11 +623,17 @@ async def refill_potions_if_needed(p: Client):
 		await asyncio.sleep(2.0)
 
 
-async def refill_potions(client: Client, mark: bool = False, recall: bool = True):
+async def refill_potions(client: Client, mark: bool = False, recall: bool = True, original_zone=None):
 	if await client.stats.reference_level() >= 5:
 		# mark if needed
 		if mark:
-			await client.send_key(Keycode.PAGE_DOWN, 0.1)
+			if await client.zone_name() != 'WizardCity/WC_Hub':
+				original_mana = await client.stats.current_mana()
+				while await client.stats.current_mana() == original_mana:
+					logger.debug(f'Client {client.title} - Marking Location')
+					await client.send_key(Keycode.PAGE_DOWN, 0.1)
+					await asyncio.sleep(.75)
+
 		# Navigate to ravenwood
 		await navigate_to_ravenwood(client)
 		# Navigate to commons from ravenwood
@@ -596,7 +641,7 @@ async def refill_potions(client: Client, mark: bool = False, recall: bool = True
 		# Navigate to hilda brewer
 		await navigate_to_potions(client)
 		# Buy potions
-		await buy_potions(client, recall)
+		await buy_potions(client, recall, original_zone=original_zone)
 
 
 async def auto_potions(client: Client, mark: bool = False, minimum_mana: int = 16, buy: bool = True):
