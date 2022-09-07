@@ -823,7 +823,7 @@ class Quester():
         if await is_free(p):
             if await is_potion_needed(p, minimum_mana=16):
                 original_potion_count = await p.stats.potion_charge()
-                while await p.stats.potion_charge() == original_potion_count:
+                while await p.stats.potion_charge() == original_potion_count and original_potion_count >= 1:
                     logger.debug(f'Client {p.title} - Using potion')
                     await click_window_by_path(p, potion_usage_path, True)
                     await asyncio.sleep(.6)
