@@ -5,6 +5,7 @@ spiral_door_teleport_path = ['WorldView', '', 'messageBoxBG', 'ControlSprite', '
 spiral_door_world_path = ['WorldView', '', 'messageBoxBG', 'ControlSprite']
 spiral_door_selected_path = ['WorldView', '', 'messageBoxBG', 'ControlSprite', 'selectedWorldCheckMark']
 spiral_door_path = ['WorldView', '', 'messageBoxBG', 'ControlSprite', 'optionWindow']
+spiral_door_title_path = ['WorldView', '', 'messageBoxBG', 'ControlSprite', 'streamTitle']
 
 # Potion Buying/Usage Paths
 potion_shop_base_path = ['WorldView', 'main']

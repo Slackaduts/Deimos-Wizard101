@@ -30,7 +30,7 @@ class Quester():
         self.leader_pid = leader_pid
         self.current_leader_client = client
         self.current_leader_pid = leader_pid
-
+    
     async def read_popup_(self, p: Client):
         try:
             popup_text_path = await get_window_from_path(p.root_window, popup_msgtext_path)
@@ -878,13 +878,96 @@ class Quester():
         #         print('2')
         #         await asyncio.sleep(0.1)
 
+    async def interactiveTeleportToZone(client: Client, menuButtonNumber):
+        #credits cowhunter
+        while not await client.is_in_npc_range():
+            pass
+
+        while await client.is_in_npc_range():
+            await client.send_key(Keycode.X, 0.1)
+            await asyncio.sleep(.4)
+
+        await asyncio.sleep(.4)
+        await client.mouse_handler.activate_mouseless()
+
+        # 4 buttons per page - menuButtonNum / 4 rounded up to nearest whole number equals the page that the button is on
+        actualButtonToClick = menuButtonNumber
+
+        if menuButtonNumber > 4:
+            pageNum = int(math.ceil(menuButtonNumber / 4)) - 1
+            # click to correct page
+            if pageNum > 0:
+                for i in range(pageNum):
+                    await client.mouse_handler.click_window_with_name('rightButton')
+                    await asyncio.sleep(0.4)
+
+            # the actual button number on the page, considering that there are 4 buttons per page (0 -> 3)
+            actualButtonToClick = ((menuButtonNumber) - ((pageNum) * 4))
+
+        await client.mouse_handler.click_window_with_name('opt' + str(actualButtonToClick - 1))
+        await asyncio.sleep(.4)
+        await client.mouse_handler.click_window_with_name('teleportButton')
+        await client.wait_for_zone_change()
+
+        await client.mouse_handler.deactivate_mouseless()
+        
+    async def read_spiral_door_title(self, client: Client):
+        try:
+            title_text_path = await get_window_from_path(client.root_window, spiral_door_title_path)
+            title = await title_text_path.maybe_text()
+        except:
+            title = ""
+            
+        return title
+    
+    async def read_quest_txt(self, client: Client):
+        try:
+            quest_name_path = await get_window_from_path(client.root_window, quest_name_path)
+            quest_name = await quest_name_path.maybe_text()
+        except:
+            quest_name = ""
+            
+        return quest_name
+        
+    async def parse_quest_zone(self, str: str):
+        # # <center>Collect Cog in Triton Avenue (0 of 3)</center>
+        center = str.split("<center>") # ['', 'Collect Cog in Triton Avenue (0 of 3)</center>']  
+        center2 = center[1].split("</center>") #['Collect Cog in Triton Avenue (0 of 3)', '']
+        In = center2[0].split(" in ") #['Collect Cog', 'Triton Avenue (0 of 3)']
+        return In[1] #Triton Avenue (0 of 3)
+    
+    async def find_quest_zone_index(self, client: Client, door_locations: list):
+        location = self.parse_quest_zone(await self.read_quest_txt(client))
+        location = location.lower()
+        parts_of_string = location.split[" "]
+        for piece in parts_of_string:
+            if piece in door_locations:
+                for d_location in door_locations:
+                    if fuzz.partial_ratio(piece, d_location) >= 50:
+                        return door_locations.index(d_location)
+                
+    async def new_world_doors(self, client: Client):
+        streamportal_locations = ["aeriel", "zanadu","outer athanor", "inner anthanor", "sepidious", "mandalla", "reverie", "nimbus", "port aero", "husk"]
+        nanavato_locations = []
+        
+        if  "Streamportal" in self.read_spiral_door_title(client):
+            index = await self.find_quest_zone_index(client, streamportal_locations)
+            await self.interactiveTeleportToZone(client, index)
+            
+        elif "Nanavator" in self.read_spiral_door_title(client):
+            index = await self.find_quest_zone_index(client, nanavato_locations)
+            await self.interactiveTeleportToZone(client, index)
+            
     async def handle_spiral_navigation(self):
         # Handles spiral door navigation
         await spiral_door_with_quest(self.current_leader_client)
-
+        
         await asyncio.sleep(1)
         leader_world = (await self.current_leader_client.zone_name()).split('/', 1)[0]
-
+        
+        #handles steam link
+        #await self.new_world_doors(self.current_leader_client)
+        #quest_name_path
         # Follower clients use separate spiral door navigation than leader (since they may not have the same quest)
         for c in self.clients:
             if c.process_id != self.current_leader_pid:
@@ -1845,6 +1928,7 @@ class Quester():
 
     # @logger.catch()
     async def auto_quest_solo(self, a, auto_pet_enabled: bool, ignore_pet_level_up=False, play_dance_game=False):
+        print(await self.read_spiral_door_title(self.client))
         if await is_free(self.client):
             if await is_potion_needed(self.client) and await self.client.stats.current_mana() > 1 and await self.client.stats.current_hitpoints() > 1:
                 await collect_wisps(self.client)
