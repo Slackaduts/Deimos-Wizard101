@@ -12,7 +12,7 @@ from loguru import logger
 
 from src.paths import *
 from src.sprinty_client import SprintyClient
-from typing import List, Optional
+from typing import List, Optional, Coroutine
 
 # from src.teleport_math import calc_Distance
 
@@ -1154,3 +1154,15 @@ async def wait_for_visible_by_path(client: Client, path: List[str], wait_for_not
 	else:
 		while not await is_visible_by_path(client, path):
 			await asyncio.sleep(interval)
+
+
+async def try_task_coro(coro: Coroutine, clients: List[Client], deactive_mouseless: bool = False):
+	try:
+		await coro()
+
+	except asyncio.CancelledError:
+		pass
+
+	finally:
+		if deactive_mouseless:
+			await asyncio.gather(*[attempt_deactivate_mouseless(client) for client in clients])
