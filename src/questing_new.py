@@ -880,14 +880,6 @@ class Quester():
 
     async def interactiveTeleportToZone(client: Client, menuButtonNumber):
         #credits cowhunter
-        while not await client.is_in_npc_range():
-            pass
-
-        while await client.is_in_npc_range():
-            await client.send_key(Keycode.X, 0.1)
-            await asyncio.sleep(.4)
-
-        await asyncio.sleep(.4)
         await client.mouse_handler.activate_mouseless()
 
         # 4 buttons per page - menuButtonNum / 4 rounded up to nearest whole number equals the page that the button is on
@@ -922,41 +914,56 @@ class Quester():
     
     async def read_quest_txt(self, client: Client):
         try:
-            quest_name_path = await get_window_from_path(client.root_window, quest_name_path)
-            quest_name = await quest_name_path.maybe_text()
+            quest_name = await get_window_from_path(client.root_window, quest_name_path)
+            quest = await quest_name.maybe_text()
         except:
-            quest_name = ""
-            
-        return quest_name
+            print("fail")
+            quest = ""
+        print(quest)    
+        return quest
+
         
-    async def parse_quest_zone(self, str: str):
+    def parse_quest_zone(self, str: str):
         # # <center>Collect Cog in Triton Avenue (0 of 3)</center>
         center = str.split("<center>") # ['', 'Collect Cog in Triton Avenue (0 of 3)</center>']  
         center2 = center[1].split("</center>") #['Collect Cog in Triton Avenue (0 of 3)', '']
         In = center2[0].split(" in ") #['Collect Cog', 'Triton Avenue (0 of 3)']
-        return In[1] #Triton Avenue (0 of 3)
+        zone_name = In[1] #'Triton Avenue (0 of 3)' or 'Triton Avenue'
+        try:
+            zone_name_final = zone_name.split(" (")[0] #['Triton Avenue' ,'0 of 3)']
+            return zone_name_final # Triton Avenue
+        except:
+            pass
+
+        return zone_name
+    
     
     async def find_quest_zone_index(self, client: Client, door_locations: list):
         location = self.parse_quest_zone(await self.read_quest_txt(client))
+
         location = location.lower()
-        parts_of_string = location.split[" "]
+        parts_of_string = location.split(" ")
         for piece in parts_of_string:
-            if piece in door_locations:
-                for d_location in door_locations:
-                    if fuzz.partial_ratio(piece, d_location) >= 50:
-                        return door_locations.index(d_location)
+            for d_location in door_locations:
+                if piece in d_location:
+                    print(d_location)
+                    return door_locations.index(d_location)
                 
     async def new_world_doors(self, client: Client):
         streamportal_locations = ["aeriel", "zanadu","outer athanor", "inner anthanor", "sepidious", "mandalla", "reverie", "nimbus", "port aero", "husk"]
         nanavato_locations = []
         
-        if  "Streamportal" in self.read_spiral_door_title(client):
+        if  "Streamportal" in await self.read_spiral_door_title(client):
             index = await self.find_quest_zone_index(client, streamportal_locations)
+            print(index)
             await self.interactiveTeleportToZone(client, index)
+            return True
             
-        elif "Nanavator" in self.read_spiral_door_title(client):
+        elif "Nanavator" in await self.read_spiral_door_title(client):
             index = await self.find_quest_zone_index(client, nanavato_locations)
             await self.interactiveTeleportToZone(client, index)
+            return True
+        return False
             
     async def handle_spiral_navigation(self):
         # Handles spiral door navigation
@@ -1928,7 +1935,7 @@ class Quester():
 
     # @logger.catch()
     async def auto_quest_solo(self, a, auto_pet_enabled: bool, ignore_pet_level_up=False, play_dance_game=False):
-        print(await self.read_spiral_door_title(self.client))
+        #print(await self.read_spiral_door_title(self.client))
         if await is_free(self.client):
             if await is_potion_needed(self.client) and await self.client.stats.current_mana() > 1 and await self.client.stats.current_hitpoints() > 1:
                 await collect_wisps(self.client)
@@ -1985,7 +1992,8 @@ class Quester():
                         await asyncio.sleep(0.75)
                         if await is_visible_by_path(self.client, spiral_door_teleport_path):
                             # Handles spiral door navigation
-                            await spiral_door_with_quest(self.client)
+                            if await self.new_world_doors(self.client) == False:
+                                await spiral_door_with_quest(self.client)
 
                 quest_objective = await get_quest_name(self.client)
 
