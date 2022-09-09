@@ -61,9 +61,9 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 
 	global hotkey_button
 	original_hotkey_button = hotkey_button
+
 	def hotkey_button(name, auto_size=False, text_color=gui_text_color, button_color=gui_button_color):
 		return original_hotkey_button(name, auto_size, text_color, button_color)
-
 
 	toggles = ['Speedhack', 'Combat', 'Dialogue', 'Sigil', 'Questing', 'Auto Pet']
 	hotkeys = ['Quest TP', 'Freecam', 'Freecam TP']
@@ -86,7 +86,7 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 
 	copy_pos = hotkey_button('Copy Position')
 	copy_zone = hotkey_button('Copy Zone')
-	copy_yaw = hotkey_button('Copy Yaw')
+	copy_yaw = hotkey_button('Copy Rotation')
 
 	client_info_layout = [
 		[client_title],
@@ -242,7 +242,7 @@ def manage_gui(send_queue: queue.Queue, recv_queue: queue.Queue, gui_theme, gui_
 				send_queue.put(GUICommand(GUICommandType.ToggleOption, event.replace('Toggle', '').strip()))
 
 			# Copying
-			case 'Copy Zone' | 'Copy Position' | 'Copy Yaw' | 'Copy Entity List' | \
+			case 'Copy Zone' | 'Copy Position' | 'Copy Rotation' | 'Copy Entity List' | \
 						'Copy Camera Position' | 'Copy Camera Rotation' | 'Copy UI Tree' | \
 						'Copy Enemy Stats':
 				send_queue.put(GUICommand(GUICommandType.Copy, event.replace('Copy', '').strip()))

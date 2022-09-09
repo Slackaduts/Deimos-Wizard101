@@ -1082,6 +1082,7 @@ async def main():
 			# await client.root_window.debug_print_ui_tree()
 			# print(await client.body.position())
 			while True:
+				# raise wizwalker.errors.MemoryInvalidated
 				await asyncio.sleep(0.1)
 				if not freecam_status:
 					client_xyz = await client.body.position()
@@ -1110,6 +1111,7 @@ async def main():
 				target=deimosgui.manage_gui,
 				args=(recv_queue, gui_send_queue, gui_theme, gui_text_color, gui_button_color, tool_name, tool_version, gui_on_top)
 			)
+			gui_thread.daemon = True
 			gui_thread.start()
 
 			enemy_stats = []
@@ -1421,7 +1423,6 @@ async def main():
 									await foreground_client.camera_elastic()
 
 							case deimosgui.GUICommandType.ExecuteBot:
-								print('FUCKING FUCK')
 								command_data: str = com.data
 
 								async def run_bot():
@@ -1443,6 +1444,7 @@ async def main():
 
 							case deimosgui.GUICommandType.SetScale:
 								desired_scale = param_input(com.data, 1.0)
+								logger.debug(f'Set Scale to {desired_scale}')
 								await asyncio.gather(*[client.body.write_scale(desired_scale) for client in walker.clients])
 
 				except queue.Empty:
