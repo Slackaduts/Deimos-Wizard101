@@ -635,6 +635,12 @@ class Fighter(CombatHandler):
 				await self.assign_spell_logic()
 				await self.effect_enchant_ID(self.client_member)
 				await self.enchant_all()
+				for card in await self.get_cards():
+					print('-------------------------------------')
+					print(await card.display_name())
+					gs = await card.get_graphical_spell()
+					desc = await gs.read_wide_string_from_offset(0x1D8)
+					print(desc)
 				if self.client.discard_duplicate_cards:
 					await self.discard_useless()
 				else:

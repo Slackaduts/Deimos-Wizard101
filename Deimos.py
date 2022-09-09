@@ -1423,7 +1423,7 @@ async def main():
 							case deimosgui.GUICommandType.ExecuteBot:
 								command_data: str = com.data
 
-								async def run_bot(command_data: str = command_data):
+								async def run_bot():
 									logger.debug('Started Bot')
 									split_commands = command_data.split('\n')
 									while True:
@@ -1769,23 +1769,20 @@ async def main():
 		
 		# while True:
 		# await asyncio.wait([foreground_client_switching_task, speed_switching_task, combat_loop_task, assign_foreground_clients_task, dialogue_loop_task, anti_afk_loop_task, sigil_loop_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task])
-		done, _ = await asyncio.wait([foreground_client_switching_task, assign_foreground_clients_task, anti_afk_loop_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task], return_when=asyncio.FIRST_EXCEPTION)
-		for t in done:
-			if t.done() and t.exception() != None:
-				raise t.exception()
+		while True:
+			await asyncio.sleep(0.25)
+			await asyncio.wait([foreground_client_switching_task, assign_foreground_clients_task, anti_afk_loop_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task], return_when=asyncio.FIRST_EXCEPTION)
+			# if any([t.done() for t in done]) and not any([t.exception() == KeyboardInterrupt for t in done]):
+			# 	[t.cancel() for t in done]
+
+			# else:
+			# 	raise KeyboardInterrupt
 
 	finally:
-		global speed_task
-		global combat_task
-		global dialogue_task
-		global questing_task
-		global sigil_task
-
-		tasks: List[asyncio.Task] = [speed_task, combat_task, sigil_task, questing_task, dialogue_task]
+		tasks: List[asyncio.Task] = [foreground_client_switching_task, speed_task, combat_task, assign_foreground_clients_task, dialogue_task, anti_afk_loop_task, sigil_task, questing_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task]
 		for task in tasks:
 			if task is not None:
 				task.cancel()
-				task = None
 
 		await tool_finish()
 

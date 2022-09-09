@@ -9,18 +9,10 @@ from wizwalker.memory.memory_objects.camera_controller import CameraController
 
 from src.sprinty_client import SprintyClient
 from src.gui_inputs import is_numeric, param_input
-from src.utils import teleport_to_friend_from_list, auto_potions_force_buy, use_potion, is_free, logout_and_in, click_window_by_path, attempt_activate_mouseless, attempt_deactivate_mouseless, wait_for_visible_by_path, refill_potions, refill_potions_if_needed
+from src.utils import index_with_str, get_window_from_path, teleport_to_friend_from_list, auto_potions_force_buy, use_potion, is_free, logout_and_in, click_window_by_path, attempt_activate_mouseless, attempt_deactivate_mouseless, wait_for_visible_by_path, refill_potions, refill_potions_if_needed
 from src.camera_utils import glide_to, point_to_xyz, rotating_glide_to, orbit
 import re
 from loguru import logger
-
-
-def index_with_str(input, desired_str: str) -> int:
-    for i, s in enumerate(input):
-        if desired_str in s.lower():
-            return i
-
-    return None
 
 
 async def parse_location(commands: List[str], camera: CameraController = None, client: Client = None) -> Tuple[XYZ, Orient]:
@@ -253,8 +245,16 @@ async def parse_command(clients: List[Client], command_str: str):
                             logger.error('Failed to go to zone.  It may be spelled incorrectly, or may not be supported.')
 
                     case 'log' | 'debug' | 'print':
-                        relevant_string: str = ' '.join(split_command[2:])
-                        logger.debug(relevant_string)
+                        if split_command[2].lower() != 'window':
+                            relevant_string: str = ' '.join(split_command[2:])
+                            logger.debug(relevant_string)
+
+                        else:
+                            desired_path = find_path(split_command)
+                            for client in clients:
+                                desired_window = await get_window_from_path(client.root_window, desired_path)
+                                relevant_string = await desired_window.maybe_text()
+                                logger.debug(relevant_string)
 
                     case _:
                         await asyncio.sleep(0.25)
