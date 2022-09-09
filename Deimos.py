@@ -1118,7 +1118,7 @@ async def main():
 				if foreground_client:
 					current_zone = await foreground_client.zone_name()
 					current_pos = await foreground_client.body.position()
-					current_yaw = await foreground_client.body.yaw()
+					current_rotation = await foreground_client.body.orientation()
 					if foreground_client:
 						combat = CombatHandler(foreground_client)
 						members = await combat.get_members()
@@ -1144,7 +1144,7 @@ async def main():
 					gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('x', f'X: {current_pos.x}')))
 					gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('y', f'Y: {current_pos.y}')))
 					gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('z', f'Z: {current_pos.z}')))
-					gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Yaw', f'Yaw: {current_yaw}')))
+					gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Yaw', f'Yaw: {current_rotation.yaw}')))
 
 				# Stuff sent by the window
 				try:
@@ -1195,11 +1195,11 @@ async def main():
 
 									case 'Position':
 										logger.debug('Copied Position')
-										pyperclip.copy(f'XYZ(x={current_pos.x}, y={current_pos.y}, z={current_pos.z})')
+										pyperclip.copy(f'XYZ({current_pos.x}, {current_pos.y}, {current_pos.z})')
 
-									case 'Yaw':
-										logger.debug('Copied Yaw')
-										pyperclip.copy(current_yaw)
+									case 'Rotation':
+										logger.debug('Copied Rotation')
+										pyperclip.copy(f'Orient({current_rotation.pitch}, {current_rotation.roll}, {current_rotation.yaw})')
 
 									case 'Entity List':
 										if foreground_client:
@@ -1219,14 +1219,14 @@ async def main():
 											camera_pos = await camera.position()
 
 											logger.debug('Copied Selected Camera Position')
-											pyperclip.copy(f'XYZ(x={camera_pos.x}, y={camera_pos.y}, z={camera_pos.z})')
+											pyperclip.copy(f'XYZ({camera_pos.x}, {camera_pos.y}, {camera_pos.z})')
 
 									case 'Camera Rotation':
 										if foreground_client:
 											camera = await foreground_client.game_client.selected_camera_controller()
 											camera_pitch, camera_roll, camera_yaw = await camera.orientation()
 											logger.debug('Copied Camera Rotations')
-											pyperclip.copy(f'Orient(pitch={camera_pitch}, roll={camera_roll}, yaw={camera_pitch})')
+											pyperclip.copy(f'Orient({camera_pitch}, {camera_roll}, {camera_pitch})')
 
 									case 'UI Tree':
 										foreground: Client = foreground_client
@@ -1271,7 +1271,7 @@ async def main():
 									x_input = param_input(com.data['X'], current_pos.x)
 									y_input = param_input(com.data['Y'], current_pos.y)
 									z_input = param_input(com.data['Z'], current_pos.z)
-									yaw_input = param_input(com.data['Yaw'], current_yaw)
+									yaw_input = param_input(com.data['Yaw'], current_rotation.yaw)
 
 									custom_xyz = XYZ(x=x_input, y=y_input, z=z_input)
 									logger.debug(f'Teleporting client {foreground_client.title} to {custom_xyz}, yaw= {yaw_input}')
@@ -1421,6 +1421,7 @@ async def main():
 									await foreground_client.camera_elastic()
 
 							case deimosgui.GUICommandType.ExecuteBot:
+								print('FUCKING FUCK')
 								command_data: str = com.data
 
 								async def run_bot():
@@ -1432,7 +1433,7 @@ async def main():
 
 										await asyncio.sleep(1)
 
-								bot_task = asyncio.create_task(try_task_coro(run_bot, clients, True))
+								bot_task = asyncio.create_task(try_task_coro(run_bot, walker.clients, True))
 
 							case deimosgui.GUICommandType.KillBot:
 								if bot_task is not None:
@@ -1769,14 +1770,10 @@ async def main():
 		
 		# while True:
 		# await asyncio.wait([foreground_client_switching_task, speed_switching_task, combat_loop_task, assign_foreground_clients_task, dialogue_loop_task, anti_afk_loop_task, sigil_loop_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task])
-		while True:
-			await asyncio.sleep(0.25)
-			await asyncio.wait([foreground_client_switching_task, assign_foreground_clients_task, anti_afk_loop_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task], return_when=asyncio.FIRST_EXCEPTION)
-			# if any([t.done() for t in done]) and not any([t.exception() == KeyboardInterrupt for t in done]):
-			# 	[t.cancel() for t in done]
-
-			# else:
-			# 	raise KeyboardInterrupt
+		done, _ = await asyncio.wait([foreground_client_switching_task, assign_foreground_clients_task, anti_afk_loop_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task], return_when=asyncio.FIRST_EXCEPTION)
+		for t in done:
+			if t.done() and t.exception() != None:
+				raise t.exception()
 
 	finally:
 		tasks: List[asyncio.Task] = [foreground_client_switching_task, speed_task, combat_task, assign_foreground_clients_task, dialogue_task, anti_afk_loop_task, sigil_task, questing_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task]
