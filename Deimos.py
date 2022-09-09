@@ -1752,6 +1752,7 @@ async def main():
 	await enable_hotkeys()
 	logger.debug('Hotkeys ready!')
 	tool_status = True
+	exc = None
 	try:
 		foreground_client_switching_task = asyncio.create_task(foreground_client_switching())
 		assign_foreground_clients_task = asyncio.create_task(assign_foreground_clients())
@@ -1773,7 +1774,7 @@ async def main():
 		done, _ = await asyncio.wait([foreground_client_switching_task, assign_foreground_clients_task, anti_afk_loop_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task], return_when=asyncio.FIRST_EXCEPTION)
 		for t in done:
 			if t.done() and t.exception() != None:
-				raise t.exception()
+				exc = t.exception()
 
 	finally:
 		tasks: List[asyncio.Task] = [foreground_client_switching_task, speed_task, combat_task, assign_foreground_clients_task, dialogue_task, anti_afk_loop_task, sigil_task, questing_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task]
@@ -1782,6 +1783,7 @@ async def main():
 				task.cancel()
 
 		await tool_finish()
+		raise exc
 
 
 def bool_to_string(input: bool):
