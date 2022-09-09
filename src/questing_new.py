@@ -1,4 +1,5 @@
 import asyncio
+from pydoc import cli
 import traceback
 import math
 
@@ -30,6 +31,7 @@ class Quester():
         self.leader_pid = leader_pid
         self.current_leader_client = client
         self.current_leader_pid = leader_pid
+        self.d_location = None
     
     async def read_popup_(self, p: Client):
         try:
@@ -878,30 +880,6 @@ class Quester():
         #         print('2')
         #         await asyncio.sleep(0.1)
 
-    async def interactiveTeleportToZone(client: Client, menuButtonNumber):
-        #credits cowhunter
-        await client.mouse_handler.activate_mouseless()
-
-        # 4 buttons per page - menuButtonNum / 4 rounded up to nearest whole number equals the page that the button is on
-        actualButtonToClick = menuButtonNumber
-
-        if menuButtonNumber > 4:
-            pageNum = int(math.ceil(menuButtonNumber / 4)) - 1
-            # click to correct page
-            if pageNum > 0:
-                for i in range(pageNum):
-                    await client.mouse_handler.click_window_with_name('rightButton')
-                    await asyncio.sleep(0.4)
-
-            # the actual button number on the page, considering that there are 4 buttons per page (0 -> 3)
-            actualButtonToClick = ((menuButtonNumber) - ((pageNum) * 4))
-
-        await client.mouse_handler.click_window_with_name('opt' + str(actualButtonToClick - 1))
-        await asyncio.sleep(.4)
-        await client.mouse_handler.click_window_with_name('teleportButton')
-        await client.wait_for_zone_change()
-
-        await client.mouse_handler.deactivate_mouseless()
         
     async def read_spiral_door_title(self, client: Client):
         try:
@@ -935,10 +913,9 @@ class Quester():
         except:
             pass
 
-        return zone_name
-    
-    
-    async def find_quest_zone_index(self, client: Client, door_locations: list):
+        return zone_name 
+
+    async def find_quest_zone_area_name(self, client: Client, door_locations: list):
         location = self.parse_quest_zone(await self.read_quest_txt(client))
 
         location = location.lower()
@@ -946,40 +923,43 @@ class Quester():
         for piece in parts_of_string:
             for d_location in door_locations:
                 if piece in d_location:
-                    print(d_location)
-                    return door_locations.index(d_location)
+                    self.d_location = d_location
+                    return d_location
                 
     async def new_world_doors(self, client: Client):
-        streamportal_locations = ["aeriel", "zanadu","outer athanor", "inner anthanor", "sepidious", "mandalla", "reverie", "nimbus", "port aero", "husk"]
-        nanavato_locations = []
-        
         if  "Streamportal" in await self.read_spiral_door_title(client):
-            index = await self.find_quest_zone_index(client, streamportal_locations)
-            print(index)
-            await self.interactiveTeleportToZone(client, index)
+            location = await self.find_quest_zone_area_name(client, streamportal_locations)
+            await new_portals_cycle(client, location)
             return True
             
         elif "Nanavator" in await self.read_spiral_door_title(client):
-            index = await self.find_quest_zone_index(client, nanavato_locations)
-            await self.interactiveTeleportToZone(client, index)
+            location = await self.find_quest_zone_area_name(client, nanavato_locations)
+            await new_portals_cycle(client, location)
             return True
+        
         return False
             
     async def handle_spiral_navigation(self):
-        # Handles spiral door navigation
-        await spiral_door_with_quest(self.current_leader_client)
-        
-        await asyncio.sleep(1)
-        leader_world = (await self.current_leader_client.zone_name()).split('/', 1)[0]
-        
-        #handles steam link
-        #await self.new_world_doors(self.current_leader_client)
-        #quest_name_path
-        # Follower clients use separate spiral door navigation than leader (since they may not have the same quest)
-        for c in self.clients:
-            if c.process_id != self.current_leader_pid:
-                if await is_visible_by_path(c, spiral_door_teleport_path):
-                    await go_to_new_world(c, leader_world)
+        if await self.new_world_doors(self.current_leader_client):
+            for c in self.clients:
+                if c.process_id != self.current_leader_pid:
+                    if await is_visible_by_path(c, spiral_door_teleport_path):
+                        await new_portals_cycle(c, self.d_location)
+        else:
+            # Handles spiral door navigation
+            await spiral_door_with_quest(self.current_leader_client)
+            
+            await asyncio.sleep(1)
+            leader_world = (await self.current_leader_client.zone_name()).split('/', 1)[0]
+            
+            #handles steam link
+            #await self.new_world_doors(self.current_leader_client)
+            #quest_name_path
+            # Follower clients use separate spiral door navigation than leader (since they may not have the same quest)
+            for c in self.clients:
+                if c.process_id != self.current_leader_pid:
+                    if await is_visible_by_path(c, spiral_door_teleport_path):
+                        await go_to_new_world(c, leader_world)
 
     async def auto_tfc_friend_all_wizards(self):
         for code_generator in self.clients:

@@ -16,7 +16,9 @@ from typing import List, Optional, Coroutine
 
 # from src.teleport_math import calc_Distance
 
-
+streamportal_locations = ["aeriel", "zanadu", "outer athanor", "inner anthanor", "sepidious", "mandalla", "chaos jungle", "reverie", "nimbus", "port aero", "husk"]
+nanavato_locations = ["karamelle city", "sweetzburg", "nibbleheim", "gutenstadt", "black licorice forest", "candy corn farm", "gobblerton"]
+        
 async def attempt_activate_mouseless(client: Client, sleep_time: float = 0.1):
 	# Attempts to activate mouseless, in a try block in case it's already on for this client
 	if not client.mouseless_status:
@@ -162,6 +164,53 @@ async def go_to_new_world(p, destinationWorld, open_window: bool = True):
 						pageCount = pageCount[8:-9]
 						currentPage = pageCount.split('/', 1)[0]
 
+async def new_portals_cycle( client: Client, location: str):
+        option_window = await client.root_window.get_windows_with_name("optionWindow")
+        assert len(option_window) == 1, str(option_window)
+        for child in await option_window[0].children():
+            if await child.name() == 'pageCount':
+                pageCount = await child.maybe_text()
+                pageCount = pageCount[8:-9]
+                currentPage = pageCount.split('/', 1)[0]
+                maxPage = pageCount.split('/', 1)[1]
+                break
+            
+        spiralGateName = location
+
+        isChildFound = False
+
+        for _ in range(int(maxPage)):
+            for child in await option_window[0].children():
+                if await child.name() in ['opt0', 'opt1', 'opt2', 'opt3']:
+                    name = await read_control_checkbox_text(child)
+                    if name.lower() == spiralGateName.lower():
+                        await attempt_activate_mouseless(client)
+                        await client.mouse_handler.click_window_with_name(await child.name())
+                        await asyncio.sleep(.4)
+                        await client.mouse_handler.click_window_with_name('teleportButton')
+                        await client.wait_for_zone_change()
+
+                        await attempt_deactivate_mouseless(client)
+
+                        isChildFound = True
+                        break
+
+            # correct world was not found - check the next page
+            if not isChildFound:
+                previousPage = currentPage
+                loopCount = 0
+                while currentPage == previousPage and loopCount < 30:
+                    loopCount += 1
+                    await attempt_activate_mouseless(client)
+                    await client.mouse_handler.click_window_with_name('rightButton')
+                    await attempt_deactivate_mouseless(client)
+                    
+                    # ensure that wizwalker didn't misclick and that we actually changed pages
+                    for child in await option_window[0].children():
+                        if await child.name() == 'pageCount':
+                            pageCount = await child.maybe_text()
+                            pageCount = pageCount[8:-9]
+                            currentPage = pageCount.split('/', 1)[0]
 
 async def generate_tfc(client: Client):
 	await client.mouse_handler.activate_mouseless()
