@@ -1206,11 +1206,15 @@ async def wait_for_visible_by_path(client: Client, path: List[str], wait_for_not
 
 
 async def try_task_coro(coro: Coroutine, clients: List[Client], deactive_mouseless: bool = False):
+	task_coro = coro
 	try:
-		await coro()
+		await task_coro()
 
 	except asyncio.CancelledError:
 		pass
+
+	except wizwalker.errors.MemoryInvalidated | wizwalker.errors.ExceptionalTimeout:
+		await try_task_coro(coro, clients, deactive_mouseless)
 
 	finally:
 		if deactive_mouseless:
