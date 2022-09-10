@@ -7,6 +7,7 @@ from io import BytesIO
 from typing import Tuple, Union
 from src.utils import is_free, get_quest_name, is_visible_by_path, get_popup_title
 from src.paths import npc_range_path
+from enum import auto, IntEnum
 
 type_format_dict = {
 "char": "<c",
@@ -95,6 +96,230 @@ def parse_nav_data(file_data: Union[bytes, TypedBytes]):
         edges.append((start, stop))
     return vertices, edges
 
+def collision_reading(file_data: Union[bytes, TypedBytes]):
+    class Box:
+        def __init__(self, length, width, depth):
+            self.length = length
+            self.width = width
+            self.depth = depth
+    class Ray:
+        def __init__(self, postiton, direction, length):
+            self.postiton = postiton
+            self.direction = direction
+            self.length = length
+    class Sphere:
+            def __init__(self, radius):
+                self.radius = radius   
+    class Cylinder:
+        def __init__(self, radius, length):
+                self.radius = radius
+                self.length = length
+    class Tube:
+        def __init__(self, radius, length):
+                self.radius = radius
+                self.length = length
+    class Plane:
+        def __init__(self, normal, distance):
+                self.normal = normal
+                self.distance = distance
+    class Mesh:
+        def __init__(self, vertices, faces):
+            self.vertices = vertices
+            self.faces = faces
+    class P_Geometry:
+        def __init__(self, name, rotation, location, scale, material, params):
+                self.name = name
+                self.rotation = rotation
+                self.location = location
+                self.scale = scale
+                self.material = material
+                self.params = params
+    class Geometry:
+        def __init__(self, category_bits, collide_bits, proxy_geometry):
+            self.category_bits = category_bits
+            self.collide_bits = collide_bits
+            self.proxy_geometry = proxy_geometry
+            
+    def BigString(file_data: Union[bytes, TypedBytes]): # may god help me
+        length = file_data.read_typed("unsigned int")
+        data =[]
+        for idx in range(length):
+            data.append(file_data.read_typed("char"))
+        
+        data = b''.join(data)
+        string = data.decode('utf-8')
+        
+        return string
+        
+    def FloatVec3(file_data: Union[bytes, TypedBytes]):
+        def f_values(file_data: Union[bytes, TypedBytes]):
+            V1 = file_data.read_typed("float")
+            V2 = file_data.read_typed("float")
+            V3 = file_data.read_typed("float")
+            return (V1, V2, V3)
+        return f_values(file_data)
+        
+    def IntVec3(file_data: Union[bytes, TypedBytes]):
+        def i_values(file_data: Union[bytes, TypedBytes]):
+            I1 = file_data.read_typed("unsigned int")
+            I2 = file_data.read_typed("unsigned int")
+            I3 = file_data.read_typed("unsigned int")
+            return (I1, I2, I3)
+        return i_values(file_data)
+    
+    class ProxyType(IntEnum):
+            box = 0
+            ray = auto()
+            sphere = auto()
+            cylinder = auto()
+            tube = auto()
+            plane = auto()
+            mesh = auto()
+            invalid = auto()
+            
+    def proxytype(file_data: Union[bytes, TypedBytes]):
+        type = file_data.read_typed("unsigned int")
+        return ProxyType(type)
+    
+    def BoxGeomParams(file_data: Union[bytes, TypedBytes]):
+        length = file_data.read_typed("float")
+        width = file_data.read_typed("float")
+        depth = file_data.read_typed("float")
+        return Box(length, width, depth)
+    
+    def RayGeomParams(file_data: Union[bytes, TypedBytes]):
+        position = file_data.read_typed("float")
+        direction = file_data.read_typed("float")
+        length = file_data.read_typed("float")
+        return Ray(position, direction, length)
+    
+    def SphereGeomParams(file_data: Union[bytes, TypedBytes]):
+        radius = file_data.read_typed("float")
+        return Sphere(radius)
+    
+    def CylinderGeomParams(file_data: Union[bytes, TypedBytes]):
+        radius = file_data.read_typed("float")
+        length = file_data.read_typed("float")
+        return Cylinder(radius, length)
+    
+    def TubeGeomParams(file_data: Union[bytes, TypedBytes]):
+        radius = file_data.read_typed("float")
+        length = file_data.read_typed("float")
+        return Tube(radius, length)
+    
+    def PlaneGeomParams(file_data: Union[bytes, TypedBytes]):
+        def n_values(file_data: Union[bytes, TypedBytes]):
+            N1 = file_data.read_typed("float")
+            N2 = file_data.read_typed("float")
+            N3 = file_data.read_typed("float")
+    
+            return (N1, N2, N3)
+        
+        normal = n_values(file_data)
+        distance = file_data.read_typed("float")
+        return Plane(normal, distance)
+    
+    def MeshGeomParams(file_data: Union[bytes, TypedBytes]):
+        return
+    
+    def Face(file_data: Union[bytes, TypedBytes]):
+        face = IntVec3(file_data)
+        normal = FloatVec3(file_data)
+        return face, normal
+        
+    def ProxyMesh(file_data: Union[bytes, TypedBytes]):
+        vertext_count = file_data.read_typed("unsigned int")
+        face_count = file_data.read_typed("unsigned int")
+        
+        vertices = []
+        for idx in range(vertext_count):
+            vertices.append(FloatVec3(file_data))
+            
+        faces = []
+        for idx in range(face_count):
+            faces.append(Face(file_data))
+            
+        return Mesh(vertices, faces)
+        
+    def ProxyGeometry(file_data: Union[bytes, TypedBytes]):
+        name = BigString(file_data)
+        
+        def f_rotation(file_data: Union[bytes, TypedBytes]):
+            R1 = file_data.read_typed("float")
+            R2 = file_data.read_typed("float")
+            R3 = file_data.read_typed("float")
+            R4 = file_data.read_typed("float")
+            R5 = file_data.read_typed("float")
+            R6 = file_data.read_typed("float")
+            R7 = file_data.read_typed("float")
+            R8 = file_data.read_typed("float")
+            R9 = file_data.read_typed("float")
+            return (R1,R2,R3,R4,R5,R6,R7,R8,R9)
+        rotation = f_rotation(file_data)
+        
+        def f_location(file_data: Union[bytes, TypedBytes]):
+            L1 = file_data.read_typed("float")
+            L2 = file_data.read_typed("float")
+            L3 = file_data.read_typed("float")
+            return (L1,L2,L3)
+        location = f_location(file_data)
+        
+        scale = file_data.read_typed("float")
+        material = BigString(file_data)
+        
+        proxy = proxytype(file_data)
+        if proxy == ProxyType.box:
+            params = BoxGeomParams(file_data)
+        elif proxy == ProxyType.ray:
+            params = RayGeomParams(file_data)
+        elif proxy == ProxyType.sphere:
+            params = SphereGeomParams(file_data)
+        elif proxy == ProxyType.cylinder:
+            params = CylinderGeomParams(file_data)
+        elif proxy == ProxyType.tube:
+            params = TubeGeomParams(file_data)
+        elif proxy == ProxyType.plane:
+            params = PlaneGeomParams(file_data)
+        elif proxy == ProxyType.mesh:
+            params = MeshGeomParams(file_data)
+            
+        return P_Geometry(name, rotation, location, scale, material, params)
+
+    def geometry(file_data: Union[bytes, TypedBytes]):
+        proxy = proxytype(file_data)
+        category_bits = file_data.read_typed("unsigned int") 
+        collide_bits = file_data.read_typed("unsigned int") 
+        
+        if proxy == ProxyType.mesh:
+            proxy_geometry = ProxyMesh(file_data)
+        else:
+            proxy_geometry = ProxyGeometry(file_data)
+
+        return Geometry(category_bits, collide_bits, proxy_geometry)
+    
+    if isinstance(file_data, bytes):
+        file_data = TypedBytes(file_data)
+        
+    geometry_list = []
+    geometry_count = file_data.read_typed("unsigned int")
+    for idx in range(geometry_count):
+        geometry_list.append(geometry(file_data))
+        
+    return geometry_list
+    
+async def get_collision_data(client: Client, zone: str = None) -> list[XYZ]:
+    if not zone:
+        zone = await client.zone_name()
+
+    wad = await load_wad(zone)
+    
+    collision_data = await wad.get_file("collision.bcd")
+    try:
+        values = collision_reading(collision_data)
+    except:
+        raise Exception('Zone did not have valid navmap data')
+
+    return values
 
 def calc_PointOn3DLine(xyz_1 : XYZ, xyz_2 : XYZ, additional_distance):
     # extends a point on the line created by 2 XYZs by additional_distance. xyz_1 is the origin.
