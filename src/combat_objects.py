@@ -17,6 +17,8 @@ astral_excluded_ids = [78483, 2625203, 2504141]
 
 non_main_excluded_ids = side_excluded_ids + shadow_excluded_ids + astral_excluded_ids
 
+opposite_school_ids = {72777: 2343174, 2330892: 78318724, 2343174: 72777, 2448141: 83375795, 78318724: 2330892, 83375795: 2448141}
+
 
 
 class InvalidSchoolID(Exception):
@@ -78,11 +80,10 @@ async def get_shadow_effects(member_id: int, members: List[CombatMember]) -> Lis
 
 async def get_total_effects(member_id: int, members: List[CombatMember]) -> List[DynamicSpellEffect]:
 	# Gets all the hanging effects from a CombatMember
-	member = await id_to_member(member_id, members)
 	effects: List[DynamicSpellEffect] = []
-	effects += await get_hanging_effects(member)
-	effects += await get_aura_effects(member)
-	effects += await get_shadow_effects(member)
+	effects += await get_hanging_effects(member_id, members)
+	effects += await get_aura_effects(member_id, members)
+	effects += await get_shadow_effects(member_id, members)
 	return effects
 
 
@@ -98,7 +99,6 @@ async def ids_from_cards(cards: List[CombatCard]) -> List[int]:
 
 async def id_to_member(member_id: int, members: List[CombatMember]) -> CombatMember:
 	# Returns a CombatMember with a given ID
-	member = await id_to_member(member_id, members)
 	for member in members:
 		if await member.owner_id() == member_id:
 			return member

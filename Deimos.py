@@ -30,12 +30,12 @@ from src.command_parser import execute_flythrough, parse_command
 from src.auto_pet import activate_dance_game_moves_hook, deactivate_dance_game_moves_hook, read_current_dance_game_moves, nomnom, attempt_deactivate_dance_hook
 from src.drop_logger import logging_loop
 from src.combat import Fighter
-from src.stat_viewer import total_stats_from_id
+from src.stat_viewer import total_stats
 from src.teleport_math import navmap_tp, calc_Distance
 # from src.questing import Quester
 from src.questing_new import Quester
 from src.sigil import Sigil
-from src.utils import attempt_deactivate_mouseless, is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world, collect_wisps, collect_wisps_with_limit, try_task_coro
+from src.utils import attempt_deactivate_mouseless, is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world, collect_wisps_with_limit, try_task_coro
 from src.paths import advance_dialog_path, decline_quest_path
 import PySimpleGUI as gui
 import pyperclip
@@ -44,7 +44,6 @@ from src.gui_inputs import param_input
 from src import discsdk
 from wizwalker.extensions.wizsprinter.wiz_navigator import toZoneDisplayName, toZone
 from typing import Coroutine, List, Tuple
-from functools import partial
 
 from src import deimosgui
 
@@ -1082,7 +1081,6 @@ async def main():
 			# await client.root_window.debug_print_ui_tree()
 			# print(await client.body.position())
 			while True:
-				# raise wizwalker.errors.MemoryInvalidated
 				await asyncio.sleep(0.1)
 				if not freecam_status:
 					client_xyz = await client.body.position()
@@ -1121,25 +1119,6 @@ async def main():
 					current_zone = await foreground_client.zone_name()
 					current_pos = await foreground_client.body.position()
 					current_rotation = await foreground_client.body.orientation()
-					if foreground_client:
-						combat = CombatHandler(foreground_client)
-						members = await combat.get_members()
-
-						enemy_ids = []
-						if await foreground_client.in_battle() and members:
-							client_member = await combat.get_client_member()
-							client_participant = await client_member.get_participant()
-							client_team_id = await client_participant.team_id()
-
-							for member in members:
-								participant = await member.get_participant()
-
-								if await participant.team_id() != client_team_id and not await member.is_player():
-									id = await member.owner_id()
-									enemy_ids.append(id)
-
-					else:
-						enemy_ids = []
 
 					gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Title', f'Client: {foreground_client.title}')))
 					gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Zone', f'Zone: {current_zone}')))
@@ -1291,12 +1270,9 @@ async def main():
 										await foreground_client.teleport(entity_pos)
 
 							case deimosgui.GUICommandType.SelectEnemy:
-								if enemy_ids:
-									selected_index = int(com.data)
-									if selected_index <= len(enemy_ids):
-										selected_id = enemy_ids[selected_index - 1]
-										enemy_stats = await total_stats_from_id(members, selected_id)
-										gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('stat_viewer', '\n'.join(enemy_stats))))
+								if foreground_client and await foreground_client.in_battle():
+									enemy_stats = await total_stats(foreground_client, int(com.data))
+									gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('stat_viewer', '\n'.join(enemy_stats))))
 
 							case deimosgui.GUICommandType.XYZSync:
 								await xyz_sync_hotkey()

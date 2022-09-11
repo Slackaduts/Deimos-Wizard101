@@ -375,7 +375,6 @@ gambit_school_types = {
 	1027491821: []
 }
 
-
 # Lists of SpellEffects that align to a specific spell type
 # Types that are interpreted as charms
 charm_effect_types = [

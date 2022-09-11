@@ -137,7 +137,8 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 	stat_viewer_layout = [
 		[gui.Text('The utils shown below are for advanced users and no support will be provided on them.', text_color=gui_text_color)],
 		[hotkey_button('Enemy 1'), hotkey_button('Enemy 2'), hotkey_button('Enemy 3'), hotkey_button('Enemy 4')],
-		[gui.Multiline('No client has been selected.', key='stat_viewer', size=(66, 11), text_color=gui_text_color, horizontal_scroll=True)],
+		[hotkey_button('Enemy 5'), hotkey_button('Enemy 6'), hotkey_button('Enemy 7'), hotkey_button('Enemy 8')],
+		[gui.Multiline('No client has been selected.', key='stat_viewer', size=(66, 9), text_color=gui_text_color, horizontal_scroll=True)],
 		[hotkey_button('Copy Enemy Stats', True), gui.Text('Note that these stats are only accurate in PVE.', text_color=gui_text_color)]
 		]
 
