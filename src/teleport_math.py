@@ -243,7 +243,6 @@ def collision_reading(file_data: Union[bytes, TypedBytes]):
         
     def ProxyGeometry(file_data: Union[bytes, TypedBytes]):
         name = BigString(file_data)
-        
         def f_rotation(file_data: Union[bytes, TypedBytes]):
             R1 = file_data.read_typed("float")
             R2 = file_data.read_typed("float")
@@ -283,18 +282,18 @@ def collision_reading(file_data: Union[bytes, TypedBytes]):
         elif proxy == ProxyType.mesh:
             params = MeshGeomParams(file_data)
             
+            
         return P_Geometry(name, rotation, location, scale, material, params)
 
     def geometry(file_data: Union[bytes, TypedBytes]):
         proxy = proxytype(file_data)
         category_bits = file_data.read_typed("unsigned int") 
         collide_bits = file_data.read_typed("unsigned int") 
-        
+
         if proxy == ProxyType.mesh:
             proxy_geometry = ProxyMesh(file_data)
         else:
             proxy_geometry = ProxyGeometry(file_data)
-
         return Geometry(category_bits, collide_bits, proxy_geometry)
     
     if isinstance(file_data, bytes):
@@ -303,8 +302,17 @@ def collision_reading(file_data: Union[bytes, TypedBytes]):
     geometry_list = []
     geometry_count = file_data.read_typed("unsigned int")
     for idx in range(geometry_count):
-        geometry_list.append(geometry(file_data))
+        proxy = proxytype(file_data)
+        category_bits = file_data.read_typed("unsigned int") 
+        collide_bits = file_data.read_typed("unsigned int") 
         
+        if proxy == ProxyType.mesh:
+            proxy_geometry = ProxyMesh(file_data)
+            geometry_list.append(Geometry(category_bits, collide_bits, proxy_geometry))
+            return geometry_list
+        else:
+            proxy_geometry = ProxyGeometry(file_data)
+            geometry_list.append(Geometry(category_bits, collide_bits, proxy_geometry))
     return geometry_list
     
 async def get_collision_data(client: Client, zone: str = None) -> list[XYZ]:
@@ -317,7 +325,7 @@ async def get_collision_data(client: Client, zone: str = None) -> list[XYZ]:
     try:
         values = collision_reading(collision_data)
     except:
-        raise Exception('Zone did not have valid navmap data')
+        raise Exception('Zone did not have valid collision data')
 
     return values
 
