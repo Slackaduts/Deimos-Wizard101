@@ -1,13 +1,14 @@
 from typing import List, Coroutine, Any
 import math
 from wizwalker import Client
-from wizwalker.combat import CombatCard, CombatMember
-from wizwalker.memory.memory_objects.spell_effect import DynamicSpellEffect
-from src.combat_objects import get_total_effects, id_to_member, id_to_card, get_game_stats, school_list_ids
+from wizwalker.combat import CombatMember
+from wizwalker.memory.memory_objects.spell_effect import DynamicSpellEffect, SpellEffects
+from src.combat_objects import get_total_effects, id_to_member, school_list_ids, opposite_school_ids
 from src.combat_utils import add_universal_stat
-# UNFINISHED - slack
+
 
 async def real_stat(stat_func: Coroutine[Any, Any, List[float]], uni_func: Coroutine[Any, Any, float]) -> List[float]:
+    # Handles 
     base_stats = await stat_func()
     uni_stat = await uni_func()
 
@@ -59,20 +60,15 @@ async def base_damage_calculation_from_id(client: Client, members: List[CombatMe
     # Calculates damage from given base damage value, and is the basis for both exact and damage potential calculation. Works based off of IDs.
 
     # Get base objects from ID arguments
-    caster = await id_to_member(members, caster_id)
-    target = await id_to_member(members, target_id)
-
+    caster = await id_to_member(caster_id, members)
+    target = await id_to_member(target_id, members)
     # Caster-specific objects
-    caster_participant = await caster.get_participant()
     caster_stats = await caster.get_stats()
-    caster_game_stats = await get_game_stats(caster)
-    caster_effects = await get_total_effects(caster)
+    caster_effects: List[DynamicSpellEffect] = await get_total_effects(caster_id, members)
 
     # Target-specific objects
-    target_participant = await target.get_participant()
     target_stats = await target.get_stats()
-    target_game_stats = await get_game_stats(target)
-    target_effects = await get_total_effects(target)
+    target_effects: List[DynamicSpellEffect] = await get_total_effects(target_id, members)
 
     # Global effects
     caster_effects.append(global_effect)
@@ -92,30 +88,36 @@ async def base_damage_calculation_from_id(client: Client, members: List[CombatMe
 
     # Break up caster hanging effect objects
     caster_effect_atrs = []
-    for effect in caster_effects:
-        curr_effect_atr = [
-            await effect.effect_param(),
-            await effect.effect_type(),
-            await effect.damage_type(),
-            await effect.spell_template_id(),
-            await effect.enchantment_spell_template_id()
-        ]
+    for effect in caster_effects.copy():
+        if effect:
+            curr_effect_atr = [
+                await effect.effect_param(),
+                await effect.effect_type(),
+                await effect.damage_type(),
+                await effect.spell_template_id(),
+                await effect.enchantment_spell_template_id()
+            ]
 
-        caster_effect_atrs.append(curr_effect_atr)
+            caster_effect_atrs.append(curr_effect_atr)
+
+        else:
+            caster_effects.remove(effect)
 
     target_effect_atrs = []
-    for effect in target_effects:
-        curr_effect_atr = [
-            await effect.effect_param(),
-            await effect.effect_type(),
-            await effect.damage_type(),
-            await effect.spell_template_id(),
-            await effect.enchantment_spell_template_id()
-        ]
+    for effect in target_effects.copy():
+        if effect:
+            curr_effect_atr = [
+                await effect.effect_param(),
+                await effect.effect_type(),
+                await effect.damage_type(),
+                await effect.spell_template_id(),
+                await effect.enchantment_spell_template_id()
+            ]
 
-        target_effect_atrs.append(curr_effect_atr)
+            target_effect_atrs.append(curr_effect_atr)
 
-    total_effects = target_effects + caster_effects
+        else:
+            target_effects.remove(effect)
 
     damage_type_index = school_list_ids[damage_type]
 
@@ -155,4 +157,78 @@ async def base_damage_calculation_from_id(client: Client, members: List[CombatMe
             damage *= crit_damage_multiplier
 
 
+    # outgoing hanging effects (caster)
+    if caster_effects:
+        for i, effect in enumerate(caster_effects):
+            # only consider effects that matches the school or are universal
+            if caster_effect_atrs[i][2] == damage_type or caster_effect_atrs[i][2] == 80289:
+                match caster_effect_atrs[i][1]:
+                    case SpellEffects.modify_outgoing_damage:
+                        damage *= (caster_effect_atrs[i][0] / 100) + 1
 
+                    case SpellEffects.modify_outgoing_damage_flat:
+                        damage += caster_effect_atrs[i][0]
+
+                    case SpellEffects.modify_outgoing_armor_piercing:
+                        caster_pierce += caster_effect_atrs[i][0]
+
+                    case SpellEffects.modify_outgoing_damage_type:
+                        if damage_type in opposite_school_ids:
+                            damage_type = opposite_school_ids[caster_effect_atrs[i][2]]
+
+                    case _:
+                        pass
+
+    # incoming hanging effects (target)
+    if target_effects:
+        for i, effect in enumerate(target_effects):
+            if target_effect_atrs[i][2] == damage_type or target_effect_atrs[i][2] == 80289:
+                match target_effect_atrs[i][1]:
+                    # traps/shields, and pierce handling
+                    case SpellEffects.modify_incoming_damage:
+                        ward_param = target_effect_atrs[i][0]
+                        if ward_param < 0:
+                            ward_param += caster_pierce
+                            caster_pierce += target_effect_atrs[i][0]
+                            if ward_param > 0:
+                                ward_param = 0
+                            if caster_pierce < 0:
+                                caster_pierce = 0
+                        damage *= (ward_param / 100) + 1
+
+                    case SpellEffects.intercept:
+                        damage *= (target_effect_atrs[i][0] / 100) + 1
+
+                    case SpellEffects.modify_incoming_damage_flat:
+                        damage += target_effect_atrs[i][0]
+
+                    case SpellEffects.absorb_damage:
+                        damage += target_effect_atrs[i][0]
+
+                    case SpellEffects.modify_incoming_armor_piercing:
+                        caster_pierce += target_effect_atrs[i][0]
+                    # prism handling
+                    case SpellEffects.modify_incoming_damage_type:
+                        if damage_type in opposite_school_ids:
+                            damage_type = opposite_school_ids[target_effect_atrs[i][0]]
+
+                    case _:
+                        pass
+
+    # Apply flat resist
+    damage -= target_flat_resist
+    damage = abs(damage)
+
+    # apply resist, accounting for pierce and potential boost
+    if curved_target_resist > 0:
+        curved_target_resist -= caster_pierce
+        if curved_target_resist <= 0:
+            curved_target_resist = 1
+        else:
+            curved_target_resist = 1 - curved_target_resist
+    else:
+        curved_target_resist = abs(curved_target_resist) + 1
+
+    damage *= curved_target_resist
+
+    return damage
