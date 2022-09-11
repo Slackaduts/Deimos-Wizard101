@@ -136,20 +136,23 @@ async def parse_command(clients: List[Client], command_str: str):
 
                 case 'teleport' | 'tp' | 'setpos':
                     # Raw TP, not navmap TP due to some limitations with navmap TP
-                    if split_command[2] == 'closestmob':
-                        await asyncio.gather(*[SprintyClient(p).tp_to_closest_mob() for p in clients])
-                    else:
-                        client_location = None
-                        for p in all_clients:
-                            if p.title == split_command[2]:
-                                client_location = await p.body.position()
-                                await asyncio.gather(*[client.teleport(client_location) for client in clients])
-                                break
+                    match split_command[2]:
+                        case 'closestmob' | 'mob':
+                            await asyncio.gather(*[SprintyClient(p).tp_to_closest_mob() for p in clients])
+                        case 'quest' | 'questpos' | 'questposition':
+                            await asyncio.gather(*[p.teleport(await clients[0].quest_position.position()) for p in clients])
+                        case _:
+                            client_location = None
+                            for p in all_clients:
+                                if p.title == split_command[2]:
+                                    client_location = await p.body.position()
+                                    await asyncio.gather(*[client.teleport(client_location) for client in clients])
+                                    break
 
-                        # a client title was not provided - user likely listed an actual XYZ coordinate
-                        if client_location is None:
-                            xyzs = await parse_locations(clients, split_command)
-                            await asyncio.gather(*[client.teleport(xyz) for client, xyz in zip(clients, xyzs)])
+                            # a client title was not provided - user likely listed an actual XYZ coordinate
+                            if client_location is None:
+                                xyzs = await parse_locations(clients, split_command)
+                                await asyncio.gather(*[client.teleport(xyz) for client, xyz in zip(clients, xyzs)])
 
                 case 'walkto' | 'goto':
                     # Walks in a straight line to a given XYZ (Z agnostic)
