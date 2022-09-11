@@ -1232,7 +1232,8 @@ async def main():
 											logger.debug('Copied Enemy Stats')
 											pyperclip.copy('\n'.join(enemy_stats))
 										else:
-											logger.info('No enemy stats are loaded. Select an Enemy # button corresponding to the desired enemy, then click the copy button.')
+											logger.info('No enemy stats are loaded. Select an enemy index corresponding to its position on the duel circle, then click the copy button.')
+
 									case _:
 										logger.debug(f'Unknown copy value: {com.data}')
 
@@ -1271,8 +1272,11 @@ async def main():
 
 							case deimosgui.GUICommandType.SelectEnemy:
 								if foreground_client and await foreground_client.in_battle():
-									enemy_stats = await total_stats(foreground_client, int(com.data))
+									enemy_stats = await total_stats(foreground_client, com.data)
 									gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('stat_viewer', '\n'.join(enemy_stats))))
+
+								else:
+									logger.info('Last selected client is not currently in combat. You must be in combat to use the stat viewer.')
 
 							case deimosgui.GUICommandType.XYZSync:
 								await xyz_sync_hotkey()
