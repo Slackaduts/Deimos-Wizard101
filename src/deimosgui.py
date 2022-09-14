@@ -40,6 +40,7 @@ class GUICommandType(Enum):
 
 	# deimos -> window
 	UpdateWindow = auto()
+	UpdateWindowValues = auto()
 
 
 
@@ -104,48 +105,50 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 
 	framed_utils_layout = gui.Frame('Utils', utils_layout, title_color=gui_text_color)
 
+	dev_utils_notice = 'The utils below are for advanced users and no support will be given on them.'
+
 	custom_tp_layout = [
-		[gui.Text('The utils shown below are for advanced users and no support will be provided on them.', text_color=gui_text_color)],
-		[gui.Text('X:', text_color=gui_text_color), gui.InputText(size=(8, 1), key='XInput'), gui.Text('Y:', text_color=gui_text_color), gui.InputText(size=(8, 1), key='YInput'), gui.Text('Z:', text_color=gui_text_color), gui.InputText(size=(8, 1), key='ZInput'), gui.Text('Yaw: ', text_color=gui_text_color), gui.InputText(size=(8, 1), key='YawInput'), hotkey_button('Custom TP')],
-		[gui.Text('Entity Name:', text_color=gui_text_color), gui.InputText(size=(43, 1), key='EntityTPInput'), hotkey_button('Entity TP')]
+		[gui.Text(dev_utils_notice, text_color=gui_text_color)],
+		[gui.Text('X:', text_color=gui_text_color), gui.InputText(size=(6, 1), key='XInput'), gui.Text('Y:', text_color=gui_text_color), gui.InputText(size=(6, 1), key='YInput'), gui.Text('Z:', text_color=gui_text_color), gui.InputText(size=(7, 1), key='ZInput'), gui.Text('Yaw: ', text_color=gui_text_color), gui.InputText(size=(6, 1), key='YawInput'), hotkey_button('Custom TP')],
+		[gui.Text('Entity Name:', text_color=gui_text_color), gui.InputText(size=(36, 1), key='EntityTPInput'), hotkey_button('Entity TP')]
 	]
 
 	framed_custom_tp_layout = gui.Frame('TP Utils', custom_tp_layout, title_color=gui_text_color)
 
 	dev_utils_layout = [
-		[gui.Text('The utils shown below are for advanced users and no support will be provided on them.', text_color=gui_text_color)],
-		[hotkey_button('Copy Entity List', True), hotkey_button('Copy Camera Position', True), hotkey_button('Copy Camera Rotation', True), hotkey_button('Copy UI Tree', True)],
-		[gui.Text('Zone Name:', text_color=gui_text_color), gui.InputText(size=(29, 1), key='ZoneInput'), hotkey_button('Go To Zone'), hotkey_button('Mass Go To Zone', True)],
-		[gui.Text('World Name:', text_color=gui_text_color), gui.Combo(['WizardCity', 'Krokotopia', 'Marleybone', 'MooShu', 'DragonSpire', 'Grizzleheim', 'Celestia', 'Wysteria', 'Zafaria', 'Avalon', 'Azteca', 'Khrysalis', 'Polaris', 'Mirage', 'Empyrea', 'Karamelle', 'Lemuria'], text_color=gui_text_color, size=(27, 1), key='WorldInput'), hotkey_button('Go To World', True), hotkey_button('Mass Go To World', True)],
+		[gui.Text(dev_utils_notice, text_color=gui_text_color)],
+		[hotkey_button('Copy Entity List', True), hotkey_button('Copy UI Tree', True)],
+		[gui.Text('Zone Name:', text_color=gui_text_color), gui.InputText(size=(13, 1), key='ZoneInput'), hotkey_button('Go To Zone'), hotkey_button('Mass Go To Zone', True)],
+		[gui.Text('World Name:', text_color=gui_text_color), gui.Combo(['WizardCity', 'Krokotopia', 'Marleybone', 'MooShu', 'DragonSpire', 'Grizzleheim', 'Celestia', 'Wysteria', 'Zafaria', 'Avalon', 'Azteca', 'Khrysalis', 'Polaris', 'Mirage', 'Empyrea', 'Karamelle', 'Lemuria'], text_color=gui_text_color, size=(13, 1), key='WorldInput'), hotkey_button('Go To World', True), hotkey_button('Mass Go To World', True)],
 		[hotkey_button('Go To Bazaar', True), hotkey_button('Mass Go To Bazaar', True), hotkey_button('Refill Potions', True), hotkey_button('Mass Refill Potions', True)]
 	]
 
 	framed_dev_utils_layout = gui.Frame('Dev Utils', dev_utils_layout, title_color=gui_text_color)
 
 	camera_controls_layout = [
-		[gui.Text('The utils shown below are for advanced users and no support will be provided on them.', text_color=gui_text_color)],
-		[gui.Text('X:', text_color=gui_text_color), gui.InputText(size=(12, 1), key='CamXInput'), gui.Text('Y:', text_color=gui_text_color), gui.InputText(size=(12, 1), key='CamYInput'), gui.Text('Z:', text_color=gui_text_color), gui.InputText(size=(11, 1), key='CamZInput'), hotkey_button('Set Camera Position', True)],
-		[gui.Text('Yaw:', text_color=gui_text_color), gui.InputText(size=(16, 1), key='CamYawInput'), gui.Text('Roll:', text_color=gui_text_color), gui.InputText(size=(16, 1), key='CamRollInput'), gui.Text('Pitch:', text_color=gui_text_color), gui.InputText(size=(15, 1), key='CamPitchInput')],
-		[gui.Text('Entity:', text_color=gui_text_color), gui.InputText(size=(25, 1), key='CamEntityInput'), hotkey_button('Anchor', text_color=gui_text_color), hotkey_button('Toggle Camera Collision', True)],
-		[gui.Text('Distance:', text_color=gui_text_color), gui.InputText(size=(10, 1), key='CamDistanceInput'), gui.Text('Min:', text_color=gui_text_color), gui.InputText(size=(10, 1), key='CamMinInput'), gui.Text('Max:', text_color=gui_text_color), gui.InputText(size=(11, 1), key='CamMaxInput'), hotkey_button('Set Distance', True)]
+		[gui.Text(dev_utils_notice, text_color=gui_text_color)],
+		[gui.Text('X:', text_color=gui_text_color), gui.InputText(size=(10, 1), key='CamXInput'), gui.Text('Y:', text_color=gui_text_color), gui.InputText(size=(10, 1), key='CamYInput'), gui.Text('Z:', text_color=gui_text_color), gui.InputText(size=(10, 1), key='CamZInput'), hotkey_button('Set Camera Position', True)],
+		[gui.Text('Yaw:', text_color=gui_text_color), gui.InputText(size=(10, 1), key='CamYawInput'), gui.Text('Roll:', text_color=gui_text_color), gui.InputText(size=(10, 1), key='CamRollInput'), gui.Text('Pitch:', text_color=gui_text_color), gui.InputText(size=(10, 1), key='CamPitchInput')],
+		[gui.Text('Entity:', text_color=gui_text_color), gui.InputText(size=(18, 1), key='CamEntityInput'), hotkey_button('Anchor', text_color=gui_text_color), hotkey_button('Toggle Camera Collision', True)],
+		[gui.Text('Distance:', text_color=gui_text_color), gui.InputText(size=(10, 1), key='CamDistanceInput'), gui.Text('Min:', text_color=gui_text_color), gui.InputText(size=(10, 1), key='CamMinInput'), gui.Text('Max:', text_color=gui_text_color), gui.InputText(size=(10, 1), key='CamMaxInput'), hotkey_button('Set Distance', True)],
+		[hotkey_button('Copy Camera Position', True), hotkey_button('Copy Camera Rotation', True)]
 	]
 
 	framed_camera_controls_layout = gui.Frame('Camera Controls', camera_controls_layout, title_color=gui_text_color)
 
 	# UNFINISHED - slack
 	stat_viewer_layout = [
-		[gui.Text('The utils shown below are for advanced users and no support will be provided on them.', text_color=gui_text_color)],
-		# [hotkey_button('Enemy 1'), hotkey_button('Enemy 2'), hotkey_button('Enemy 3'), hotkey_button('Enemy 4')],
-		# [hotkey_button('Enemy 5'), hotkey_button('Enemy 6'), hotkey_button('Enemy 7'), hotkey_button('Enemy 8')],
-		[gui.Text('Enemy Index:', text_color=gui_text_color), gui.Combo([1, 2, 3, 4, 5, 6, 7, 8], text_color=gui_text_color, size=(3, 1), default_value=1, key='EnemyInput'), hotkey_button('View Stats'), hotkey_button('Copy Enemy Stats', True)],
-		[gui.Multiline('No client has been selected.', key='stat_viewer', size=(66, 9), text_color=gui_text_color, horizontal_scroll=True)],
-		[gui.Text('Note that the stat viewer does not work in PvP.', text_color=gui_text_color)]
+		[gui.Text(dev_utils_notice, text_color=gui_text_color)],
+		[gui.Text('Caster/Target Indices:', text_color=gui_text_color), gui.Combo([1, 2, 3, 4, 5, 6, 7, 8], text_color=gui_text_color, size=(21, 1), default_value=1, key='EnemyInput'), gui.Combo([1, 2, 3, 4, 5, 6, 7, 8], text_color=gui_text_color, size=(21, 1), default_value=1, key='AllyInput')],
+		[gui.Text('Custom Base Damage:', text_color=gui_text_color), gui.InputText('', size=(20, 1), key='DamageInput'), hotkey_button('View Stats'), hotkey_button('Copy Stats', True)],
+		[gui.Text('The dmg param will use a given number as the card dmg instead of guessing.', text_color=gui_text_color)],
+		[gui.Multiline('No client has been selected.', key='stat_viewer', size=(66, 8), text_color=gui_text_color, horizontal_scroll=True)],
 		]
 
 	framed_stat_viewer_layout = gui.Frame('Stat Viewer', stat_viewer_layout, title_color=gui_text_color)
 
 	flythrough_layout = [
-		[gui.Text('The utils shown below are for advanced users and no support will be provided on them.', text_color=gui_text_color)],
+		[gui.Text(dev_utils_notice, text_color=gui_text_color)],
 		[gui.Multiline(key='flythrough_creator', size=(66, 11), text_color=gui_text_color, horizontal_scroll=True)],
 		[
 			gui.Input(key='flythrough_file_path', visible=False), 
@@ -160,7 +163,7 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 	framed_flythrough_layout = gui.Frame('Flythrough Creator', flythrough_layout, title_color=gui_text_color)
 
 	bot_creator_layout = [
-		[gui.Text('The utils shown below are for advanced users and no support will be provided on them.', text_color=gui_text_color)],
+		[gui.Text(dev_utils_notice, text_color=gui_text_color)],
 		[gui.Multiline(key='bot_creator', size=(66, 11), text_color=gui_text_color, horizontal_scroll=True)],
 		[
 			gui.Input(key='bot_file_path', visible=False), 
@@ -175,7 +178,7 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 	framed_bot_creator_layout = gui.Frame('Bot Creator', bot_creator_layout, title_color=gui_text_color)
 
 	misc_utils_layout = [
-		[gui.Text('The utils shown below are for advanced users and no support will be provided on them.', text_color=gui_text_color)],
+		[gui.Text(dev_utils_notice, text_color=gui_text_color)],
 		[gui.Text('Scale:', text_color=gui_text_color), gui.InputText(size=(8, 1), key='scale'), hotkey_button('Set Scale')],
 	]
 
@@ -208,8 +211,6 @@ def manage_gui(send_queue: queue.Queue, recv_queue: queue.Queue, gui_theme, gui_
 
 	running = True
 
-	enemy_ids = []
-
 	while running:
 		event, inputs = window.read(timeout=10)
 		# print(inputs)
@@ -225,6 +226,9 @@ def manage_gui(send_queue: queue.Queue, recv_queue: queue.Queue, gui_theme, gui_
 
 					case GUICommandType.UpdateWindow:
 						window[com.data[0]].update(com.data[1])
+
+					case GUICommandType.UpdateWindowValues:
+						window[com.data[0]].update(values=com.data[1])
 		except queue.Empty:
 			pass
 
@@ -246,7 +250,7 @@ def manage_gui(send_queue: queue.Queue, recv_queue: queue.Queue, gui_theme, gui_
 			# Copying
 			case 'Copy Zone' | 'Copy Position' | 'Copy Rotation' | 'Copy Entity List' | \
 						'Copy Camera Position' | 'Copy Camera Rotation' | 'Copy UI Tree' | \
-						'Copy Enemy Stats':
+						'Copy Stats':
 				send_queue.put(GUICommand(GUICommandType.Copy, event.replace('Copy', '').strip()))
 			
 			# Simple teleports
@@ -348,7 +352,9 @@ def manage_gui(send_queue: queue.Queue, recv_queue: queue.Queue, gui_theme, gui_
 
 			case 'View Stats':
 				enemy_index = re.sub(r'[^0-9]', '', str(inputs['EnemyInput']))
-				send_queue.put(GUICommand(GUICommandType.SelectEnemy, int(enemy_index)))
+				ally_index = re.sub(r'[^0-9]', '', str(inputs['AllyInput']))
+				base_damage = re.sub(r'[^0-9]', '', str(inputs['DamageInput']))
+				send_queue.put(GUICommand(GUICommandType.SelectEnemy, (int(enemy_index), int(ally_index), base_damage)))
 
 			# Other
 			case _:
