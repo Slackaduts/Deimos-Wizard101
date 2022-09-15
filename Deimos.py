@@ -1,8 +1,5 @@
 import asyncio
-from distutils.log import debug
 import traceback
-from pathlib import Path
-
 import requests
 import queue
 import threading
@@ -10,8 +7,6 @@ import wizwalker
 from wizwalker import Keycode, HotkeyListener, ModifierKeys, utils, XYZ, Orient, MemoryInvalidated
 from wizwalker.client_handler import ClientHandler, Client
 from wizwalker.extensions.scripting import teleport_to_friend_from_list
-from wizwalker.combat import CombatMember, CombatHandler
-from wizwalker.memory import HookHandler
 from wizwalker.memory.memory_objects.camera_controller import DynamicCameraController, FreeCameraController, ElasticCameraController
 from wizwalker.memory.memory_objects.window import Window
 import os
@@ -35,7 +30,7 @@ from src.teleport_math import navmap_tp, calc_Distance
 # from src.questing import Quester
 from src.questing_new import Quester
 from src.sigil import Sigil
-from src.utils import attempt_deactivate_mouseless, is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world, collect_wisps_with_limit, try_task_coro
+from src.utils import is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world, collect_wisps_with_limit, try_task_coro
 from src.paths import advance_dialog_path, decline_quest_path
 import PySimpleGUI as gui
 import pyperclip
@@ -43,7 +38,7 @@ from src.sprinty_client import SprintyClient
 from src.gui_inputs import param_input
 from src import discsdk
 from wizwalker.extensions.wizsprinter.wiz_navigator import toZoneDisplayName, toZone
-from typing import Coroutine, List, Tuple
+from typing import List, Tuple
 
 from src import deimosgui
 
@@ -1266,12 +1261,13 @@ async def main():
 											logger.debug(f'Copied UI Tree for client {foreground.title}')
 											pyperclip.copy(ui_tree)
 
-									case 'Enemy Stats':
+									case 'Stats':
 										if enemy_stats:
-											logger.debug('Copied Enemy Stats')
+											logger.debug('Copied Stats')
 											pyperclip.copy('\n'.join(enemy_stats))
 										else:
-											logger.info('No enemy stats are loaded. Select an Enemy # button corresponding to the desired enemy, then click the copy button.')
+											logger.info('No stats are loaded. Select an enemy index corresponding to its position on the duel circle, then click the copy button.')
+
 									case _:
 										logger.debug(f'Unknown copy value: {com.data}')
 
@@ -1310,8 +1306,23 @@ async def main():
 
 							case deimosgui.GUICommandType.SelectEnemy:
 								if foreground_client and await foreground_client.in_battle():
-									enemy_stats = await total_stats(foreground_client, int(com.data))
+									caster_index, target_index, base_damage = com.data
+
+									if not base_damage:
+										base_damage = None
+
+									else:
+										base_damage = int(base_damage)
+
+									enemy_stats, names_list, caster_i, target_i = await total_stats(foreground_client, caster_index, target_index, base_damage)
 									gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('stat_viewer', '\n'.join(enemy_stats))))
+									gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindowValues, ('EnemyInput', names_list)))
+									gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindowValues, ('AllyInput', names_list)))
+									gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('EnemyInput', names_list[caster_i])))
+									gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('AllyInput', names_list[target_i])))
+
+								else:
+									logger.info('Last selected client is not currently in combat. You must be in combat to use the stat viewer.')
 
 							case deimosgui.GUICommandType.XYZSync:
 								await xyz_sync_hotkey()

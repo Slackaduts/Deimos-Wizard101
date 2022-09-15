@@ -1,4 +1,5 @@
-from typing import Dict, List
+import asyncio
+from typing import Dict, List, Tuple
 from wizwalker import Client
 from wizwalker.errors import MemoryInvalidated
 from wizwalker.combat import CombatHandler
@@ -41,26 +42,38 @@ shadow_damage_per_pip = {
 }
 
 
-async def total_stats(client: Client, member_index: int) -> List:
+async def total_stats(client: Client, caster_index: int, target_index: int, base_damage: int = None) -> Tuple[List[str], List[str], int, int]:
     # Gets the readable relevant stats from
     combat = CombatHandler(client)
     try:
-        members = await combat.get_all_monster_members()
-        if len(members) < member_index:
-            member_index = len(members) - 1
+        members = await combat.get_members()
+        if len(members) < caster_index:
+            caster_index = len(members) - 1
 
         else:
-            member_index -= 1
+            caster_index -= 1
 
-        member = members[member_index]
+        if len(members) < target_index:
+            target_index = len(members) - 1
+
+        else:
+            target_index -= 1
+
+        member = members[caster_index]
+        target = members[target_index]
+
         member_id = await member.owner_id()
+        target_id = await target.owner_id()
         participant = await member.get_participant()
         stats = await member.get_stats()
 
     except MemoryInvalidated:
-        await total_stats(client, member_index)
+        await asyncio.sleep(0.5)
+        await total_stats(client, caster_index, target_index, base_damage)
 
     else:
+        member_names = [await m.name() for m in members]
+        names_with_indexes = [f'{i + 1} - {name}' for i, name in enumerate(member_names)]
         member_name = await member.name()
         member_type = await enemy_type_str(member)
         school_id = await participant.primary_magic_school_id()
@@ -96,12 +109,7 @@ async def total_stats(client: Client, member_index: int) -> List:
         masteries = await get_str_masteries(member)
         masteries_str = ', '.join(masteries)
 
-        client_member = await combat.get_client_member()
-        clent_member_id = await client_member.owner_id()
-
         total_pips = (power_pips * 2) + (shadow_pips * 3.6) + pips
-        # if school_id in damage_per_pip and not shadow_pips:
-        #     dpp = damage_per_pip[school_id]
 
         if school_id in damage_per_pip:
             dpp = shadow_damage_per_pip[school_id]
@@ -109,12 +117,15 @@ async def total_stats(client: Client, member_index: int) -> List:
         else:
             dpp = 100
 
+        if not base_damage:
+            base_damage = dpp * total_pips
+
         global_effect = None
         combat_resolver = await client.duel.combat_resolver()
         if combat_resolver:
             global_effect = await combat_resolver.global_effect()
 
-        estimated_damage = await base_damage_calculation_from_id(client, await combat.get_members(), member_id, clent_member_id, dpp * total_pips, school_id, global_effect)
+        estimated_damage = await base_damage_calculation_from_id(client, members, member_id, target_id, base_damage, school_id, global_effect)
 
         resistances, raw_boosts = to_seperated_str_stats(real_resistances)
 
@@ -124,7 +135,7 @@ async def total_stats(client: Client, member_index: int) -> List:
         blocks, _ = to_seperated_str_stats(real_blocks)
 
         total_stats = [
-            f'Estimated Max Dmg Output Against {client.title}: {int(estimated_damage)}',
+            f'Estimated Max Dmg Output Against {await target.name()}: {int(estimated_damage)}',
             f'Name: {member_name} - {member_type} - {school_name}',
             f'Power Pips: {power_pips} - Pips: {pips}',
             f'Shadow Pips: {shadow_pips}',
@@ -138,7 +149,7 @@ async def total_stats(client: Client, member_index: int) -> List:
             f'Masteries: {masteries_str}',
         ]
 
-        return total_stats
+        return (total_stats, names_with_indexes, caster_index, target_index)
 
 
 def dict_to_str(input_dict: Dict[str, float], seperator_1: str = ': ', seperator_2: str = ', ', take_abs: bool = False, key_blacklist: List[str] = ['WhirlyBurly', 'Gardening', 'CastleMagic', 'Cantrips', 'Fishing']) -> str:
