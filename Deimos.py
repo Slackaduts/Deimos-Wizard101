@@ -1306,7 +1306,7 @@ async def main():
 
 							case deimosgui.GUICommandType.SelectEnemy:
 								if foreground_client and await foreground_client.in_battle():
-									caster_index, target_index, base_damage = com.data
+									caster_index, target_index, base_damage, school_id, crit_status = com.data
 
 									if not base_damage:
 										base_damage = None
@@ -1314,7 +1314,7 @@ async def main():
 									else:
 										base_damage = int(base_damage)
 
-									enemy_stats, names_list, caster_i, target_i = await total_stats(foreground_client, caster_index, target_index, base_damage)
+									enemy_stats, names_list, caster_i, target_i = await total_stats(foreground_client, caster_index, target_index, base_damage, school_id, crit_status)
 									gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('stat_viewer', '\n'.join(enemy_stats))))
 									gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindowValues, ('EnemyInput', names_list)))
 									gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindowValues, ('AllyInput', names_list)))

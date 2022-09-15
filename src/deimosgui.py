@@ -2,6 +2,7 @@ from enum import Enum, auto
 import queue
 import re
 import PySimpleGUI as gui
+from src.combat_objects import school_id_to_names
 
 
 class GUICommandType(Enum):
@@ -139,9 +140,8 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 	# UNFINISHED - slack
 	stat_viewer_layout = [
 		[gui.Text(dev_utils_notice, text_color=gui_text_color)],
-		[gui.Text('Caster/Target Indices:', text_color=gui_text_color), gui.Combo([1, 2, 3, 4, 5, 6, 7, 8], text_color=gui_text_color, size=(21, 1), default_value=1, key='EnemyInput'), gui.Combo([1, 2, 3, 4, 5, 6, 7, 8], text_color=gui_text_color, size=(21, 1), default_value=1, key='AllyInput')],
-		[gui.Text('Custom Base Damage:', text_color=gui_text_color), gui.InputText('', size=(20, 1), key='DamageInput'), hotkey_button('View Stats'), hotkey_button('Copy Stats', True)],
-		[gui.Text('The dmg param will use a given number as the card dmg instead of guessing.', text_color=gui_text_color)],
+		[gui.Text('Caster/Target Indices:', text_color=gui_text_color), gui.Combo([i + 1 for i in range(12)], text_color=gui_text_color, size=(21, 1), default_value=1, key='EnemyInput', readonly=True), gui.Combo([i + 1 for i in range(12)], text_color=gui_text_color, size=(21, 1), default_value=1, key='AllyInput', readonly=True)],
+		[gui.Text('Dmg:', text_color=gui_text_color), gui.InputText('', size=(7, 1), key='DamageInput'), gui.Text('School:', text_color=gui_text_color), gui.Combo(['Fire', 'Ice', 'Storm', 'Myth', 'Life', 'Death', 'Balance', 'Star', 'Sun', 'Moon', 'Shadow'], default_value='Fire', size=(7, 1), key='SchoolInput', readonly=True), gui.Text('Crit:', text_color=gui_text_color), gui.Checkbox(None, True, text_color=gui_text_color, key='CritStatus'),hotkey_button('View Stats', True), hotkey_button('Copy Stats', True)],
 		[gui.Multiline('No client has been selected.', key='stat_viewer', size=(66, 8), text_color=gui_text_color, horizontal_scroll=True)],
 		]
 
@@ -354,7 +354,8 @@ def manage_gui(send_queue: queue.Queue, recv_queue: queue.Queue, gui_theme, gui_
 				enemy_index = re.sub(r'[^0-9]', '', str(inputs['EnemyInput']))
 				ally_index = re.sub(r'[^0-9]', '', str(inputs['AllyInput']))
 				base_damage = re.sub(r'[^0-9]', '', str(inputs['DamageInput']))
-				send_queue.put(GUICommand(GUICommandType.SelectEnemy, (int(enemy_index), int(ally_index), base_damage)))
+				school_id: int = school_id_to_names[inputs['SchoolInput']]
+				send_queue.put(GUICommand(GUICommandType.SelectEnemy, (int(enemy_index), int(ally_index), base_damage, school_id, inputs['CritStatus'])))
 
 			# Other
 			case _:

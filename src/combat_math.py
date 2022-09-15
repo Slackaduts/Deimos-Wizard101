@@ -56,7 +56,7 @@ async def curve_resist(client: Client, member: CombatMember, resist: float) -> f
     return resist
 
 
-async def base_damage_calculation_from_id(client: Client, members: List[CombatMember], caster_id: int, target_id: int, damage: float, damage_type: int, global_effect: DynamicSpellEffect = None) -> float:
+async def base_damage_calculation_from_id(client: Client, members: List[CombatMember], caster_id: int, target_id: int, damage: float, damage_type: int, global_effect: DynamicSpellEffect = None, force_crit: bool = None) -> float:
     # Calculates damage from given base damage value, and is the basis for both exact and damage potential calculation. Works based off of IDs.
 
     # Get base objects from ID arguments
@@ -153,7 +153,7 @@ async def base_damage_calculation_from_id(client: Client, members: List[CombatMe
         crit_chance = client_school_critical / mob_block
 
         # applying the crit multiplier if the chance is above a certain threshold
-        if crit_chance >= 0.85:
+        if (crit_chance >= 0.85 and force_crit is None) or force_crit:
             damage *= crit_damage_multiplier
 
 

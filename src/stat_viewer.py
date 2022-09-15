@@ -42,7 +42,7 @@ shadow_damage_per_pip = {
 }
 
 
-async def total_stats(client: Client, caster_index: int, target_index: int, base_damage: int = None) -> Tuple[List[str], List[str], int, int]:
+async def total_stats(client: Client, caster_index: int, target_index: int, base_damage: int = None, school_id: int = None, force_crit: bool = None) -> Tuple[List[str], List[str], int, int]:
     # Gets the readable relevant stats from
     combat = CombatHandler(client)
     try:
@@ -76,8 +76,11 @@ async def total_stats(client: Client, caster_index: int, target_index: int, base
         names_with_indexes = [f'{i + 1} - {name}' for i, name in enumerate(member_names)]
         member_name = await member.name()
         member_type = await enemy_type_str(member)
-        school_id = await participant.primary_magic_school_id()
-        school_name = school_to_str[school_id]
+        if not school_id:
+            school_id = await participant.primary_magic_school_id()
+
+        real_school_id = await participant.primary_magic_school_id()
+        school_name = school_to_str[real_school_id]
 
         power_pips = await member.power_pips()
         pips = await member.normal_pips()
@@ -125,7 +128,7 @@ async def total_stats(client: Client, caster_index: int, target_index: int, base
         if combat_resolver:
             global_effect = await combat_resolver.global_effect()
 
-        estimated_damage = await base_damage_calculation_from_id(client, members, member_id, target_id, base_damage, school_id, global_effect)
+        estimated_damage = await base_damage_calculation_from_id(client, members, member_id, target_id, base_damage, school_id, global_effect, force_crit=force_crit)
 
         resistances, raw_boosts = to_seperated_str_stats(real_resistances)
 
@@ -135,11 +138,11 @@ async def total_stats(client: Client, caster_index: int, target_index: int, base
         blocks, _ = to_seperated_str_stats(real_blocks)
 
         total_stats = [
-            f'Estimated Max Dmg Output Against {await target.name()}: {int(estimated_damage)}',
+            f'Estimated Max Dmg Against {await target.name()}: {int(estimated_damage)}',
             f'Name: {member_name} - {member_type} - {school_name}',
             f'Power Pips: {power_pips} - Pips: {pips}',
             f'Shadow Pips: {shadow_pips}',
-            f'Health: {health}/{max_health} ({int((health / max_health) * 100)}%)',
+            f'Health: {health}/{max_health} ({(health // max_health) * 100}%)',
             f'Boosts: {dict_to_str(raw_boosts, take_abs=True)}',
             f'Resists: {dict_to_str(resistances)}',
             f'Damages: {dict_to_str(damages)}',

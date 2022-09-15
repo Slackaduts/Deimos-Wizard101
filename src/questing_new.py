@@ -8,7 +8,7 @@ from loguru import logger
 # from Deimos import sync_camera
 from wizwalker.extensions.scripting.utils import _maybe_get_named_window
 
-from src.abandonded_quest_correction import return_to_main_quest, handle_abandonded_quest_correction_general, handle_abandonded_quest_correction_talk_quests
+# from src.abandonded_quest_correction import return_to_main_quest, handle_abandonded_quest_correction_general, handle_abandonded_quest_correction_talk_quests
 from src.auto_pet import auto_pet, nomnom
 from src.teleport_math import *
 from wizwalker import XYZ, Keycode, MemoryReadError, Client, Rectangle, ClientHandler, HookAlreadyActivated, HookNotActive
