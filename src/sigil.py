@@ -53,11 +53,12 @@ class Sigil():
 		if client.use_team_up:
 			await self.team_up(client)
 		else:
+			current_zone = await client.zone_name()
 			await client.send_key(Keycode.X, seconds=0.1)
 			await asyncio.sleep(0.5)
 			if await is_visible_by_path(client, dungeon_warning_path):
 				await client.send_key(Keycode.ENTER, 0.1)
-			await wait_for_zone_change(client)
+			await wait_for_zone_change(client, current_zone=current_zone)
 
 
 	async def go_through_zone_changes(self):
@@ -112,6 +113,7 @@ class Sigil():
 
 			# Join sigil and wait for the zone to change either via team up or sigil countdown
 			await self.join_sigil()
+			await asyncio.sleep(1.5)
 
 			# if quest objective is same, we know it's a short dungeon, most likely with 1 room
 			if await get_quest_name(self.client) == self.original_quest:
@@ -163,7 +165,7 @@ class Sigil():
 						await asyncio.sleep(0.25)
 
 						if await is_visible_by_path(self.client, cancel_chest_roll_path):
-							click_window_by_path(self.client, cancel_chest_roll_path)
+							await click_window_by_path(self.client, cancel_chest_roll_path)
 
 						if await is_visible_by_path(self.client, npc_range_path):
 							await self.client.send_key(Keycode.X, 0.1)
@@ -257,7 +259,7 @@ class Sigil():
 						if await get_quest_name(self.client) != self.original_quest:
 							try:
 								# await navmap_tp(self.client, quest_xyz, auto_quest_leader=True)
-								await asyncio.gather(*[navmap_tp(p, quest_xyz, auto_quest_leader=True) for p in self.clients])
+								await asyncio.gather(*[navmap_tp(p, quest_xyz, leader_client=self.client) for p in self.clients])
 							except ValueError:
 								pass
 

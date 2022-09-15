@@ -168,3 +168,8 @@ dance_game_action_textbox_path = ['WorldView', 'PetGameSplash', '', 'PetGameDanc
 
 # Character Screen Energy Amount
 energy_amount_path = ['WorldView', 'DeckConfiguration', '', 'ControlSprite', 'wndEnergyFrame', 'Layout', 'txtEnergy']
+
+# Questbook Quest Paths
+quest_buttons_parent_path = ['WorldView', 'DeckConfiguration', 'wndQuestList']
+quest_two_button_path = ['WorldView', 'DeckConfiguration', 'wndQuestList', 'wndQuestInfo1']
+all_quests_sort_button_path = ['WorldView', 'DeckConfiguration', 'wndQuestList', 'QuestLogAllButton']

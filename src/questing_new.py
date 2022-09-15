@@ -8,10 +8,10 @@ from loguru import logger
 # from Deimos import sync_camera
 from wizwalker.extensions.scripting.utils import _maybe_get_named_window
 
-
+from src.abandonded_quest_correction import return_to_main_quest, handle_abandonded_quest_correction_general, handle_abandonded_quest_correction_talk_quests
 from src.auto_pet import auto_pet, nomnom
 from src.teleport_math import *
-from wizwalker import XYZ, Keycode, MemoryReadError, Client, Rectangle, ClientHandler
+from wizwalker import XYZ, Keycode, MemoryReadError, Client, Rectangle, ClientHandler, HookAlreadyActivated, HookNotActive
 from wizwalker.file_readers.wad import Wad
 from wizwalker.memory import DynamicClientObject, SimpleHook, HookHandler
 from wizwalker.extensions.scripting import teleport_to_friend_from_list
@@ -57,7 +57,7 @@ class Quester():
         except:
             txtmsg = ""
 
-        if 'to enter' in txtmsg.lower() or 'to interact' in txtmsg.lower() or 'to activate' in txtmsg.lower():
+        if 'to enter' in txtmsg.lower() or 'to interact' in txtmsg.lower() or 'to activate' in txtmsg.lower() or 'to teleport' in txtmsg.lower():
             return True
         else:
             return False
@@ -526,9 +526,8 @@ class Quester():
 
                         try:
                             await c.mouse_handler.activate_mouseless()
-                        except:
+                        except HookAlreadyActivated:
                             print(traceback.print_exc())
-                            logger.error('Hook already activated')
                             pass
 
                         await asyncio.sleep(.4)
@@ -563,7 +562,7 @@ class Quester():
 
                             try:
                                 await c.mouse_handler.deactivate_mouseless()
-                            except:
+                            except HookNotActive:
                                 print(traceback.print_exc())
                                 pass
 
@@ -702,9 +701,7 @@ class Quester():
                     await asyncio.sleep(1.0)
 
                     if solo_cl in self.clients and solo_cl.questing_status:
-                        await questing.auto_quest_solo(auto_pet_enabled=False, a=111)
-
-                # solo_zone_clients.remove(solo_cl)
+                        await questing.auto_quest_solo(auto_pet_disabled=True)
 
             await asyncio.gather(*[solo_zone_questing(cl) for cl in clients_in_solo])
 
@@ -802,19 +799,25 @@ class Quester():
         await asyncio.gather(*[self.collect_wisps(p) for p in self.clients])
         await asyncio.gather(*[self.guarantee_use_potion(p) for p in self.clients])
 
+        any_client_needs_potions = False
         for p in self.clients:
             # If we have less than 1 potion left, send all clients to get potions (even if some don't need it).  Only do this once per questing loop
             if await p.stats.potion_charge() < 1.0 and await p.stats.reference_level() >= 5:
+                any_client_needs_potions = True
+
+        if any_client_needs_potions:
+            # Guaranteed teleport mark placement - marks until mana is lower than starting point
+            for p in self.clients:
                 if await p.zone_name() != 'WizardCity/WC_Hub':
                     original_mana = await p.stats.current_mana()
-                    while await p.stats.current_mana() == original_mana:
+                    while await p.stats.current_mana() >= original_mana:
                         logger.debug(f'Client {p.title} - Marking Location')
                         await p.send_key(Keycode.PAGE_DOWN, 0.1)
                         await asyncio.sleep(.75)
 
-                await asyncio.gather(*[refill_potions(c, mark=False, recall=False, original_zone=await c.zone_name()) for c in self.clients])
-                await asyncio.gather(*[self.gather_clients_from_potion_buy(c) for c in self.clients])
-                break
+            await asyncio.gather(*[refill_potions(c, mark=False, recall=False, original_zone=await c.zone_name()) for c in self.clients])
+            # return all clients to original location, and if it fails, send all to commons
+            await asyncio.gather(*[self.gather_clients_from_potion_buy(c) for c in self.clients])
 
     async def collect_wisps(self, p: Client):
         if await is_free(p):
@@ -1224,7 +1227,7 @@ class Quester():
                     display_name_code = await object_template.display_name()  # gets display name code
                     display_name = await self.client.cache_handler.get_langcode_name(display_name_code)  # uses display name code to get display name text
                     match = fuzz.ratio(display_name.lower(), str(quest_item_list).lower())  # fuzzywuzzy check if display name matches quest item.
-                    # print(display_name + ' : ' + str(match))
+                    print(display_name + ' : ' + str(match))
 
                     if match > 80:  # if strings match greater than 80 it means that it's most likely the item
                         while not await is_free(self.client) or self.client.entity_detect_combat_status:
@@ -1333,12 +1336,12 @@ class Quester():
             await asyncio.sleep(.3)
 
     # @logger.catch()
-    async def auto_quest_leader(self, questing_friend_tp: bool, gear_switching_in_solo_zones: bool, hitting_client, auto_pet_enabled: bool, ignore_pet_level_up: bool, play_dance_game: bool):
+    async def auto_quest_leader(self, questing_friend_tp: bool, gear_switching_in_solo_zones: bool, hitting_client, ignore_pet_level_up: bool, play_dance_game: bool):
         follower_clients = await self.get_follower_clients()
         questing_clients = await self.get_questing_clients()
 
         # read and store the name of the client's wizard, and check energy
-        if questing_friend_tp or auto_pet_enabled:
+        if questing_friend_tp or self.current_leader_client.auto_pet_status:
             # open character screen
 
             await asyncio.gather(*[self.open_character_screen(c) for c in self.clients])
@@ -1349,7 +1352,12 @@ class Quester():
             # close character screen
             await asyncio.gather(*[self.close_character_screen(c) for c in self.clients])
 
-            if auto_pet_enabled:
+            auto_pet_on = False
+            for p in self.clients:
+                if p.auto_pet_status:
+                    auto_pet_on = True
+
+            if auto_pet_on:
                 # potentially run auto_pet once initially, if all questing_clients have high energy
                 all_high_energy = True
                 for i, c in enumerate(questing_clients):
@@ -1358,6 +1366,10 @@ class Quester():
                         all_high_energy = False
 
                 if all_high_energy:
+                    # buy potions if necessary, otherwise auto pet will fail
+                    await self.heal_and_handle_potions(questing_friend_tp=False)
+
+                    logger.debug('All questing clients have high energy, training pets on all clients.')
                     await asyncio.gather(*[auto_pet(c, ignore_pet_level_up, play_dance_game, questing=True) for c in self.clients])
 
             # Working but inconsistent code for checking if all clients are friends, and then automatically adding them
@@ -1458,17 +1470,25 @@ class Quester():
                 if dungeon_recalled:
                     await asyncio.gather(*[self.dungeon_recall(p) for p in follower_clients])
 
-                if auto_pet_enabled:
-                    all_questing_clients_leveled_up = True
+                auto_pet_on = False
+                for p in self.clients:
+                    if p.auto_pet_status:
+                        auto_pet_on = True
+                        break
+
+                # train pet on all clients if any questing client levels up
+                if auto_pet_on:
+                    any_client_leveled_up = False
                     for c in questing_clients:
-                        if await c.stats.reference_level() <= c.character_level:
-                            all_questing_clients_leveled_up = False
+                        char_level = await c.stats.reference_level()
+                        if char_level > c.character_level:
+                            any_client_leveled_up = True
                             break
                         # else:
                         #    print('client: ' + c.title + ' leveled up')
 
-                    if all_questing_clients_leveled_up:
-                        logger.debug('All questing clients leveled up - training pets on all questing clients.')
+                    if any_client_leveled_up:
+                        logger.debug('One or more questing clients leveled up - training pets on all questing clients.')
                         await asyncio.gather(*[auto_pet(c, ignore_pet_level_up, play_dance_game, questing=True) for c in self.clients])
 
                 # If zone changed, try to determine if we are in a solo zone
@@ -1914,7 +1934,7 @@ class Quester():
                 await asyncio.sleep(.1)
 
     # @logger.catch()
-    async def auto_quest_solo(self, a, auto_pet_enabled: bool, ignore_pet_level_up=False, play_dance_game=False):
+    async def auto_quest_solo(self, auto_pet_disabled=False, ignore_pet_level_up=False, play_dance_game=False):
         #print(await self.read_spiral_door_title(self.client))
         if await is_free(self.client):
             if await is_potion_needed(self.client) and await self.client.stats.current_mana() > 1 and await self.client.stats.current_hitpoints() > 1:
@@ -1925,9 +1945,9 @@ class Quester():
 
             quest_xyz = await self.client.quest_position.position()
 
-            if auto_pet_enabled:
+            if self.client.auto_pet_status and not auto_pet_disabled:
                 # client has leveled up
-                if self.client.character_level <= await self.client.stats.reference_level() or a == 1:
+                if self.client.character_level < await self.client.stats.reference_level():
                     logger.debug('Client ' + self.client.title + ' leveled up - training pet.')
                     await auto_pet(self.client, ignore_pet_level_up, play_dance_game, questing=True)
 
@@ -1997,12 +2017,10 @@ class Quester():
                 if distance < 1:
                     await self.auto_collect_rewrite(self.client)
 
-    async def auto_quest(self, auto_pet_enabled: bool, ignore_pet_level_up: bool, play_dance_game: bool):
-        a = 1
+    async def auto_quest(self, ignore_pet_level_up: bool, play_dance_game: bool):
         while self.client.questing_status:
             await asyncio.sleep(1)
-            await self.auto_quest_solo(a=a, auto_pet_enabled=auto_pet_enabled, ignore_pet_level_up=ignore_pet_level_up, play_dance_game=play_dance_game)
-            a += 1
+            await self.auto_quest_solo(ignore_pet_level_up=ignore_pet_level_up, play_dance_game=play_dance_game)
 
     async def handle_sigil_wait(self, min_sigil_distance: float = 750.0):
         sprinter = SprintyClient(self.client)

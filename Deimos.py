@@ -7,7 +7,7 @@ import requests
 import queue
 import threading
 import wizwalker
-from wizwalker import Keycode, HotkeyListener, ModifierKeys, utils, XYZ, Orient
+from wizwalker import Keycode, HotkeyListener, ModifierKeys, utils, XYZ, Orient, MemoryInvalidated
 from wizwalker.client_handler import ClientHandler, Client
 from wizwalker.extensions.scripting import teleport_to_friend_from_list
 from wizwalker.combat import CombatMember, CombatHandler
@@ -27,7 +27,7 @@ import statistics
 import re
 from pypresence import AioPresence
 from src.command_parser import execute_flythrough, parse_command
-from src.auto_pet import activate_dance_game_moves_hook, deactivate_dance_game_moves_hook, read_current_dance_game_moves, nomnom, attempt_deactivate_dance_hook
+from src.auto_pet import nomnom
 from src.drop_logger import logging_loop
 from src.combat import Fighter
 from src.stat_viewer import total_stats
@@ -166,12 +166,10 @@ def read_config(config_name : str):
 	global questing_friend_tp
 	global gear_switching_in_solo_zones
 	global hitter_client
-	global auto_pet_questing
 	client_to_boost = parser.get('questing', 'client_to_boost', fallback=None)
 	questing_friend_tp = parser.getboolean('questing', 'friend_teleport', fallback=False)
 	gear_switching_in_solo_zones = parser.getboolean('questing', 'gear_switching_in_solo_zones', fallback=False)
 	hitter_client = parser.get('questing', 'hitter_client', fallback=None)
-	auto_pet_questing = parser.getboolean('questing', 'auto_pet', fallback=False)
 	# empty string can falsely be read as a client.  Check if the user's config entry was valid and set to None if not
 	valid_configs = ['p1', 'p2', 'p3', 'p4', '1', '2', '3', '4']
 	if any(hitter_client == option for option in valid_configs):
@@ -229,6 +227,7 @@ sigil_leader_pid: int = None
 questing_leader_pid: int = None
 
 questing_task: asyncio.Task = None
+auto_pet_task: asyncio.Task = None
 sigil_task: asyncio.Task = None
 dialogue_task: asyncio.Task = None
 combat_task: asyncio.Task = None
@@ -685,10 +684,33 @@ async def main():
 				questing_task = None
 
 			else:
-				p.sigil_status = False
+				for p in walker.clients:
+					p.sigil_status = False
+
 				logger.debug(f'{toggle_auto_questing_key} key pressed, enabling auto questing.')
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('QuestingStatus', 'Enabled')))
 				questing_task = asyncio.create_task(try_task_coro(questing_loop, walker.clients, True))
+
+
+	async def toggle_auto_pet_hotkey():
+		global auto_pet_task
+		global auto_pet_status
+
+		if not freecam_status:
+			auto_pet_status ^= True
+			for p in walker.clients:
+				p.auto_pet_status ^= True
+
+			if auto_pet_task is not None:
+				logger.debug(f'Disabling auto pet.')
+				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Auto PetStatus', 'Disabled')))
+				auto_pet_task.cancel()
+				auto_pet_task = None
+
+			else:
+				logger.debug(f'Enabling auto pet.')
+				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Auto PetStatus', 'Enabled')))
+				auto_pet_task = asyncio.create_task(try_task_coro(auto_pet_loop, walker.clients, True))
 
 
 	async def enable_hotkeys(exclude_freecam: bool = False, debug: bool = False):
@@ -837,6 +859,8 @@ async def main():
 	async def questing_loop():
 		# Auto questing on a per client basis.
 		async def async_questing(client: Client):
+			client.character_level = await client.stats.reference_level()
+
 			while True:
 				await asyncio.sleep(1)
 
@@ -846,15 +870,27 @@ async def main():
 							# if follow leader is off, quest on all clients, passing through only the leader
 							logger.debug(f'Client {client.title} - Handling questing for all clients.')
 							questing = Quester(client, walker.clients, questing_leader_pid)
-							await questing.auto_quest_leader(questing_friend_tp, gear_switching_in_solo_zones, hitter_client, auto_pet_questing, ignore_pet_level_up, only_play_dance_game)
+							await questing.auto_quest_leader(questing_friend_tp, gear_switching_in_solo_zones, hitter_client, ignore_pet_level_up, only_play_dance_game)
 					else:
 						# if follow leader is off, quest on all clients, passing through only the leader
 						logger.debug(f'Client {client.title} - Handling questing.')
 						questing = Quester(client, walker.clients, None)
-						await questing.auto_quest(auto_pet_questing, ignore_pet_level_up, only_play_dance_game)
+						await questing.auto_quest(ignore_pet_level_up, only_play_dance_game)
 
 		await asyncio.gather(*[async_questing(p) for p in walker.clients])
 
+	# logger.catch()
+	async def auto_pet_loop():
+		# Auto questing on a per client basis.
+		async def async_auto_pet(client: Client):
+			while True:
+				await asyncio.sleep(1)
+
+				if client in walker.clients and auto_pet_status:
+					await nomnom(client, ignore_pet_level_up=ignore_pet_level_up, only_play_dance_game=only_play_dance_game)
+
+
+		await asyncio.gather(*[async_auto_pet(p) for p in walker.clients])
 
 	async def nearest_duel_circle_distance_and_xyz(sprinter: SprintyClient):
 		min_distance = None
@@ -1152,6 +1188,9 @@ async def main():
 
 									case 'Questing':
 										await toggle_questing_hotkey()
+
+									case 'Auto Pet':
+										await toggle_auto_pet_hotkey()
 
 									case 'Freecam':
 										await toggle_freecam_hotkey()
@@ -1694,6 +1733,7 @@ async def main():
 		p.sigil_status = False
 		p.questing_status = False
 		p.auto_pet_status = False
+		p.feeding_pet_status = False
 		p.use_team_up = use_team_up
 		p.mouseless_status = False
 		p.dance_hook_status = False

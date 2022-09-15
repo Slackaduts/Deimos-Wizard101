@@ -7,104 +7,12 @@ from pymem.exception import MemoryReadError
 from wizwalker import HookAlreadyActivated, HookNotActive, HookNotReady, Client, Keycode, XYZ
 from wizwalker.memory import HookHandler, SimpleHook
 
+from src.dance_game_hook import attempt_activate_dance_hook, attempt_deactivate_dance_hook
 from src.paths import *
 from src.teleport_math import navmap_tp_leader_quest
 from src.utils import navigate_to_ravenwood, click_window_by_path, is_visible_by_path, navigate_to_commons_from_ravenwood, post_keys, get_window_from_path, safe_wait_for_zone_change, LoadingScreenNotFound, FriendBusyOrInstanceClosed, get_popup_title, attempt_activate_mouseless, attempt_deactivate_mouseless
 
 _dance_moves_transtable = str.maketrans("abcd", "WDSA")
-
-
-# Thanks to peechez for this class
-class DanceGameMovesHook(SimpleHook):
-    pattern = rb"\x48\x8B\xF8\x48\x39\x70\x10"
-    instruction_length = 7
-    exports = [("dance_game_moves", 8)]
-    noops = 2
-
-    async def bytecode_generator(self, packed_exports):
-        return (
-                b"\x48\x8B\xF8"
-                b"\x48\x8B\x00"
-                b"\x48\xA3" + packed_exports[0][1] +
-                b"\x48\x8B\xC7"
-                b"\x48\x39\x70\x10"
-        )
-
-
-
-async def activate_dance_game_moves_hook(
-        self, *, wait_for_ready: bool = False, timeout: float = None
-):
-    if self._check_if_hook_active(DanceGameMovesHook):
-        raise HookAlreadyActivated("DanceGameMovesHook")
-
-    await self._check_for_autobot()
-
-    hook = DanceGameMovesHook(self)
-    await hook.hook()
-
-    self._active_hooks.append(hook)
-    self._base_addrs["dance_game_moves"] = hook.dance_game_moves
-
-    if wait_for_ready:
-        await self._wait_for_value(hook.dance_game_moves, timeout)
-
-
-HookHandler.activate_dance_game_moves_hook = activate_dance_game_moves_hook
-
-
-async def deactivate_dance_game_moves_hook(self):
-    if not self._check_if_hook_active(DanceGameMovesHook):
-        raise HookNotActive("DanceGameMovesHook")
-
-    hook = self._get_hook_by_type(DanceGameMovesHook)
-    self._active_hooks.remove(hook)
-    await hook.unhook()
-
-    del self._base_addrs["dance_game_moves"]
-
-
-HookHandler.deactivate_dance_game_moves_hook = deactivate_dance_game_moves_hook
-
-async def attempt_activate_dance_hook(client: Client, sleep_time: float = 0.1):
-    # Attempts to activate dance hook, in a try block in case it's already off for this client
-    if not client.dance_hook_status:
-        try:
-            await client.hook_handler.activate_dance_game_moves_hook()
-        except:
-            pass
-
-        client.dance_hook_status = True
-    await asyncio.sleep(sleep_time)
-
-async def attempt_deactivate_dance_hook(client: Client, sleep_time: float = 0.1):
-    # Attempts to deactivate dance hook, in a try block in case it's already off for this client
-    if client.dance_hook_status:
-        try:
-            await client.hook_handler.deactivate_dance_game_moves_hook()
-        except:
-            pass
-
-        client.dance_hook_status = False
-    await asyncio.sleep(sleep_time)
-
-
-async def read_current_dance_game_moves(self) -> str:
-    try:
-        addr = self._base_addrs["dance_game_moves"]
-    except KeyError:
-        raise HookNotActive("DanceGameMovesHook")
-
-    try:
-        moves = await self.read_bytes(addr, 8)
-    except MemoryReadError:
-        raise HookNotReady("DanceGameMovesHook")
-    return moves.partition(b"\0")[0].decode().translate(_dance_moves_transtable)
-
-
-HookHandler.read_current_dance_game_moves = read_current_dance_game_moves
-
-
 
 async def navigate_to_pavilion_from_commons(cl: Client):
     # Teleport to pet pavilion door
@@ -129,6 +37,7 @@ async def nomnom(client: Client, ignore_pet_level_up: bool, only_play_dance_game
     mouseless_active = False
 
     while not finished_feeding:
+        client.feeding_pet_status = True
         popup_title = await get_popup_title(client)
         while not popup_title == 'Dance Game':
             await asyncio.sleep(.125)
@@ -192,12 +101,12 @@ async def nomnom(client: Client, ignore_pet_level_up: bool, only_play_dance_game
                 # click 'Next' button
                 if await is_visible_by_path(client, skipped_pet_game_continue_and_feed_button_path):
                     await click_window_by_path(client, skipped_pet_game_continue_and_feed_button_path)
-                    await asyncio.sleep(.5)
+                    await asyncio.sleep(1.5)
 
                 # click first snack
                 if await is_visible_by_path(client, skipped_first_pet_snack_path):
                     await click_window_by_path(client, skipped_first_pet_snack_path)
-                    await asyncio.sleep(.2)
+                    await asyncio.sleep(.6)
 
                     # Click 'Feed Pet'
                     if await is_visible_by_path(client, skipped_pet_game_continue_and_feed_button_path):
@@ -272,17 +181,17 @@ async def nomnom(client: Client, ignore_pet_level_up: bool, only_play_dance_game
 
                 # if we leveled up from the small amount of XP the pet game gave us, account for it
                 if await is_visible_by_path(client, won_pet_leveled_up_window_path):
-                    await won_game_leveled_up(client, won_pet_leveled_up_window_path)
+                    await won_game_leveled_up(client, ignore_pet_level_up)
                 # else:
                 # click 'Next'
                 if await is_visible_by_path(client, won_pet_game_continue_and_feed_button_path):
                     await click_window_by_path(client, won_pet_game_continue_and_feed_button_path)
-                    await asyncio.sleep(.5)
+                    await asyncio.sleep(1.5)
 
                 # click first snack
                 if await is_visible_by_path(client, won_first_pet_snack_path):
                     await click_window_by_path(client, won_first_pet_snack_path)
-                    await asyncio.sleep(.2)
+                    await asyncio.sleep(.6)
 
                     # Click 'Feed Pet'
                     if await is_visible_by_path(client, won_pet_game_continue_and_feed_button_path):
@@ -318,7 +227,6 @@ async def nomnom(client: Client, ignore_pet_level_up: bool, only_play_dance_game
             await click_window_by_path(client, pet_feed_window_cancel_button_path)
             await asyncio.sleep(.2)
 
-
     if mouseless_active:
         await attempt_deactivate_mouseless(client)
 
@@ -327,7 +235,15 @@ async def nomnom(client: Client, ignore_pet_level_up: bool, only_play_dance_game
         await attempt_deactivate_dance_hook(client)
 
     # home button can in rare cases be greyed out after auto_buy - wait some time to make sure that clients don't get stuck if other code tries to send them home
-    await asyncio.sleep(6.5)
+    # await asyncio.sleep(6.5)
+
+    client.feeding_pet_status = False
+
+    # wait for client or code to walk off the sigil
+    while await get_popup_title(client) == 'Dance Game':
+        await asyncio.sleep(.125)
+
+
 
 
 # Thanks to Peechez for this code from wizdancer
@@ -353,6 +269,7 @@ async def won_game_leveled_up(client: Client, auto_pet_ignore_pet_level_up):
     await click_window_by_path(client, won_pet_game_continue_and_feed_button_path)
     await asyncio.sleep(1.0)
     if await is_visible_by_path(client, won_pet_leveled_up_window_path):
+        print(str(auto_pet_ignore_pet_level_up))
         if not auto_pet_ignore_pet_level_up:
             await client.mouse_handler.deactivate_mouseless()
             logger.info('Auto Pet - Client ' + client.title + '\'s pet leveled up.  Please close the window to continue, or exit Deimos if you wish to stop questing.')
@@ -374,7 +291,12 @@ async def won_game_leveled_up(client: Client, auto_pet_ignore_pet_level_up):
 async def auto_pet(client: Client, ignore_pet_level_up: bool, only_play_dance_game: bool, questing: bool = False):
     started_at_pavilion = False
     if await client.zone_name() != 'WizardCity/WC_Streets/Interiors/WC_PET_Park':
-        await client.send_key(Keycode.PAGE_DOWN, 0.1)
+        original_mana = await client.stats.current_mana()
+        while await client.stats.current_mana() >= original_mana:
+            logger.debug(f'Client {client.title} - Marking Location')
+            await client.send_key(Keycode.PAGE_DOWN, 0.1)
+            await asyncio.sleep(.75)
+
         await asyncio.sleep(.5)
         # Navigate to ravenwood
         await navigate_to_ravenwood(client)
@@ -392,6 +314,8 @@ async def auto_pet(client: Client, ignore_pet_level_up: bool, only_play_dance_ga
             await asyncio.sleep(3.0)
             await client.teleport(XYZ(x=-4450.57958984375, y=-994.8973388671875, z=-8.041412353515625))
 
+    # we know we are on the pet sigil or going to it, activate and let nomnom deactivate when it is finished
+    client.feeding_pet_status = True
         # for i in range(3):
         #     await client.send_key(Keycode.END, 0.1)
         #
@@ -416,9 +340,26 @@ async def auto_pet(client: Client, ignore_pet_level_up: bool, only_play_dance_ga
     if questing:
         client.character_level = await client.stats.reference_level()
 
-    await asyncio.sleep(1.0)
     # feed the pet
-    await nomnom(client, ignore_pet_level_up, only_play_dance_game)
+    # await nomnom(client, ignore_pet_level_up, only_play_dance_game)
+
+
+    print('before ' + client.title)
+
+    # while not client.feeding_pet_status:
+    #     print('while not ' + client.title)
+    #     await asyncio.sleep(.1)
+
+    while client.feeding_pet_status:
+        print('while ' + client.title)
+        await asyncio.sleep(.1)
+
+    print('AFTER while ' + client.title)
+
+    await asyncio.sleep(1.0)
+
+    # walk off of the sigil to stop auto pet from triggering
+    # await client.goto(-3830.433837890625, -1301.0308837890625)
 
     if not started_at_pavilion:
         # return to last location
@@ -426,14 +367,16 @@ async def auto_pet(client: Client, ignore_pet_level_up: bool, only_play_dance_ga
 
         # account for teleporting to mark
         # if any error occurs, just let auto quest take care of it
-        try:
-            await safe_wait_for_zone_change(client, name='WizardCity/WC_Streets/Interiors/WC_PET_Park', handle_hooks_if_needed=True)
-        # something may have gone wrong initially with the teleport mark - we never entered a loading screen
-        except LoadingScreenNotFound:
-            logger.debug('Client ' + client.title + 'failed to recall from pet pavilion.')
-            pass
-        # we attempted to teleport to a closed dungeon
-        except FriendBusyOrInstanceClosed:
-            logger.debug('Client ' + client.title + 'failed to recall from pet pavilion - instance was closed.')
-            pass
+        while True:
+            try:
+                await safe_wait_for_zone_change(client, name='WizardCity/WC_Streets/Interiors/WC_PET_Park', handle_hooks_if_needed=True)
+                break
+            # something may have gone wrong initially with the teleport mark - we never entered a loading screen
+            except LoadingScreenNotFound:
+                logger.debug('Client ' + client.title + 'failed to recall from pet pavilion.')
+                pass
+            # we attempted to teleport to a closed dungeon
+            except FriendBusyOrInstanceClosed:
+                logger.debug('Client ' + client.title + 'failed to recall from pet pavilion - instance was closed.')
+                break
 

@@ -10,6 +10,7 @@ from wizwalker.extensions.wizsprinter.wiz_navigator import toZone
 from wizwalker.memory import Window, WindowFlags
 from loguru import logger
 
+from src.dance_game_hook import attempt_deactivate_dance_hook
 from src.paths import *
 from src.sprinty_client import SprintyClient
 from typing import List, Optional, Coroutine
@@ -323,11 +324,13 @@ async def wait_for_loading_screen(client: Client):
 		await asyncio.sleep(0.1)
 
 
-async def wait_for_zone_change(client: Client, loading_only: bool = False):
+async def wait_for_zone_change(client: Client, current_zone: str = None, loading_only: bool = False):
 	# Wait for zone to change, allows for waiting in team up forever without any extra checks
 	logger.debug(f'Client {client.title} - Awaiting loading')
 	if not loading_only:
-		current_zone = await client.zone_name()
+		if current_zone is None:
+			current_zone = await client.zone_name()
+
 		while current_zone == await client.zone_name():
 			await asyncio.sleep(0.1)
 
@@ -440,11 +443,15 @@ async def navigate_to_potions(client: Client):
 async def buy_potions(client: Client, recall: bool = True, original_zone=None):
 	try:
 		await client.mouse_handler.activate_mouseless()
-
+		await asyncio.sleep(1.0)
+		max_potions = await client.stats.potion_max()
 		# buy potions and close the potions menu, and recall if needed
 		for i in range(2):
 			original_potion_count = await client.stats.potion_charge()
-			while await client.stats.potion_charge() == original_potion_count:
+			current_potion_count = original_potion_count
+
+			# buy potions until our potion count has either increased (we may not have enough gold for all potions) or we are at max potions
+			while current_potion_count == original_potion_count and current_potion_count < max_potions:
 				while not await is_visible_by_path(client, potion_shop_base_path):
 					await client.send_key(Keycode.X, 0.1)
 				await asyncio.sleep(0.5)
@@ -459,7 +466,8 @@ async def buy_potions(client: Client, recall: bool = True, original_zone=None):
 					await click_window_by_path(client, potion_exit_path)
 					await asyncio.sleep(0.125)
 
-				await asyncio.sleep(.25)
+				current_potion_count = await client.stats.potion_charge()
+				await asyncio.sleep(.5)
 
 			if i == 0:
 				if await client.stats.potion_charge() >= 1.0:
@@ -468,12 +476,12 @@ async def buy_potions(client: Client, recall: bool = True, original_zone=None):
 					while await client.stats.potion_charge() == original_potion_count:
 						logger.debug(f'Client {client.title} - Using potion')
 						await click_window_by_path(client, potion_usage_path)
-						await asyncio.sleep(.5)
+						await asyncio.sleep(3.0)
 
 		await client.mouse_handler.deactivate_mouseless()
 	except:
 		print(traceback.print_exc())
-		await asyncio.sleep(1000000)
+		raise KeyboardInterrupt
 
 	# Put an extra check here in case Starrfox becomes a time traveller or someone is using cheat engine at 100x speed, causing this logic to somehow fail
 	if recall:
@@ -763,6 +771,38 @@ async def get_quest_name(client: Client):
 	quest_objective = quest_objective.replace('<center>', '')
 	quest_objective = quest_objective.replace('</center>', '')
 	return quest_objective
+
+
+# quest_number - 0-3
+# opens book, selects quest, and then closes book
+async def select_quest_from_questbook(client: Client, quest_book_sort: list[str], quest_number: int):
+
+	while not await is_visible_by_path(client, quest_book_sort):
+		await client.send_key(Keycode.Q)
+		await asyncio.sleep(.5)
+
+	if await is_visible_by_path(client, quest_book_sort):
+		await click_window_by_path(client, quest_book_sort)
+
+	await asyncio.sleep(.5)
+
+	quest_number_path = quest_buttons_parent_path[:]
+	quest_number_path.append('wndQuestInfo' + str(quest_number))
+	quest_number_path.append('questInfoWindow')
+	quest_number_path.append('wndQuestInfo')
+	quest_number_path.append('txtGoal')
+	print(quest_number_path)
+
+	for i in range(5):
+		if await is_visible_by_path(client, quest_number_path):
+			await click_window_by_path(client, quest_number_path)
+		await asyncio.sleep(.1)
+
+	await asyncio.sleep(.5)
+
+	while await is_visible_by_path(client, quest_book_sort):
+		await client.send_key(Keycode.Q)
+		await asyncio.sleep(.5)
 
 
 async def get_popup_title(client: Client) -> str:
@@ -1211,6 +1251,11 @@ async def try_task_coro(coro: Coroutine, clients: List[Client], deactive_mousele
 		await task_coro()
 
 	except asyncio.CancelledError:
+		for p in clients:
+			p.feeding_pet_status = False
+
+		await asyncio.gather(*[attempt_deactivate_dance_hook(p) for p in clients])
+
 		pass
 
 	except wizwalker.errors.MemoryInvalidated | wizwalker.errors.ExceptionalTimeout:
@@ -1222,8 +1267,8 @@ async def try_task_coro(coro: Coroutine, clients: List[Client], deactive_mousele
 
 
 def index_with_str(input, desired_str: str) -> int:
-    for i, s in enumerate(input):
-        if desired_str in s.lower():
-            return i
+	for i, s in enumerate(input):
+		if desired_str in s.lower():
+			return i
 
-    return None
+	return None
