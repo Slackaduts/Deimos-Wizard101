@@ -191,7 +191,7 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 			gui.Tab('Dev Utils', [[framed_custom_tp_layout], [framed_dev_utils_layout]], title_color=gui_text_color),
 			gui.Tab('Stat Viewer', [[framed_stat_viewer_layout]], title_color=gui_text_color),
 			gui.Tab('Flythrough', [[framed_flythrough_layout]], title_color=gui_text_color),
-			gui.Tab('Bot Creator', [[framed_bot_creator_layout]], title_color=gui_text_color),
+			gui.Tab('Bot', [[framed_bot_creator_layout]], title_color=gui_text_color),
 			gui.Tab('Misc', [[framed_misc_utils_layout]], title_color=gui_text_color)
 		]
 	]
