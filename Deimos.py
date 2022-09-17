@@ -20,6 +20,7 @@ import datetime
 from configparser import ConfigParser
 import statistics
 import re
+import pypresence
 from pypresence import AioPresence
 from src.command_parser import execute_flythrough, parse_command
 from src.auto_pet import nomnom
@@ -550,7 +551,7 @@ async def main():
 		global gui_send_queue
 
 		if not freecam_status:
-			if speed_task is not None:
+			if speed_task is not None and not speed_task.cancelled():
 				speed_task.cancel()
 				speed_task = None
 				logger.debug(f'{toggle_speed_key} key pressed, disabling speed multiplier.')
@@ -581,7 +582,7 @@ async def main():
 			client.combat_status ^= True
 
 		if not freecam_status:
-			if combat_task is not None:
+			if combat_task is not None and not combat_task.cancelled():
 				combat_task.cancel()
 				combat_task = None
 				logger.debug(f'{toggle_auto_combat_key} key pressed, disabling auto combat.')
@@ -598,7 +599,7 @@ async def main():
 		global gui_send_queue
 
 		if not freecam_status:
-			if dialogue_task is not None:
+			if dialogue_task is not None and not dialogue_task.cancelled():
 				dialogue_task.cancel()
 				dialogue_task = None
 				logger.debug(f'{toggle_auto_dialogue_key} key pressed, disabling auto dialogue.')
@@ -622,7 +623,7 @@ async def main():
 					p.questing_status = False
 					p.auto_pet_status = False
 
-			if sigil_task is not None:
+			if sigil_task is not None and not sigil_task.cancelled():
 				sigil_task.cancel()
 				sigil_task = None
 				logger.debug(f'{toggle_auto_sigil_key} key pressed, disabling auto sigil.')
@@ -672,7 +673,7 @@ async def main():
 			for p in walker.clients:
 				p.questing_status ^= True
 
-			if questing_task is not None:
+			if questing_task is not None and not questing_task.cancelled():
 				logger.debug(f'{toggle_auto_questing_key} key pressed, disabling auto questing.')
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('QuestingStatus', 'Disabled')))
 				questing_task.cancel()
@@ -696,7 +697,7 @@ async def main():
 			for p in walker.clients:
 				p.auto_pet_status ^= True
 
-			if auto_pet_task is not None:
+			if auto_pet_task is not None and not auto_pet_task.cancelled():
 				logger.debug(f'Disabling auto pet.')
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Auto PetStatus', 'Disabled')))
 				auto_pet_task.cancel()
@@ -1442,7 +1443,7 @@ async def main():
 									flythrough_task = asyncio.create_task(_flythrough())
 
 							case deimosgui.GUICommandType.KillFlythrough:
-								if flythrough_task is not None:
+								if flythrough_task is not None and not flythrough_task.cancelled():
 									flythrough_task.cancel()
 									flythrough_task = None
 									await asyncio.sleep(0)
@@ -1463,7 +1464,7 @@ async def main():
 								bot_task = asyncio.create_task(try_task_coro(run_bot, walker.clients, True))
 
 							case deimosgui.GUICommandType.KillBot:
-								if bot_task is not None:
+								if bot_task is not None and not bot_task.cancelled():
 									bot_task.cancel()
 									logger.debug('Bot Killed')
 									bot_task = None
@@ -1499,113 +1500,119 @@ async def main():
 		if rpc_status:
 			# Connect to the discord dev app
 			rpc = AioPresence(1000159655357587566)
-			await rpc.connect()
+			try:
+				await rpc.connect()
 
-			# Assign foreground client locally
-			client: Client = walker.clients[0]
-			zone_name: str = None
-			while True:
-				for c in walker.clients:
-					c: Client
-					if c.is_foreground:
-						client = c
-						break
+			except pypresence.exceptions.DiscordNotFound:
+				pass
 
-				# Assign zone name of client
-				await asyncio.sleep(1)
-				if await client.zone_name() is not None:
-					zone_name = await client.zone_name()
+			else:
 
-				zone_list = zone_name.split('/')
-				if len(zone_list):
-					status_str = zone_list[0]
-				else:
-					status_str = zone_name
+				# Assign foreground client locally
+				client: Client = walker.clients[0]
+				zone_name: str = None
+				while True:
+					for c in walker.clients:
+						c: Client
+						if c.is_foreground:
+							client = c
+							break
 
-				# parse zone name and make it more visually appealing
-				if len(zone_list) > 1:
-					if 'Housing_' in zone_name:
-						status_str = status_str.replace('Housing_', '')
-						end_zone_list = zone_list[-1].split('_')
-						end_zone = f' - {end_zone_list[-1]}'
+					# Assign zone name of client
+					await asyncio.sleep(1)
+					if await client.zone_name() is not None:
+						zone_name = await client.zone_name()
 
-					elif 'Housing' in zone_name:
-						end_zone_list = zone_list[-1].split('_')
+					zone_list = zone_name.split('/')
+					if len(zone_list):
+						status_str = zone_list[0]
+					else:
+						status_str = zone_name
 
-						if 'School' in zone_list:
-							status_str = end_zone_list[0] + 'House'
+					# parse zone name and make it more visually appealing
+					if len(zone_list) > 1:
+						if 'Housing_' in zone_name:
+							status_str = status_str.replace('Housing_', '')
+							end_zone_list = zone_list[-1].split('_')
+							end_zone = f' - {end_zone_list[-1]}'
+
+						elif 'Housing' in zone_name:
+							end_zone_list = zone_list[-1].split('_')
+
+							if 'School' in zone_list:
+								status_str = end_zone_list[0] + 'House'
+
+							else:
+								status_str = zone_list[1]
+
+							end_zone = f' - {end_zone_list[-1]}'
 
 						else:
-							status_str = zone_list[1]
+							end_zone = None
 
-						end_zone = f' - {end_zone_list[-1]}'
+						if not end_zone:
+							area_list: list[str] = zone_list[-1].split('_')
+							del area_list[0]
+
+							for a in area_list.copy():
+								if any([s.isdigit() for s in a]):
+									area_list.remove(a)
+
+							seperator = ' '
+							area = seperator.join(area_list)
+							zone_word_list = re.findall('[A-Z][^A-Z]*', area)
+							if zone_word_list:
+								end_zone = f' - {seperator.join(zone_word_list)}'
+
+							else:
+								end_zone = ''
 
 					else:
-						end_zone = None
+						end_zone = ''
 
-					if not end_zone:
-						area_list: list[str] = zone_list[-1].split('_')
-						del area_list[0]
+					status_str = status_str.replace('DragonSpire', 'Dragonspyre')
+					status_list = status_str.split('_')
+					if len(status_list[0]) <= 3:
+						del status_list[0]
 
-						for a in area_list.copy():
-							if any([s.isdigit() for s in a]):
-								area_list.remove(a)
+					seperator = ' '
+					status_str = seperator.join(status_list)
 
-						seperator = ' '
-						area = seperator.join(area_list)
-						zone_word_list = re.findall('[A-Z][^A-Z]*', area)
-						if zone_word_list:
-							end_zone = f' - {seperator.join(zone_word_list)}'
+					status_list = re.findall('[A-Z][^A-Z]*', status_str)
+					status_str = seperator.join(status_list)
 
-						else:
-							end_zone = ''
+					if 'ext' in end_zone.lower():
+						end_zone = ' - Outside'
 
-				else:
-					end_zone = ''
+					elif 'int' in end_zone.lower():
+						end_zone = ' - Inside'
 
-				status_str = status_str.replace('DragonSpire', 'Dragonspyre')
-				status_list = status_str.split('_')
-				if len(status_list[0]) <= 3:
-					del status_list[0]
+					# Read combat members, this check is only needed since WW combat detection breaks upon fleeing
+					fighter = Fighter(client, walker.clients)
+					members = await fighter.get_members()
 
-				seperator = ' '
-				status_str = seperator.join(status_list)
+					# Assign current task to show in discord status
+					if await client.in_battle() and members:
+						task_str = 'Fighting '
 
-				status_list = re.findall('[A-Z][^A-Z]*', status_str)
-				status_str = seperator.join(status_list)
+					elif questing_status:
+						task_str = 'Questing '
 
-				if 'ext' in end_zone.lower():
-					end_zone = ' - Outside'
+					elif sigil_status:
+						task_str = 'Farming '
 
-				elif 'int' in end_zone.lower():
-					end_zone = ' - Inside'
+					else:
+						task_str = ''
 
-				# Read combat members, this check is only needed since WW combat detection breaks upon fleeing
-				fighter = Fighter(client, walker.clients)
-				members = await fighter.get_members()
+					# Assign if a client is currently selected or not
+					if not any([client.is_foreground for client in walker.clients]):
+						details_pane = 'Idle'
 
-				# Assign current task to show in discord status
-				if await client.in_battle() and members:
-					task_str = 'Fighting '
+					else:
+						details_pane = 'Active'
 
-				elif questing_status:
-					task_str = 'Questing '
-
-				elif sigil_status:
-					task_str = 'Farming '
-
-				else:
-					task_str = ''
-
-				# Assign if a client is currently selected or not
-				if not any([client.is_foreground for client in walker.clients]):
-					details_pane = 'Idle'
-
-				else:
-					details_pane = 'Active'
-
-				# Update the discord RPC status
-				await rpc.update(state=f'{task_str}In {status_str}{end_zone}', details=details_pane)
+					# Update the discord RPC status
+					await rpc.update(state=f'{task_str}In {status_str}{end_zone}', details=details_pane)
 
 
 	def ban_thread():
@@ -1808,7 +1815,7 @@ async def main():
 	finally:
 		tasks: List[asyncio.Task] = [foreground_client_switching_task, speed_task, combat_task, assign_foreground_clients_task, dialogue_task, anti_afk_loop_task, sigil_task, questing_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task]
 		for task in tasks:
-			if task is not None:
+			if task is not None and not task.cancelled():
 				task.cancel()
 
 		await tool_finish()

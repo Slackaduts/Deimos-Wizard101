@@ -120,7 +120,7 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 		[gui.Text(dev_utils_notice, text_color=gui_text_color)],
 		[hotkey_button('Copy Entity List', True), hotkey_button('Copy UI Tree', True)],
 		[gui.Text('Zone Name:', text_color=gui_text_color), gui.InputText(size=(13, 1), key='ZoneInput'), hotkey_button('Go To Zone'), hotkey_button('Mass Go To Zone', True)],
-		[gui.Text('World Name:', text_color=gui_text_color), gui.Combo(['WizardCity', 'Krokotopia', 'Marleybone', 'MooShu', 'DragonSpire', 'Grizzleheim', 'Celestia', 'Wysteria', 'Zafaria', 'Avalon', 'Azteca', 'Khrysalis', 'Polaris', 'Mirage', 'Empyrea', 'Karamelle', 'Lemuria'], text_color=gui_text_color, size=(13, 1), key='WorldInput'), hotkey_button('Go To World', True), hotkey_button('Mass Go To World', True)],
+		[gui.Text('World Name:', text_color=gui_text_color), gui.Combo(['WizardCity', 'Krokotopia', 'Marleybone', 'MooShu', 'DragonSpire', 'Grizzleheim', 'Celestia', 'Wysteria', 'Zafaria', 'Avalon', 'Azteca', 'Khrysalis', 'Polaris', 'Mirage', 'Empyrea', 'Karamelle', 'Lemuria'], default_value='WizardCity', readonly=True,text_color=gui_text_color, size=(13, 1), key='WorldInput'), hotkey_button('Go To World', True), hotkey_button('Mass Go To World', True)],
 		[hotkey_button('Go To Bazaar', True), hotkey_button('Mass Go To Bazaar', True), hotkey_button('Refill Potions', True), hotkey_button('Mass Refill Potions', True)]
 	]
 
@@ -143,6 +143,7 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 		[gui.Text('Caster/Target Indices:', text_color=gui_text_color), gui.Combo([i + 1 for i in range(12)], text_color=gui_text_color, size=(21, 1), default_value=1, key='EnemyInput', readonly=True), gui.Combo([i + 1 for i in range(12)], text_color=gui_text_color, size=(21, 1), default_value=1, key='AllyInput', readonly=True)],
 		[gui.Text('Dmg:', text_color=gui_text_color), gui.InputText('', size=(7, 1), key='DamageInput'), gui.Text('School:', text_color=gui_text_color), gui.Combo(['Fire', 'Ice', 'Storm', 'Myth', 'Life', 'Death', 'Balance', 'Star', 'Sun', 'Moon', 'Shadow'], default_value='Fire', size=(7, 1), key='SchoolInput', readonly=True), gui.Text('Crit:', text_color=gui_text_color), gui.Checkbox(None, True, text_color=gui_text_color, key='CritStatus'),hotkey_button('View Stats', True), hotkey_button('Copy Stats', True)],
 		[gui.Multiline('No client has been selected.', key='stat_viewer', size=(66, 8), text_color=gui_text_color, horizontal_scroll=True)],
+		[hotkey_button('Swap Members', True)],
 		]
 
 	framed_stat_viewer_layout = gui.Frame('Stat Viewer', stat_viewer_layout, title_color=gui_text_color)
@@ -356,6 +357,12 @@ def manage_gui(send_queue: queue.Queue, recv_queue: queue.Queue, gui_theme, gui_
 				base_damage = re.sub(r'[^0-9]', '', str(inputs['DamageInput']))
 				school_id: int = school_id_to_names[inputs['SchoolInput']]
 				send_queue.put(GUICommand(GUICommandType.SelectEnemy, (int(enemy_index), int(ally_index), base_damage, school_id, inputs['CritStatus'])))
+
+			case 'Swap Members':
+				enemy_input = inputs['EnemyInput']
+				ally_input = inputs['AllyInput']
+				window['EnemyInput'].update(ally_input)
+				window['AllyInput'].update(enemy_input)
 
 			# Other
 			case _:
