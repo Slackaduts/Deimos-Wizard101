@@ -34,7 +34,7 @@ jobs:
         run: pyinstaller --onefile ./Deimos.py
         
       - name: Move exe
-        run: xcopy /y ./dist/Deimos.exe ./Deimos.exe
+        run: xcopy /y '.\dist\Deimos.exe' '.\Deimos.exe'
       
       - name: Cleanup
         run: |
