@@ -38,8 +38,8 @@ jobs:
       
       - name: Cleanup
         run: |
-          rmdir dist /S /Q
-          rmdir build /S /Q
+          rm -r -fo dist
+          rm -r -fo build
           
       - name: Commit changes
         run: |
