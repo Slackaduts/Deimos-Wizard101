@@ -27,7 +27,7 @@ jobs:
         run: python -m pip install -r requirements.txt
           
       - name: Install pyinstaller
-        run: python -m pip install pyinstaller
+        run: python -m pip install pyinstaller==5.1
         
       - name: Run pyinstaller
         run: python -m pyinstaller --onefile ./Deimos.py
