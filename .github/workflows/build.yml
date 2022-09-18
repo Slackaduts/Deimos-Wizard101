@@ -2,9 +2,9 @@ name: Build Deimos
 
 on:
   push:
-    branches: [ "buildtest" ]
-  pull_request:
-    branches: [ "buildtest" ]
+    tags:
+      - "*.*.*"
+    branches: [ "master" ]
     
   workflow_dispatch:
 
@@ -13,21 +13,63 @@ jobs:
     runs-on: windows-latest
 
     steps:
+      - name: Get release tag
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+
       - name: Checkout
         uses: actions/checkout@v3
         with:
-          ref: buildtest
+          ref: master
           
       - name: Setup Python
         uses: actions/setup-python@v4.2.0
         with:
-          python-version: 3.10
+          python-version: "3.10"
+          cache: pip
         
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
           
       - name: Install pyinstaller
-        run: python -m pip install pyinstaller
+        run: python -m pip install pyinstaller==5.1
         
       - name: Run pyinstaller
-        run: python -m pyinstaller --onefile ./Deimos.py
+        run: pyinstaller --onefile --icon=Deimos-logo.ico ./Deimos.py
+        
+      - name: Copy exe
+        run: xcopy /y '.\dist\Deimos.exe' '.\Deimos.exe'
+      
+      - name: Update version file
+        run: |
+          rm LatestVersion.txt
+          echo ${{ env.RELEASE_VERSION }} > LatestVersion.txt
+
+      - name: Cleanup
+        run: |
+          rm -r -fo dist
+          rm -r -fo build
+          rm Deimos.spec
+
+      - name: Commit changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name = "Github Action"
+          git add .
+          git commit -a -m "Build Deimos"
+          
+      - name: Push changes
+        if: ${{ success() }}
+        uses: ad-m/github-push-action@v0.6.0
+        with:
+          branch: master
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create release zip
+        run: Compress-Archive -Path Deimos.exe, README.txt, LICENSE, Deimos-config.ini -DestinationPath 'Deimos-${{ env.RELEASE_VERSION }}.zip'
+
+      - name: Publish release
+        uses: softprops/action-gh-release@1
+        with:
+          files: Deimos-${{ env.RELEASE_VERSION }}.zip
+          release_name: ${{ env.RELEASE_VERSION }}
+          generate_release_notes: yes
