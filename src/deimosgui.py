@@ -143,7 +143,7 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 		[gui.Text('Caster/Target Indices:', text_color=gui_text_color), gui.Combo([i + 1 for i in range(12)], text_color=gui_text_color, size=(21, 1), default_value=1, key='EnemyInput', readonly=True), gui.Combo([i + 1 for i in range(12)], text_color=gui_text_color, size=(21, 1), default_value=1, key='AllyInput', readonly=True)],
 		[gui.Text('Dmg:', text_color=gui_text_color), gui.InputText('', size=(7, 1), key='DamageInput'), gui.Text('School:', text_color=gui_text_color), gui.Combo(['Fire', 'Ice', 'Storm', 'Myth', 'Life', 'Death', 'Balance', 'Star', 'Sun', 'Moon', 'Shadow'], default_value='Fire', size=(7, 1), key='SchoolInput', readonly=True), gui.Text('Crit:', text_color=gui_text_color), gui.Checkbox(None, True, text_color=gui_text_color, key='CritStatus'),hotkey_button('View Stats', True), hotkey_button('Copy Stats', True)],
 		[gui.Multiline('No client has been selected.', key='stat_viewer', size=(66, 8), text_color=gui_text_color, horizontal_scroll=True)],
-		[hotkey_button('Swap Members', True)],
+		[hotkey_button('Swap Members', True), gui.Text('Force School Damage:', text_color=gui_text_color), gui.Checkbox(None, text_color=gui_text_color, key='ForceSchoolStatus')],
 		]
 
 	framed_stat_viewer_layout = gui.Frame('Stat Viewer', stat_viewer_layout, title_color=gui_text_color)
@@ -356,7 +356,7 @@ def manage_gui(send_queue: queue.Queue, recv_queue: queue.Queue, gui_theme, gui_
 				ally_index = re.sub(r'[^0-9]', '', str(inputs['AllyInput']))
 				base_damage = re.sub(r'[^0-9]', '', str(inputs['DamageInput']))
 				school_id: int = school_id_to_names[inputs['SchoolInput']]
-				send_queue.put(GUICommand(GUICommandType.SelectEnemy, (int(enemy_index), int(ally_index), base_damage, school_id, inputs['CritStatus'])))
+				send_queue.put(GUICommand(GUICommandType.SelectEnemy, (int(enemy_index), int(ally_index), base_damage, school_id, inputs['CritStatus'], inputs['ForceSchoolStatus'])))
 
 			case 'Swap Members':
 				enemy_input = inputs['EnemyInput']

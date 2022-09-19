@@ -42,7 +42,7 @@ shadow_damage_per_pip = {
 }
 
 
-async def total_stats(client: Client, caster_index: int, target_index: int, base_damage: int = None, school_id: int = None, force_crit: bool = None) -> Tuple[List[str], List[str], int, int]:
+async def total_stats(client: Client, caster_index: int, target_index: int, base_damage: int = None, school_id: int = None, force_crit: bool = None, force_school: bool = False) -> Tuple[List[str], List[str], int, int]:
     # Gets the readable relevant stats from
     combat = CombatHandler(client)
     try:
@@ -76,11 +76,13 @@ async def total_stats(client: Client, caster_index: int, target_index: int, base
         names_with_indexes = [f'{i + 1} - {name}' for i, name in enumerate(member_names)]
         member_name = await member.name()
         member_type = await enemy_type_str(member)
-        if not school_id:
+        if not school_id or not force_school:
             school_id = await participant.primary_magic_school_id()
 
         real_school_id = await participant.primary_magic_school_id()
+
         school_name = school_to_str[real_school_id]
+        temp_school_name = school_to_str[school_id]
 
         power_pips = await member.power_pips()
         pips = await member.normal_pips()
@@ -152,7 +154,7 @@ async def total_stats(client: Client, caster_index: int, target_index: int, base
             f'Masteries: {masteries_str}',
         ]
 
-        return (total_stats, names_with_indexes, caster_index, target_index)
+        return (total_stats, names_with_indexes, caster_index, target_index, temp_school_name)
 
 
 def dict_to_str(input_dict: Dict[str, float], seperator_1: str = ': ', seperator_2: str = ', ', take_abs: bool = False, key_blacklist: List[str] = ['WhirlyBurly', 'Gardening', 'CastleMagic', 'Cantrips', 'Fishing']) -> str:

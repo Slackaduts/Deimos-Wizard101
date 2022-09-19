@@ -1307,7 +1307,7 @@ async def main():
 
 							case deimosgui.GUICommandType.SelectEnemy:
 								if foreground_client and await foreground_client.in_battle():
-									caster_index, target_index, base_damage, school_id, crit_status = com.data
+									caster_index, target_index, base_damage, school_id, crit_status, force_school_status = com.data
 
 									if not base_damage:
 										base_damage = None
@@ -1315,12 +1315,13 @@ async def main():
 									else:
 										base_damage = int(base_damage)
 
-									enemy_stats, names_list, caster_i, target_i = await total_stats(foreground_client, caster_index, target_index, base_damage, school_id, crit_status)
+									enemy_stats, names_list, caster_i, target_i, school_name = await total_stats(foreground_client, caster_index, target_index, base_damage, school_id, crit_status, force_school_status)
 									gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('stat_viewer', '\n'.join(enemy_stats))))
 									gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindowValues, ('EnemyInput', names_list)))
 									gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindowValues, ('AllyInput', names_list)))
 									gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('EnemyInput', names_list[caster_i])))
 									gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('AllyInput', names_list[target_i])))
+									gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('SchoolInput', school_name)))
 
 								else:
 									logger.info('Last selected client is not currently in combat. You must be in combat to use the stat viewer.')
@@ -1825,6 +1826,7 @@ async def main():
 def bool_to_string(input: bool):
 	if input:
 		return 'Enabled'
+
 	else:
 		return 'Disabled'
 
@@ -1844,8 +1846,10 @@ if __name__ == "__main__":
 	# Steam support and config path support
 	if wiz_path:
 		utils.override_wiz_install_location(wiz_path)
+
 	elif not os.path.exists(r'C:\Program Files (x86)\Steam\steamapps\common\Wizard101'):
 		utils.override_wiz_install_location(r'C:\ProgramData\KingsIsle Entertainment\Wizard101')
+
 	else:
 		utils.override_wiz_install_location(r'C:\Program Files (x86)\Steam\steamapps\common\Wizard101')
 

@@ -8,7 +8,7 @@ from src.combat_utils import add_universal_stat
 
 
 async def real_stat(stat_func: Coroutine[Any, Any, List[float]], uni_func: Coroutine[Any, Any, float]) -> List[float]:
-    # Handles 
+    # Handles adding two stat reading coroutines
     base_stats = await stat_func()
     uni_stat = await uni_func()
 
@@ -56,12 +56,13 @@ async def curve_resist(client: Client, member: CombatMember, resist: float) -> f
     return resist
 
 
-async def base_damage_calculation_from_id(client: Client, members: List[CombatMember], caster_id: int, target_id: int, damage: float, damage_type: int, global_effect: DynamicSpellEffect = None, force_crit: bool = None) -> float:
+async def base_damage_calculation_from_id(client: Client, members: List[CombatMember], caster_id: int, target_id: int, damage: float, damage_type: int, global_effect: DynamicSpellEffect = None, force_crit: bool = False) -> float:
     # Calculates damage from given base damage value, and is the basis for both exact and damage potential calculation. Works based off of IDs.
 
     # Get base objects from ID arguments
     caster = await id_to_member(caster_id, members)
     target = await id_to_member(target_id, members)
+
     # Caster-specific objects
     caster_stats = await caster.get_stats()
     caster_effects: List[DynamicSpellEffect] = await get_total_effects(caster_id, members)
@@ -207,6 +208,7 @@ async def base_damage_calculation_from_id(client: Client, members: List[CombatMe
 
                     case SpellEffects.modify_incoming_armor_piercing:
                         caster_pierce += target_effect_atrs[i][0]
+
                     # prism handling
                     case SpellEffects.modify_incoming_damage_type:
                         if damage_type in opposite_school_ids:
