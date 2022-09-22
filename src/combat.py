@@ -9,7 +9,7 @@ from wizwalker.memory.memory_objects.enums import DuelPhase, SpellEffects, Effec
 from loguru import logger
 import asyncio
 import math
-from src.utils import is_visible_by_path, get_window_from_path
+from src.utils import is_visible_by_path, get_window_from_path, attempt_activate_mouseless
 from src.paths import willcast_path
 
 
@@ -1508,6 +1508,7 @@ class Fighter(CombatHandler):
 				self.passed = False
 			else:
 				logger.debug(f"Client {self.client.title} - Passing")
+				await attempt_activate_mouseless(self.client)
 				await self.pass_button()
 				self.passed = True
 

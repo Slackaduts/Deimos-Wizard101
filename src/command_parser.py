@@ -109,6 +109,19 @@ async def parse_command(clients: List[Client], command_str: str):
             # Delays a specified number of seconds
             await asyncio.sleep(float(split_command[-1]))
 
+        case 'log' | 'debug' | 'print':
+            # Logs a specific message or prints the text of a window (by path, if any)
+            if split_command[1].lower() != 'window':
+                relevant_string: str = ' '.join(split_command[1:])
+                logger.debug(relevant_string)
+
+            else:
+                desired_path = find_path(split_command)
+                for client in clients:
+                    desired_window = await get_window_from_path(client.root_window, desired_path)
+                    relevant_string = await desired_window.maybe_text()
+                    logger.debug(relevant_string)
+
         case _:
             client_str = split_command[0].replace(' ', '')
             exclude = False
@@ -267,25 +280,7 @@ async def parse_command(clients: List[Client], command_str: str):
 
                 case 'tozone' | 'to_zone':
                     # Navigates to a specific zone, by vague name
-                    zoneChanged = await toZone(clients, split_command[2])
-
-                    if zoneChanged == 0:
-                        logger.debug('Reached destination zone: ' + await clients[0].zone_name())
-                    else:
-                        logger.error('Failed to go to zone.  It may be spelled incorrectly, or may not be supported.')
-
-                case 'log' | 'debug' | 'print':
-                    # Logs a specific message or prints the text of a window (by path, if any)
-                    if split_command[2].lower() != 'window':
-                        relevant_string: str = ' '.join(split_command[2:])
-                        logger.debug(relevant_string)
-
-                    else:
-                        desired_path = find_path(split_command)
-                        for client in clients:
-                            desired_window = await get_window_from_path(client.root_window, desired_path)
-                            relevant_string = await desired_window.maybe_text()
-                            logger.debug(relevant_string)
+                    await toZone(clients, split_command[2])
 
                 case _:
                     await asyncio.sleep(0.25)

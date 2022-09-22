@@ -37,7 +37,6 @@ async def nomnom(client: Client, ignore_pet_level_up: bool, only_play_dance_game
     mouseless_active = False
 
     while not finished_feeding:
-        client.feeding_pet_status = True
         popup_title = await get_popup_title(client)
         while not popup_title == 'Dance Game':
             await asyncio.sleep(.125)
@@ -51,6 +50,8 @@ async def nomnom(client: Client, ignore_pet_level_up: bool, only_play_dance_game
                 await asyncio.sleep(.125)
             popup_title = await get_popup_title(client)
             await asyncio.sleep(.125)
+
+        client.feeding_pet_status = True
 
         if not mouseless_active:
             mouseless_active = True
@@ -244,8 +245,6 @@ async def nomnom(client: Client, ignore_pet_level_up: bool, only_play_dance_game
         await asyncio.sleep(.125)
 
 
-
-
 # Thanks to Peechez for this code from wizdancer
 async def dancedance(client: Client):
     # wait for the dance game text box to appear
@@ -269,7 +268,6 @@ async def won_game_leveled_up(client: Client, auto_pet_ignore_pet_level_up):
     await click_window_by_path(client, won_pet_game_continue_and_feed_button_path)
     await asyncio.sleep(1.0)
     if await is_visible_by_path(client, won_pet_leveled_up_window_path):
-        print(str(auto_pet_ignore_pet_level_up))
         if not auto_pet_ignore_pet_level_up:
             await client.mouse_handler.deactivate_mouseless()
             logger.info('Auto Pet - Client ' + client.title + '\'s pet leveled up.  Please close the window to continue, or exit Deimos if you wish to stop questing.')
@@ -289,6 +287,9 @@ async def won_game_leveled_up(client: Client, auto_pet_ignore_pet_level_up):
 
 
 async def auto_pet(client: Client, ignore_pet_level_up: bool, only_play_dance_game: bool, questing: bool = False):
+    # we know we are on the pet sigil or going to it, activate and let nomnom deactivate when it is finished
+    client.feeding_pet_status = True
+
     started_at_pavilion = False
     if await client.zone_name() != 'WizardCity/WC_Streets/Interiors/WC_PET_Park':
         original_mana = await client.stats.current_mana()
@@ -314,8 +315,7 @@ async def auto_pet(client: Client, ignore_pet_level_up: bool, only_play_dance_ga
             await asyncio.sleep(3.0)
             await client.teleport(XYZ(x=-4450.57958984375, y=-994.8973388671875, z=-8.041412353515625))
 
-    # we know we are on the pet sigil or going to it, activate and let nomnom deactivate when it is finished
-    client.feeding_pet_status = True
+
         # for i in range(3):
         #     await client.send_key(Keycode.END, 0.1)
         #
@@ -343,18 +343,8 @@ async def auto_pet(client: Client, ignore_pet_level_up: bool, only_play_dance_ga
     # feed the pet
     # await nomnom(client, ignore_pet_level_up, only_play_dance_game)
 
-
-    print('before ' + client.title)
-
-    # while not client.feeding_pet_status:
-    #     print('while not ' + client.title)
-    #     await asyncio.sleep(.1)
-
     while client.feeding_pet_status:
-        print('while ' + client.title)
         await asyncio.sleep(.1)
-
-    print('AFTER while ' + client.title)
 
     await asyncio.sleep(1.0)
 
