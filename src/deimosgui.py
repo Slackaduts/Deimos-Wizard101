@@ -272,7 +272,7 @@ def manage_gui(send_queue: queue.Queue, recv_queue: queue.Queue, gui_theme, gui_
 			# Entity tp
 			case 'Entity TP':
 				if inputs['EntityTPInput']:
-					send_queue.put(GUICommand(GUICommandType.EntityTeleport, inputs[14]))
+					send_queue.put(GUICommand(GUICommandType.EntityTeleport, inputs['EntityTPInput']))
 
 			# XYZ Sync
 			case 'XYZ Sync':
