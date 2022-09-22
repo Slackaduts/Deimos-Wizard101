@@ -145,7 +145,7 @@ async def go_to_new_world(p, destinationWorld, open_window: bool = True):
 					await attempt_deactivate_mouseless(p)
 
 					# move away from the spiral door so we dont accidentally click on it again after teleporting later
-					await p.send_key(Keycode.W, 1.5)
+					# await p.send_key(Keycode.W, 1.5)
 
 					isChildFound = True
 					break

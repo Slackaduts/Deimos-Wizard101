@@ -198,6 +198,11 @@ async def parse_command(clients: List[Client], command_str: str):
                         await asyncio.gather(*[wait_for_coro(client.in_battle, True) for client in clients])
 
                 case 'waitforzonechange':
+
+                    # waits for zone to change from the provided zone name
+                    if split_command[-2].lower() == 'zone':
+                        await asyncio.gather(*[client.wait_for_zone_change(name=split_command[-1]) for client in clients])
+
                     # Waits for the zone to change
                     await asyncio.gather(*[client.wait_for_zone_change() for client in clients])
 
@@ -279,7 +284,7 @@ async def parse_command(clients: List[Client], command_str: str):
                     await asyncio.gather(*[SprintyClient(client).tp_to_closest_by_vague_name(split_command[2]) for client in clients])
 
                 case 'tozone' | 'to_zone':
-                    # Navigates to a specific zone, by vague name
+                    # Navigates to a specific zone, by name
                     await toZone(clients, split_command[2])
 
                 case _:
