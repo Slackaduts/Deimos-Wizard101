@@ -1273,8 +1273,8 @@ async def try_task_coro(coro: Coroutine, clients: List[Client], deactive_mousele
 			await asyncio.gather(*[attempt_deactivate_mouseless(client) for client in clients])
 
 
-def index_with_str(input, desired_str: str) -> int:
-	for i, s in enumerate(input):
+def index_with_str(input_str, desired_str: str) -> int:
+	for i, s in enumerate(input_str):
 		if desired_str in s.lower():
 			return i
 
