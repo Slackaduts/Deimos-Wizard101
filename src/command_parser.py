@@ -134,7 +134,8 @@ async def parse_command(clients: List[Client], command_str: str):
             client_str = split_command[0].replace(' ', '')
             exclude = False
             if 'except' in client_str:
-                client_str = client_str.replace('except', '')
+                split_command.pop(0)
+                client_str = split_command[0]
                 exclude = True
 
             if 'mass' not in client_str:
