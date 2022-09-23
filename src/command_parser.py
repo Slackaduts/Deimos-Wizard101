@@ -9,7 +9,7 @@ from wizwalker.memory.memory_objects.camera_controller import CameraController
 
 from src.sprinty_client import SprintyClient
 from src.gui_inputs import is_numeric, param_input
-from src.utils import index_with_str, get_window_from_path, teleport_to_friend_from_list, auto_potions_force_buy, use_potion, is_free, logout_and_in, click_window_by_path, attempt_activate_mouseless, attempt_deactivate_mouseless, wait_for_visible_by_path, refill_potions, refill_potions_if_needed
+from src.utils import index_with_str, get_window_from_path, teleport_to_friend_from_list, auto_potions_force_buy, use_potion, is_free, logout_and_in, click_window_by_path, attempt_activate_mouseless, attempt_deactivate_mouseless, wait_for_visible_by_path, refill_potions, refill_potions_if_needed, wait_for_zone_change
 from src.camera_utils import glide_to, point_to_xyz, rotating_glide_to, orbit
 import re
 from loguru import logger
@@ -95,7 +95,9 @@ async def parse_command(clients: List[Client], command_str: str):
     all_clients = clients.copy()
     command_str = command_str.replace(', ', ',')
 
-    if 'tozone' not in command_str and 'to_zone' not in command_str:
+    check_strings = ['tozone', 'to_zone', 'waitforzonechange', 'wait_for_zone_change']
+    # remove _ from command_str except for a few commands that it interferes with
+    if not any(substring in command_str for substring in check_strings):
         command_str = command_str.replace('_', '')
 
     # allows for single line comments and comment tags in the middle of a line
@@ -204,18 +206,21 @@ async def parse_command(clients: List[Client], command_str: str):
                             # Waits for combat to end
                             await asyncio.gather(*[wait_for_coro(client.in_battle, True) for client in clients])
 
-                    case 'waitforzonechange':
-
+                    case 'waitforzonechange' | 'wait_for_zone_change':
                         # waits for zone to change from the provided zone name
-                        if split_command[-2].lower() == 'zone':
-                            await asyncio.gather(*[client.wait_for_zone_change(name=split_command[-1]) for client in clients])
+                        print(split_command[-2])
+                        if split_command[-2].lower() == 'from':
+                            await asyncio.gather(*[wait_for_zone_change(client, current_zone=split_command[-1]) for client in clients])
+                        # waits for zone to change to the provided zone name
+                        elif split_command[-2].lower() == 'to':
+                            await asyncio.gather(*[wait_for_zone_change(client, to_zone=split_command[-1]) for client in clients])
+                        else:
+                            # Waits for the zone to change
+                            await asyncio.gather(*[client.wait_for_zone_change() for client in clients])
 
-                        # Waits for the zone to change
-                        await asyncio.gather(*[client.wait_for_zone_change() for client in clients])
-
-                        if split_command[-1].lower() == 'completion':
-                            # Waits for loading screen to end
-                            await asyncio.gather(*[wait_for_coro(client.is_loading, True) for client in clients])
+                            if split_command[-1].lower() == 'completion':
+                                # Waits for loading screen to end
+                                await asyncio.gather(*[wait_for_coro(client.is_loading, True) for client in clients])
 
                     case 'waitforfree':
                         # Waits for is_free to return True
@@ -280,8 +285,10 @@ async def parse_command(clients: List[Client], command_str: str):
                         await asyncio.sleep(.25)
 
                         if split_command[2] == 'icon':
+                            # uses fish icon
                             await asyncio.gather(*[teleport_to_friend_from_list(client, icon_list=2, icon_index=0) for client in clients])
                         else:
+                            # uses provided wizard name
                             await asyncio.gather(*[teleport_to_friend_from_list(client, name=split_command[2]) for client in clients])
 
                         await asyncio.gather(*[client.mouse_handler.deactivate_mouseless() for client in clients])

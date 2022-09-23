@@ -324,15 +324,22 @@ async def wait_for_loading_screen(client: Client):
 		await asyncio.sleep(0.1)
 
 
-async def wait_for_zone_change(client: Client, current_zone: str = None, loading_only: bool = False):
+async def wait_for_zone_change(client: Client, current_zone: str = None, to_zone: str = None, loading_only: bool = False):
 	# Wait for zone to change, allows for waiting in team up forever without any extra checks
 	logger.debug(f'Client {client.title} - Awaiting loading')
 	if not loading_only:
-		if current_zone is None:
-			current_zone = await client.zone_name()
+		# if to_zone is present, wait until we reach the selected zone
+		if to_zone is not None:
+			while await client.zone_name() != to_zone:
+				await asyncio.sleep(0.1)
 
-		while current_zone == await client.zone_name():
-			await asyncio.sleep(0.1)
+		# otherwise wait until our zone changes from whatever it was previously
+		else:
+			if current_zone is None:
+				current_zone = await client.zone_name()
+
+			while current_zone == await client.zone_name():
+				await asyncio.sleep(0.1)
 
 	# Second loading check incase theres some sort of phantom zone loading screens put us into
 	while await client.is_loading():
