@@ -98,6 +98,10 @@ async def parse_command(clients: List[Client], command_str: str):
     if 'tozone' not in command_str and 'to_zone' not in command_str:
         command_str = command_str.replace('_', '')
 
+    # allows for single line comments and comment tags in the middle of a line
+    if '#' in command_str:
+        command_str = command_str.split('#', 1)[0]
+
     split_command = split_line(command_str)
 
     match split_command[0].lower():
@@ -124,171 +128,174 @@ async def parse_command(clients: List[Client], command_str: str):
 
         case _:
             client_str = split_command[0].replace(' ', '')
-            exclude = False
-            if 'except' in client_str:
-                client_str = client_str.replace('except', '')
-                exclude = True
 
-            if 'mass' not in client_str:
-                # Allows for specific clients to be used via a : seperator. Example: p1:p3:p4   , except p2
-                if ':' in client_str:
-                    split_clients = client_str.split(':')
-                    provided_clients = [client_from_titles(all_clients.copy(), title) for title in split_clients]
-                else:
-                    provided_clients = [client_from_titles(all_clients, client_str)]
+            # if client_str is empty, user either used a single line comment tag or left a line blank in the command list
+            if client_str != '':
+                exclude = False
+                if 'except' in client_str:
+                    client_str = client_str.replace('except', '')
+                    exclude = True
 
-                if is_numeric(client_str[1]):
-                    if exclude:
-                        # Sets client list equal to all clients except specified ones
-                        clients = [client for client in all_clients.copy() if client not in provided_clients]
+                if 'mass' not in client_str:
+                    # Allows for specific clients to be used via a : seperator. Example: p1:p3:p4   , except p2
+                    if ':' in client_str:
+                        split_clients = client_str.split(':')
+                        provided_clients = [client_from_titles(all_clients.copy(), title) for title in split_clients]
                     else:
-                        clients = provided_clients
+                        provided_clients = [client_from_titles(all_clients, client_str)]
 
-
-            match split_command[1].lower():
-
-                case 'teleport' | 'tp' | 'setpos':
-                    # Raw TP, not navmap TP due to some limitations with navmap TP
-                    match split_command[2]:
-                        case 'closestmob' | 'mob':
-                            await asyncio.gather(*[SprintyClient(p).tp_to_closest_mob() for p in clients])
-                        case 'quest' | 'questpos' | 'questposition':
-                            await asyncio.gather(*[p.teleport(await clients[0].quest_position.position()) for p in clients])
-                        case _:
-                            client_location = None
-                            for p in all_clients:
-                                if p.title == split_command[2]:
-                                    client_location = await p.body.position()
-                                    await asyncio.gather(*[client.teleport(client_location) for client in clients])
-                                    break
-
-                            # a client title was not provided - user likely listed an actual XYZ coordinate
-                            if client_location is None:
-                                xyzs = await parse_locations(clients, split_command)
-                                await asyncio.gather(*[client.teleport(xyz) for client, xyz in zip(clients, xyzs)])
-
-                case 'walkto' | 'goto':
-                    # Walks in a straight line to a given XYZ (Z agnostic)
-                    xyzs = await parse_locations(clients, split_command)
-                    await asyncio.gather(*[client.goto(xyz.x, xyz.y) for client, xyz in zip(clients, xyzs)])
-
-                case 'sendkey' | 'press' | 'presskey':
-                    # Sends a key press
-                    key = split_command[2]
-                    time = 0.1
-                    if len(split_command) >= 4:
-                        time = float(split_command[3])
-
-                    await asyncio.gather(*[client.send_key(Keycode[key], time) for client in clients])
-
-                case 'waitfordialog' | 'waitfordialogue':
-                    # Waits for dialogue window to appear
-                    await asyncio.gather(*[wait_for_coro(client.is_in_dialog) for client in clients])
-
-                    if split_command[1].lower() == 'completion':
-                        # Waits for dialogue window to disappear
-                        await asyncio.gather(*[wait_for_coro(client.is_in_dialog, True) for client in clients])
-
-                case 'waitforbattle' | 'waitforcombat':
-                    # Waits for combat
-                    await asyncio.gather(*[wait_for_coro(client.in_battle) for client in clients])
-
-                    if split_command[-1].lower() == 'completion':
-                        # Waits for combat to end
-                        await asyncio.gather(*[wait_for_coro(client.in_battle, True) for client in clients])
-
-                case 'waitforzonechange':
-
-                    # waits for zone to change from the provided zone name
-                    if split_command[-2].lower() == 'zone':
-                        await asyncio.gather(*[client.wait_for_zone_change(name=split_command[-1]) for client in clients])
-
-                    # Waits for the zone to change
-                    await asyncio.gather(*[client.wait_for_zone_change() for client in clients])
-
-                    if split_command[-1].lower() == 'completion':
-                        # Waits for loading screen to end
-                        await asyncio.gather(*[wait_for_coro(client.is_loading, True) for client in clients])
-
-                case 'waitforfree':
-                    # Waits for is_free to return True
-                    async def _wait_for_free(client: Client, wait_for_not: bool = False, interval: float = 0.25):
-                        if wait_for_not:
-                            while await is_free(client):
-                                await asyncio.sleep(interval)
-
+                    if is_numeric(client_str[1]):
+                        if exclude:
+                            # Sets client list equal to all clients except specified ones
+                            clients = [client for client in all_clients.copy() if client not in provided_clients]
                         else:
-                            while not await is_free(client):
-                                await asyncio.sleep(interval)
+                            clients = provided_clients
 
-                    await asyncio.gather(*[_wait_for_free(client) for client in clients])
 
-                    if split_command[-1].lower() == 'completion':
-                        # Waits for is_free to return False
-                        await asyncio.gather(*[_wait_for_free(client, True) for client in clients])
+                match split_command[1].lower():
 
-                case 'usepotion':
-                    # Uses a potion
-                    if len(split_command) > 3:
-                        # Same, but uses specified mana/health thresholds
-                        await asyncio.gather(*[SprintyClient(p).use_potion_if_needed(health_percent=int(split_command[2]), mana_percent=int(split_command[3]), handle_hooks=True) for p in clients])
-                    else:
-                        await asyncio.gather(*[use_potion(client) for client in clients])
+                    case 'teleport' | 'tp' | 'setpos':
+                        # Raw TP, not navmap TP due to some limitations with navmap TP
+                        match split_command[2]:
+                            case 'closestmob' | 'mob':
+                                await asyncio.gather(*[SprintyClient(p).tp_to_closest_mob() for p in clients])
+                            case 'quest' | 'questpos' | 'questposition':
+                                await asyncio.gather(*[p.teleport(await clients[0].quest_position.position()) for p in clients])
+                            case _:
+                                client_location = None
+                                for p in all_clients:
+                                    if p.title == split_command[2]:
+                                        client_location = await p.body.position()
+                                        await asyncio.gather(*[client.teleport(client_location) for client in clients])
+                                        break
 
-                case 'buypotions' | 'refillpotions' | 'buypots' | 'refillpots':
-                    # Refills potions
-                    if len(split_command) > 2:
-                        # Refills potions if needed
-                        if split_command[2] == 'ifneeded':
-                            await asyncio.gather(*[refill_potions_if_needed(client) for client in clients])
-                    else:
-                        await asyncio.gather(*[refill_potions(client, mark=True, recall=True) for client in clients])
+                                # a client title was not provided - user likely listed an actual XYZ coordinate
+                                if client_location is None:
+                                    xyzs = await parse_locations(clients, split_command)
+                                    await asyncio.gather(*[client.teleport(xyz) for client, xyz in zip(clients, xyzs)])
 
-                case 'logoutandin' | 'relog':
-                    # Logs out the specific clients, and logs them back in
-                    await asyncio.gather(*[logout_and_in(client) for client in clients])
+                    case 'walkto' | 'goto':
+                        # Walks in a straight line to a given XYZ (Z agnostic)
+                        xyzs = await parse_locations(clients, split_command)
+                        await asyncio.gather(*[client.goto(xyz.x, xyz.y) for client, xyz in zip(clients, xyzs)])
 
-                case 'click':
-                    # Clicks at a specified screen XY
-                    await asyncio.gather(*[attempt_activate_mouseless(client) for client in clients])
-                    await asyncio.gather(*[client.mouse_handler.click(int(split_command[2], int(split_command[3]))) for client in clients])
-                    await asyncio.gather(*[attempt_deactivate_mouseless(client) for client in clients])
+                    case 'sendkey' | 'press' | 'presskey':
+                        # Sends a key press
+                        key = split_command[2]
+                        time = 0.1
+                        if len(split_command) >= 4:
+                            time = float(split_command[3])
 
-                case 'clickwindow':
-                    # Clicks a specific window by path
-                    desired_path = find_path(split_command)
-                    await asyncio.gather(*[click_window_by_path(client, desired_path, True) for client in clients])
+                        await asyncio.gather(*[client.send_key(Keycode[key], time) for client in clients])
 
-                case 'waitforwindow' | 'waitforpath':
-                    # Waits for a specific window (by path) to be visible
-                    desired_path = find_path(split_command)
-                    await asyncio.gather(*[wait_for_visible_by_path(client, desired_path) for client in clients])
-                    if split_command[-1].lower() == 'completion':
-                        # Waits for a specific window (by path) to not be visible
-                        await asyncio.gather(*[wait_for_visible_by_path(client, desired_path, True) for client in clients])
+                    case 'waitfordialog' | 'waitfordialogue':
+                        # Waits for dialogue window to appear
+                        await asyncio.gather(*[wait_for_coro(client.is_in_dialog) for client in clients])
 
-                case 'friendtp' | 'friendteleport':
-                    # Teleports specified clients to another via wizard name or icon
-                    await asyncio.gather(*[client.mouse_handler.activate_mouseless() for client in clients])
-                    await asyncio.sleep(.25)
+                        if split_command[1].lower() == 'completion':
+                            # Waits for dialogue window to disappear
+                            await asyncio.gather(*[wait_for_coro(client.is_in_dialog, True) for client in clients])
 
-                    if split_command[2] == 'icon':
-                        await asyncio.gather(*[teleport_to_friend_from_list(client, icon_list=2, icon_index=0) for client in clients])
-                    else:
-                        await asyncio.gather(*[teleport_to_friend_from_list(client, name=split_command[2]) for client in clients])
+                    case 'waitforbattle' | 'waitforcombat':
+                        # Waits for combat
+                        await asyncio.gather(*[wait_for_coro(client.in_battle) for client in clients])
 
-                    await asyncio.gather(*[client.mouse_handler.deactivate_mouseless() for client in clients])
+                        if split_command[-1].lower() == 'completion':
+                            # Waits for combat to end
+                            await asyncio.gather(*[wait_for_coro(client.in_battle, True) for client in clients])
 
-                case 'entitytp' | 'entityteleport':
-                    # Teleports to a specific entity by vague name
-                    await asyncio.gather(*[SprintyClient(client).tp_to_closest_by_vague_name(split_command[2]) for client in clients])
+                    case 'waitforzonechange':
 
-                case 'tozone' | 'to_zone':
-                    # Navigates to a specific zone, by name
-                    await toZone(clients, split_command[2])
+                        # waits for zone to change from the provided zone name
+                        if split_command[-2].lower() == 'zone':
+                            await asyncio.gather(*[client.wait_for_zone_change(name=split_command[-1]) for client in clients])
 
-                case _:
-                    await asyncio.sleep(0.25)
+                        # Waits for the zone to change
+                        await asyncio.gather(*[client.wait_for_zone_change() for client in clients])
+
+                        if split_command[-1].lower() == 'completion':
+                            # Waits for loading screen to end
+                            await asyncio.gather(*[wait_for_coro(client.is_loading, True) for client in clients])
+
+                    case 'waitforfree':
+                        # Waits for is_free to return True
+                        async def _wait_for_free(client: Client, wait_for_not: bool = False, interval: float = 0.25):
+                            if wait_for_not:
+                                while await is_free(client):
+                                    await asyncio.sleep(interval)
+
+                            else:
+                                while not await is_free(client):
+                                    await asyncio.sleep(interval)
+
+                        await asyncio.gather(*[_wait_for_free(client) for client in clients])
+
+                        if split_command[-1].lower() == 'completion':
+                            # Waits for is_free to return False
+                            await asyncio.gather(*[_wait_for_free(client, True) for client in clients])
+
+                    case 'usepotion':
+                        # Uses a potion
+                        if len(split_command) > 3:
+                            # Same, but uses specified mana/health thresholds
+                            await asyncio.gather(*[SprintyClient(p).use_potion_if_needed(health_percent=int(split_command[2]), mana_percent=int(split_command[3]), handle_hooks=True) for p in clients])
+                        else:
+                            await asyncio.gather(*[use_potion(client) for client in clients])
+
+                    case 'buypotions' | 'refillpotions' | 'buypots' | 'refillpots':
+                        # Refills potions
+                        if len(split_command) > 2:
+                            # Refills potions if needed
+                            if split_command[2] == 'ifneeded':
+                                await asyncio.gather(*[refill_potions_if_needed(client) for client in clients])
+                        else:
+                            await asyncio.gather(*[refill_potions(client, mark=True, recall=True) for client in clients])
+
+                    case 'logoutandin' | 'relog':
+                        # Logs out the specific clients, and logs them back in
+                        await asyncio.gather(*[logout_and_in(client) for client in clients])
+
+                    case 'click':
+                        # Clicks at a specified screen XY
+                        await asyncio.gather(*[attempt_activate_mouseless(client) for client in clients])
+                        await asyncio.gather(*[client.mouse_handler.click(int(split_command[2], int(split_command[3]))) for client in clients])
+                        await asyncio.gather(*[attempt_deactivate_mouseless(client) for client in clients])
+
+                    case 'clickwindow':
+                        # Clicks a specific window by path
+                        desired_path = find_path(split_command)
+                        await asyncio.gather(*[click_window_by_path(client, desired_path, True) for client in clients])
+
+                    case 'waitforwindow' | 'waitforpath':
+                        # Waits for a specific window (by path) to be visible
+                        desired_path = find_path(split_command)
+                        await asyncio.gather(*[wait_for_visible_by_path(client, desired_path) for client in clients])
+                        if split_command[-1].lower() == 'completion':
+                            # Waits for a specific window (by path) to not be visible
+                            await asyncio.gather(*[wait_for_visible_by_path(client, desired_path, True) for client in clients])
+
+                    case 'friendtp' | 'friendteleport':
+                        # Teleports specified clients to another via wizard name or icon
+                        await asyncio.gather(*[client.mouse_handler.activate_mouseless() for client in clients])
+                        await asyncio.sleep(.25)
+
+                        if split_command[2] == 'icon':
+                            await asyncio.gather(*[teleport_to_friend_from_list(client, icon_list=2, icon_index=0) for client in clients])
+                        else:
+                            await asyncio.gather(*[teleport_to_friend_from_list(client, name=split_command[2]) for client in clients])
+
+                        await asyncio.gather(*[client.mouse_handler.deactivate_mouseless() for client in clients])
+
+                    case 'entitytp' | 'entityteleport':
+                        # Teleports to a specific entity by vague name
+                        await asyncio.gather(*[SprintyClient(client).tp_to_closest_by_vague_name(split_command[2]) for client in clients])
+
+                    case 'tozone' | 'to_zone':
+                        # Navigates to a specific zone, by name
+                        await toZone(clients, split_command[2])
+
+                    case _:
+                        await asyncio.sleep(0.25)
 
     await asyncio.sleep(0)
 
