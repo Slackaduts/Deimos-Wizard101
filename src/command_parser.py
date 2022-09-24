@@ -137,7 +137,6 @@ async def parse_command(clients: List[Client], command_str: str):
         case 'log' | 'debug' | 'print':
             # Logs a specific message or prints the text of a window (by path, if any)
             if len(split_command) <= 2:
-                relevant_string: str = ' '.join(split_command[1:])
                 logger.debug(split_command[1])
 
             else:
