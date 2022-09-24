@@ -139,12 +139,10 @@ async def total_stats(client: Client, caster_index: int, target_index: int, base
         crits, _ = to_seperated_str_stats(real_crits)
         blocks, _ = to_seperated_str_stats(real_blocks)
 
-        pvp_check = False
-
         if await member.is_player() and await target.is_player():
-            pvp_check = True
+            total_stats = ['The stat viewer is not supported in PvP.']
 
-        if not pvp_check:
+        else:
             total_stats = [
                 f'Estimated Max Dmg Against {await target.name()}: {int(estimated_damage)}',
                 f'Name: {member_name} - {member_type} - {school_name}',
@@ -159,9 +157,6 @@ async def total_stats(client: Client, caster_index: int, target_index: int, base
                 f'Blocks: {dict_to_str(blocks)}',
                 f'Masteries: {masteries_str}',
             ]
-
-        else:
-            total_stats = ['The stat viewer is not supported in PvP.']
 
         return (total_stats, names_with_indexes, caster_index, target_index, temp_school_name)
 
