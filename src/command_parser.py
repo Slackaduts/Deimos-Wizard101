@@ -11,6 +11,7 @@ from src.sprinty_client import SprintyClient
 from src.gui_inputs import is_numeric, param_input
 from src.utils import index_with_str, get_window_from_path, teleport_to_friend_from_list, auto_potions_force_buy, use_potion, is_free, logout_and_in, click_window_by_path, attempt_activate_mouseless, attempt_deactivate_mouseless, wait_for_visible_by_path, refill_potions, refill_potions_if_needed, wait_for_zone_change
 from src.camera_utils import glide_to, point_to_xyz, rotating_glide_to, orbit
+from src.tokenizer import tokenize
 import re
 from loguru import logger
 
@@ -73,39 +74,39 @@ async def wait_for_coro(coro: Coroutine, wait_for_not: bool = False, interval: f
             await asyncio.sleep(interval)
 
 
-def find_path(commands: List[str], starting_index: int = 2) -> List[str]:
-    # Finds the window path string from a list of strings
-    relevant_strings: List[str] = commands[starting_index:]
-    path_str: str = re.findall('\[(.*?)\]|$', ','.join(relevant_strings))[0]
-    desired_path: List[str] = path_str.strip('[]"').replace("'", "").split(',')
+# def find_path(commands: List[str], starting_index: int = 2) -> List[str]:
+#     # Finds the window path string from a list of strings
+#     relevant_strings: List[str] = commands[starting_index:]
+#     path_str: str = re.findall('\[(.*?)\]|$', ','.join(relevant_strings))[0]
+#     desired_path: List[str] = path_str.strip('[]"').replace("'", "").split(',')
 
-    return desired_path
+#     return desired_path
 
 
-def split_line(l: str) -> list[str]:
-    result = []
+# def split_line(l: str) -> list[str]:
+#     result = []
 
-    in_nested = False
-    word = ''
-    for c in l:
-        match c:
-            case '(':
-                in_nested = True
-            case ')':
-                in_nested = False
-            case ' ' | ',':
-                if not in_nested:
-                    if len(word) > 0:
-                        result.append(word)
-                    word = ''
-                    c = ''
-        word += c
-    result.append(word)
+#     in_nested = False
+#     word = ''
+#     for c in l:
+#         match c:
+#             case '(':
+#                 in_nested = True
+#             case ')':
+#                 in_nested = False
+#             case ' ' | ',':
+#                 if not in_nested:
+#                     if len(word) > 0:
+#                         result.append(word)
+#                     word = ''
+#                     c = ''
+#         word += c
+#     result.append(word)
 
-    if in_nested:
-        raise Exception("Unterminated (")
+#     if in_nested:
+#         raise Exception("Unterminated (")
 
-    return result
+#     return result
 
 
 async def parse_command(clients: List[Client], command_str: str):
@@ -118,7 +119,7 @@ async def parse_command(clients: List[Client], command_str: str):
     if not any(substring in command_str for substring in check_strings):
         command_str = command_str.replace('_', '')
 
-    split_command = split_line(command_str)
+    split_command = tokenize(command_str)
 
     match split_command[0].lower():
         case 'kill' | 'killbot' | 'stop' | 'stopbot' | 'end' | 'exit':
@@ -275,16 +276,14 @@ async def parse_command(clients: List[Client], command_str: str):
 
                 case 'clickwindow':
                     # Clicks a specific window by path
-                    desired_path = find_path(split_command)
-                    await asyncio.gather(*[click_window_by_path(client, desired_path, True) for client in clients])
+                    await asyncio.gather(*[click_window_by_path(client, split_command[2], True) for client in clients])
 
                 case 'waitforwindow' | 'waitforpath':
                     # Waits for a specific window (by path) to be visible
-                    desired_path = find_path(split_command)
-                    await asyncio.gather(*[wait_for_visible_by_path(client, desired_path) for client in clients])
+                    await asyncio.gather(*[wait_for_visible_by_path(client, split_command[2]) for client in clients])
                     if split_command[-1].lower() == 'completion':
                         # Waits for a specific window (by path) to not be visible
-                        await asyncio.gather(*[wait_for_visible_by_path(client, desired_path, True) for client in clients])
+                        await asyncio.gather(*[wait_for_visible_by_path(client, split_command[2], True) for client in clients])
 
                 case 'friendtp' | 'friendteleport':
                     # Teleports specified clients to another via wizard name or icon
@@ -316,13 +315,12 @@ async def parse_command(clients: List[Client], command_str: str):
                 case 'log' | 'debug' | 'print':
                     # Logs a specific message or prints the text of a window (by path, if any)
                     if split_command[2].lower() != 'window':
-                        relevant_string: str = ' '.join(split_command[2:])
+                        relevant_string: str = ' '.join(split_command[1:])
                         logger.debug(relevant_string)
 
                     else:
-                        desired_path = find_path(split_command)
                         for client in clients:
-                            desired_window = await get_window_from_path(client.root_window, desired_path)
+                            desired_window = await get_window_from_path(client.root_window, split_command[3])
                             relevant_string = await desired_window.maybe_text()
                             logger.debug(relevant_string)
 
@@ -346,7 +344,7 @@ async def execute_flythrough(client: Client, flythrough_data: str, line_seperato
 async def parse_camera_command(camera: CameraController, command_str: str):
     command_str = command_str.replace(', ', ',')
     command_str = command_str.replace('_', '')
-    split_command = split_line(command_str)
+    split_command = tokenize(command_str)
 
     origin_pos = await camera.position()
     origin_orientation = await camera.orientation()

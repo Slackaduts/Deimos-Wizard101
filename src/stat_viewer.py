@@ -139,20 +139,29 @@ async def total_stats(client: Client, caster_index: int, target_index: int, base
         crits, _ = to_seperated_str_stats(real_crits)
         blocks, _ = to_seperated_str_stats(real_blocks)
 
-        total_stats = [
-            f'Estimated Max Dmg Against {await target.name()}: {int(estimated_damage)}',
-            f'Name: {member_name} - {member_type} - {school_name}',
-            f'Power Pips: {power_pips} - Pips: {pips}',
-            f'Shadow Pips: {shadow_pips}',
-            f'Health: {health}/{max_health} ({(health // max_health) * 100}%)',
-            f'Boosts: {dict_to_str(raw_boosts, take_abs=True)}',
-            f'Resists: {dict_to_str(resistances)}',
-            f'Damages: {dict_to_str(damages)}',
-            f'Pierces: {dict_to_str(pierces)}',
-            f'Crits: {dict_to_str(crits)}',
-            f'Blocks: {dict_to_str(blocks)}',
-            f'Masteries: {masteries_str}',
-        ]
+        pvp_check = False
+
+        if await member.is_player() and await target.is_player():
+            pvp_check = True
+
+        if not pvp_check:
+            total_stats = [
+                f'Estimated Max Dmg Against {await target.name()}: {int(estimated_damage)}',
+                f'Name: {member_name} - {member_type} - {school_name}',
+                f'Power Pips: {power_pips} - Pips: {pips}',
+                f'Shadow Pips: {shadow_pips}',
+                f'Health: {health}/{max_health} ({(health // max_health) * 100}%)',
+                f'Boosts: {dict_to_str(raw_boosts, take_abs=True)}',
+                f'Resists: {dict_to_str(resistances)}',
+                f'Damages: {dict_to_str(damages)}',
+                f'Pierces: {dict_to_str(pierces)}',
+                f'Crits: {dict_to_str(crits)}',
+                f'Blocks: {dict_to_str(blocks)}',
+                f'Masteries: {masteries_str}',
+            ]
+
+        else:
+            total_stats = ['The stat viewer is not supported in PvP.']
 
         return (total_stats, names_with_indexes, caster_index, target_index, temp_school_name)
 

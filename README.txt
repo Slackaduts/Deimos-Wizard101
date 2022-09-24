@@ -10,7 +10,6 @@ To remap keys, simply replace the key's name with the desired key in the config.
 
 This tool gets updated when I have free time from college, and my personal project(s). Don't pester me for when updates are coming.
 
-GUI: If you use a hotkey, it has a small chance of not working due to how the GUI works. Just press it again and it'll work.
 You can also close Deimos by closing out the GUI, just never close out the CMD window.
 
 What hotkeys exist:
@@ -26,6 +25,9 @@ What hotkeys exist:
   -Auto sigil (F2 by default)
   -Freecam (F1 by default)
   -TP to freecam position (Shift + Freecam Key by default)
+
+The GUI also has a bot creator and flythrough creator. Information on these systems are in the bots/flythroughs channels of the Deimos discord server, or the wiki.
+https://github.com/Slackaduts/Deimos-Wizard101/wiki
 
 There's also more advanced features in the GUI that are difficult to explain in writing. Those are intended for more advanced users and/or script developers. No support will be provided on them.
 Additionally, minimal support will be provided on auto questing and auto sigil. This is highly generalized code by design and it is impossible to fix every issue or every circumstance.
