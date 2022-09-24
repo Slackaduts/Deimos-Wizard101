@@ -121,6 +121,9 @@ async def parse_command(clients: List[Client], command_str: str):
 
     split_command = tokenize(command_str)
 
+    if not split_command:
+        return
+
     match split_command[0].lower():
         case 'kill' | 'killbot' | 'stop' | 'stopbot' | 'end' | 'exit':
             # Kills the bot loop, useful for not having stuff loop
@@ -130,6 +133,18 @@ async def parse_command(clients: List[Client], command_str: str):
         case 'sleep' | 'wait' | 'delay':
             # Delays a specified number of seconds
             await asyncio.sleep(float(split_command[-1]))
+
+        case 'log' | 'debug' | 'print':
+            # Logs a specific message or prints the text of a window (by path, if any)
+            if len(split_command) <= 2:
+                relevant_string: str = ' '.join(split_command[1:])
+                logger.debug(split_command[1])
+
+            else:
+                for client in clients:
+                    desired_window = await get_window_from_path(client.root_window, split_command[2])
+                    relevant_string = await desired_window.maybe_text()
+                    logger.debug(f'{client.title} - {relevant_string}')
 
         case _:
             client_str = split_command[0].replace(' ', '')
@@ -281,7 +296,7 @@ async def parse_command(clients: List[Client], command_str: str):
                 case 'waitforwindow' | 'waitforpath':
                     # Waits for a specific window (by path) to be visible
                     await asyncio.gather(*[wait_for_visible_by_path(client, split_command[2]) for client in clients])
-                    if split_command[-1].lower() == 'completion':
+                    if type(split_command[-1]) == str and split_command[-1].lower() == 'completion':
                         # Waits for a specific window (by path) to not be visible
                         await asyncio.gather(*[wait_for_visible_by_path(client, split_command[2], True) for client in clients])
 
@@ -312,18 +327,6 @@ async def parse_command(clients: List[Client], command_str: str):
                     else:
                         logger.error('Failed to go to zone.  It may be spelled incorrectly, or may not be supported.')
 
-                case 'log' | 'debug' | 'print':
-                    # Logs a specific message or prints the text of a window (by path, if any)
-                    if split_command[2].lower() != 'window':
-                        relevant_string: str = ' '.join(split_command[1:])
-                        logger.debug(relevant_string)
-
-                    else:
-                        for client in clients:
-                            desired_window = await get_window_from_path(client.root_window, split_command[3])
-                            relevant_string = await desired_window.maybe_text()
-                            logger.debug(relevant_string)
-
                 case _:
                     await asyncio.sleep(0.25)
 
@@ -345,6 +348,9 @@ async def parse_camera_command(camera: CameraController, command_str: str):
     command_str = command_str.replace(', ', ',')
     command_str = command_str.replace('_', '')
     split_command = tokenize(command_str)
+
+    if not split_command:
+        return 
 
     origin_pos = await camera.position()
     origin_orientation = await camera.orientation()
