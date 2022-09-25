@@ -136,14 +136,15 @@ async def parse_command(clients: List[Client], command_str: str):
 
         case 'log' | 'debug' | 'print':
             # Logs a specific message or prints the text of a window (by path, if any)
-            if len(split_command) <= 2:
-                logger.debug(split_command[1])
-
-            else:
+            if len(split_command) >= 3 and split_command[1].lower() == 'window' and type(split_command[2]) == list:
                 for client in clients:
                     desired_window = await get_window_from_path(client.root_window, split_command[2])
                     relevant_string = await desired_window.maybe_text()
                     logger.debug(f'{client.title} - {relevant_string}')
+
+            else:
+                relevant_string: str = ' '.join(split_command[1:])
+                logger.debug(relevant_string)
 
         case _:
             client_str = split_command[0].replace(' ', '')
