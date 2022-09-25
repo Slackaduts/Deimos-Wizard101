@@ -46,7 +46,7 @@ from src import deimosgui
 cMessageBox = ctypes.windll.user32.MessageBoxW
 
 
-tool_version = '3.7.0'
+tool_version = '3.7.1'
 tool_name = 'Deimos'
 repo_name = tool_name + '-Wizard101'
 branch = 'master'
@@ -515,7 +515,6 @@ async def main():
 			except:
 				await asyncio.sleep(0)
 
-		logger.remove(current_log)
 		await listener.clear()
 		for p in walker.clients:
 			try:
@@ -1540,8 +1539,8 @@ async def main():
 	async def rpc_loop():
 		if rpc_status:
 			# Connect to the discord dev app
-			rpc = AioPresence(1000159655357587566)
 			try:
+				rpc = AioPresence(1000159655357587566)
 				await rpc.connect()
 
 			except pypresence.exceptions.DiscordNotFound:
@@ -1852,6 +1851,7 @@ async def main():
 		for t in done:
 			if t.done() and t.exception() != None:
 				exc = t.exception()
+				raise exc
 
 	finally:
 		tasks: List[asyncio.Task] = [foreground_client_switching_task, speed_task, combat_task, assign_foreground_clients_task, dialogue_task, anti_afk_loop_task, sigil_task, questing_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task]
@@ -1860,7 +1860,6 @@ async def main():
 				task.cancel()
 
 		await tool_finish()
-		raise exc
 
 
 def bool_to_string(input: bool):
@@ -1894,3 +1893,4 @@ if __name__ == "__main__":
 		utils.override_wiz_install_location(r'C:\Program Files (x86)\Steam\steamapps\common\Wizard101')
 
 	asyncio.run(main())
+	logger.remove(current_log)
