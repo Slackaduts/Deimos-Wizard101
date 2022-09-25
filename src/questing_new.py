@@ -1,15 +1,19 @@
 import asyncio
+from pydoc import cli
 import traceback
 import math
+
 from loguru import logger
 
 # from Deimos import sync_camera
 from wizwalker.extensions.scripting.utils import _maybe_get_named_window
 
+# from src.abandonded_quest_correction import return_to_main_quest, handle_abandonded_quest_correction_general, handle_abandonded_quest_correction_talk_quests
+from src.auto_pet import auto_pet, nomnom
 from src.teleport_math import *
-from wizwalker import XYZ, Keycode, MemoryReadError, Client, Rectangle
+from wizwalker import XYZ, Keycode, MemoryReadError, Client, Rectangle, ClientHandler, HookAlreadyActivated, HookNotActive
 from wizwalker.file_readers.wad import Wad
-from wizwalker.memory import DynamicClientObject
+from wizwalker.memory import DynamicClientObject, SimpleHook, HookHandler
 from wizwalker.extensions.scripting import teleport_to_friend_from_list
 from src.sprinty_client import SprintyClient
 from src.utils import *
@@ -20,7 +24,6 @@ from fuzzywuzzy import fuzz
 
 # from Deimos import sync_camera
 
-
 class Quester():
     def __init__(self, client: Client, clients: list[Client], leader_pid: int):
         self.client = client
@@ -28,13 +31,23 @@ class Quester():
         self.leader_pid = leader_pid
         self.current_leader_client = client
         self.current_leader_pid = leader_pid
-
+        self.d_location = None
+    
     async def read_popup_(self, p: Client):
         try:
             popup_text_path = await get_window_from_path(p.root_window, popup_msgtext_path)
             txtmsg = await popup_text_path.maybe_text()
         except:
             txtmsg = ""
+        return txtmsg
+
+
+    async def read_dialogue_text_(self, p: Client):
+        try:
+            dialogue_text = await get_window_from_path(p.root_window, dialog_text_path)
+            txtmsg = await dialogue_text.maybe_text()
+        except:
+            txtmsg = ''
         return txtmsg
 
     async def detected_interact_from_popup_(self, p: Client):
@@ -44,7 +57,7 @@ class Quester():
         except:
             txtmsg = ""
 
-        if 'to enter' in txtmsg.lower() or 'to interact' in txtmsg.lower() or 'to activate' in txtmsg.lower():
+        if 'to enter' in txtmsg.lower() or 'to interact' in txtmsg.lower() or 'to activate' in txtmsg.lower() or 'to teleport' in txtmsg.lower():
             return True
         else:
             return False
@@ -305,6 +318,12 @@ class Quester():
                         split1_qst = unsplitted.split("<center>Gather ")
                         if not len(split1_qst) > 1:
                             split1_qst = unsplitted.split("<center>Destroy ")
+                            if not len(split1_qst) > 1:
+                                split1_qst = unsplitted.split("<center>Smash ")
+                                if not len(split1_qst) > 1:
+                                    split1_qst = unsplitted.split("<center>Repair ")
+                                    if not len(split1_qst) > 1:
+                                        split1_qst = unsplitted.split("<center>Free ")
 
         print(split1_qst)
         try:
@@ -317,19 +336,21 @@ class Quester():
         # "Cog", "Triton Avenue" and "(0 of 3)" the rest is static
         # <center>Collect Cog in Triton Avenue (0 of 3)</center>
 
-        split1_amt = unsplitted.split(" (")
-        split2_amt = split1_amt[1].replace(")</center>", "")
-        amount_to_get_parsed = split2_amt.split("of ")[1]  # Parsing the amount of stuff to pick up
-        amount_gotten_parsed = split2_amt.split(" of")[0]  # Parsing the amount of stuff that has been picked up
+        if "(" in unsplitted:
+            split1_amt = unsplitted.split(" (")
+            split2_amt = split1_amt[1].replace(")</center>", "")
 
+            amount_to_get_parsed = split2_amt.split("of ")[1]  # Parsing the amount of stuff to pick up
+            amount_gotten_parsed = split2_amt.split(" of")[0]  # Parsing the amount of stuff that has been picked up
         # some collect quests do not have numbers (ex: 0 / 6) - for these only one item must be picked up
-        # while this does fix collects for these quests, it can cause non - collects to be read as collects
-        # except:
-        #     #print(traceback.print_exc())
-        #     amount_to_get_parsed = 1
-        #     amount_gotten_parsed = 0
+        else:
+            split2_amt = unsplitted.replace("</center>", "")
 
-        return questnameparsed, f"{amount_gotten_parsed} / {amount_to_get_parsed}"
+            amount_to_get_parsed = 1
+            amount_gotten_parsed = 0
+
+        b = f"{amount_gotten_parsed} / {amount_to_get_parsed}"
+        return questnameparsed, b
 
     async def load_wad(self, path: str):
         return Wad.from_game_data(path.replace("/", "-"))
@@ -339,33 +360,6 @@ class Quester():
         # while await battle.is_fighting() == True and self.client.questing_status:
         while await self.client.in_battle():
             await asyncio.sleep(0.1)
-
-    async def auto_collect_new(self, collect_client):
-        cli = SprintyClient(collect_client)
-        quest_name_path = ["WorldView", "windowHUD", "QuestHelperHud", "ElementWindow", "", "txtGoalName"]
-        popup_msgtext_path = ["WorldView", "NPCRangeWin", "imgBackground", "NPCRangeTxtMessage"]
-        # popup_title_path =["WorldView", "NPCRangeWin"]
-        entity = dict()
-        entity2 = dict()
-        collect_counter = 0
-        safe_cords = await collect_client.body.position()
-        completed = False
-
-        if result := await self.parse_quest_stuff(quest_name_path):
-            parsed_quest_info = result
-        else:
-            return
-
-        try:
-            await self.find_quest_entites(parsed_quest_info, entity, quest_name_path, safe_cords)
-        except:
-            print(traceback.format_exc())
-
-        try:
-            # this may not work
-            await self.combat()
-        except:
-            print(traceback.format_exc())
 
     async def auto_collect(self, collect_client):
         temp_leader_client = self.client
@@ -515,160 +509,343 @@ class Quester():
 
             await asyncio.sleep(2)
 
+    async def friend_teleport(self, maybe_solo_zone: bool):
+        clients_in_solo_zone = []
+        solo_zone = None
+        leader_in_solo_zone = False
+        was_loading = False
+
+        for c in self.clients:
+            if c.process_id != self.current_leader_pid:
+                c_zone = await c.zone_name()
+                leader_zone = await self.current_leader_client.zone_name()
+                if c_zone != leader_zone or maybe_solo_zone:
+                    if await is_free(c) and not c.entity_detect_combat_status:
+                        # teleport to leader
+                        await c.send_key(Keycode.F, 0.1)
+
+                        try:
+                            await c.mouse_handler.activate_mouseless()
+                        except HookAlreadyActivated:
+                            print(traceback.print_exc())
+                            pass
+
+                        await asyncio.sleep(.4)
+
+                        await teleport_to_friend_from_list(c, name=self.current_leader_client.wizard_name)  # icon_list=1, icon_index=self.current_leader_client.questing_friend_teleport_icon)
+
+                        if c_zone != leader_zone:
+
+                            # zone_changed = await safe_wait_for_zone_change(c)
+                            # try:
+                            #     await safe_wait_for_zone_change(c)
+                            # except FriendBusyOrInstanceClosed:
+                            #     print('Friend was busy')
+                            try:
+                                await safe_wait_for_zone_change(c, handle_hooks_if_needed=False)
+                            except FriendBusyOrInstanceClosed:
+                                leader_in_solo_zone = True
+                                solo_zone = await self.current_leader_client.zone_name()
+
+                                # if leader is in solo zone, others may be too - meaning the user is likely trying to quest multiple clients at the same time.  Keep track of these questing clients
+                                for p in self.clients:
+                                    if await p.zone_name() == await self.current_leader_client.zone_name():
+                                        clients_in_solo_zone.append(p)
+
+                                break
+                            except LoadingScreenNotFound:
+                                print(traceback.print_exc())
+                                while True:
+                                    await asyncio.sleep(1.0)
+
+                            was_loading = True
+
+                            try:
+                                await c.mouse_handler.deactivate_mouseless()
+                            except HookNotActive:
+                                print(traceback.print_exc())
+                                pass
+
+                            # if not zone_changed:
+                            #     leader_in_solo_zone = True
+                            #
+                            #     solo_zone = await self.current_leader_client.zone_name()
+                            #
+                            #     # if leader is in solo zone, others may be too - meaning the user is likely trying to quest multiple clients at the same time.  Keep track of these questing clients
+                            #     for p in self.clients:
+                            #         if await p.zone_name() == await self.current_leader_client.zone_name():
+                            #             clients_in_solo_zone.append(p)
+                            #
+                            #     break
+                            # else:
+                            #     was_loading = True
+
+
+                        else:
+                            await c.mouse_handler.deactivate_mouseless()
+
+                            await asyncio.sleep(6.0)
+                            if await is_visible_by_path(c, friend_is_busy_and_dungeon_reset_path):
+                                await c.mouse_handler.activate_mouseless()
+                                while await is_visible_by_path(c, friend_is_busy_and_dungeon_reset_path):
+                                    leader_in_solo_zone = True
+                                    await click_window_by_path(c, friend_is_busy_and_dungeon_reset_path)
+
+                                try:
+                                    await c.mouse_handler.deactivate_mouseless()
+                                except:
+                                    print(traceback.print_exc())
+                                    logger.error('Hook not active')
+                                    pass
+
+                                solo_zone = await self.current_leader_client.zone_name()
+
+                                # if leader is in solo zone, others may be too - meaning the user is likely trying to quest multiple clients at the same time.  Keep track of these questing clients
+                                for p in self.clients:
+                                    if await p.zone_name() == await self.current_leader_client.zone_name():
+                                        clients_in_solo_zone.append(p)
+
+                                break
+
+        if not leader_in_solo_zone:
+            maybe_solo_zone = False
+
+            # logger.warning('after teleport')
+            # if c_zone != leader_zone:
+            #     while not await c.is_loading():
+            #         print(c.title + ': ' + 'not loading')
+            #         await asyncio.sleep(.1)
+            #         # friend TP may fail due to leader being in a solo zone
+            #         if await is_visible_by_path(c, friend_is_busy_and_dungeon_reset_path):
+            #             await click_window_by_path(c, friend_is_busy_and_dungeon_reset_path)
+            #
+            #             solo_zone = await self.current_leader_client.zone_name()
+            #
+            #             # if leader is in solo zone, others may be too - meaning the user is likely trying to quest multiple clients at the same time.  Keep track of these questing clients
+            #             for p in self.clients:
+            #                 if await p.zone_name() == await self.current_leader_client.zone_name():
+            #                     clients_in_solo_zone.append(p)
+            #
+            #             await attempt_deactivate_mouseless(c)
+            #             leader_in_solo_zone = True
+            #             break
+            #
+            #     if not leader_in_solo_zone:
+            #         while await c.is_loading():
+            #             was_loading = True
+            #             await asyncio.sleep(0.1)
+            #
+            #             # friend TP may fail due to leader being in a solo zone
+            #             if await is_visible_by_path(c, friend_is_busy_and_dungeon_reset_path):
+            #                 await click_window_by_path(c, friend_is_busy_and_dungeon_reset_path)
+            #
+            #                 solo_zone = await self.current_leader_client.zone_name()
+            #
+            #                 # if leader is in solo zone, others may be too - meaning the user is likely trying to quest multiple clients at the same time.  Keep track of these questing clients
+            #                 for p in self.clients:
+            #                     if await p.zone_name() == await self.current_leader_client.zone_name():
+            #                         clients_in_solo_zone.append(p)
+            #
+            #                 await attempt_deactivate_mouseless(c)
+            #                 leader_in_solo_zone = True
+            #                 break
+            #
+            #         # we successfully teleported, which means we are clearly not in a solo zone anymore
+            #         if not leader_in_solo_zone:
+            #             maybe_solo_zone = False
+            #
+            #         await attempt_deactivate_mouseless(c)
+            #     else:
+            #         break
+            # else:
+            #     await asyncio.sleep(2.0)
+            #
+            #     # friend TP may fail due to leader being in a solo zone
+            #     if await is_visible_by_path(c, friend_is_busy_and_dungeon_reset_path):
+            #         await click_window_by_path(c, friend_is_busy_and_dungeon_reset_path)
+            #
+            #         solo_zone = await self.current_leader_client.zone_name()
+            #
+            #         # if leader is in solo zone, others may be too - meaning the user is likely trying to quest multiple clients at the same time.  Keep track of these questing clients
+            #         for p in self.clients:
+            #             if await p.zone_name() == await self.current_leader_client.zone_name():
+            #                 clients_in_solo_zone.append(p)
+            #
+            #         await attempt_deactivate_mouseless(c)
+            #         leader_in_solo_zone = True
+            #         break
+            #     else:
+            #         maybe_solo_zone = False
+
+            # else:
+            #     await c.teleport(await self.current_leader_client.body.position())
+
+            # if a client is in the same zone as the leader, it cannot be a solo zone
+            #     maybe_solo_zone = False
+            #     await asyncio.sleep(1.0)
+        # leaving a loading screen is not equivalent to being ready to move - give clients time to truly load into a zone
+        if was_loading:
+            await asyncio.sleep(3.0)
+
+        return clients_in_solo_zone, solo_zone
+
     # handle zone recorrection in follow leader mode using friend TP.  Also quest all questing clients individually when they are in a solo zone
-    async def zone_recorrect_friend_tp(self, maybe_solo_zone: bool):
+
+    # maybe_solo_zone - tells the function that we think we may be in a solo zone, and that it should check and account for that even if we are technically in the same zone as the leader
+    async def zone_recorrect_friend_tp(self, maybe_solo_zone: bool, gear_switching_in_solo_zones=False):
         # for solo zone questing support across multiple clients
         async def solo_zone_questing_loop(clients_in_solo: List[Client], zone: str):
             async def solo_zone_questing(solo_cl: Client):
-                # solo_zone_clients = []
-                # for sc in clients_in_solo:
-                #     solo_zone_clients.append(sc)
-
                 questing = Quester(solo_cl, self.clients, None)
                 while solo_cl.questing_status and await solo_cl.zone_name() == zone:
                     await asyncio.sleep(1.0)
 
                     if solo_cl in self.clients and solo_cl.questing_status:
-                        await questing.auto_quest_solo()
-
-                # solo_zone_clients.remove(solo_cl)
+                        await questing.auto_quest_solo(auto_pet_disabled=True)
 
             await asyncio.gather(*[solo_zone_questing(cl) for cl in clients_in_solo])
 
         if len(self.clients) > 1:
-            clients_in_solo_zone = []
             # if clients are not in same zone as leader, teleport there, or quest leader individually
             while not await self.followers_in_correct_zone() or maybe_solo_zone:
-                leader_in_solo_zone = False
-                was_loading = False
-                for c in self.clients:
-                    if c.process_id != self.current_leader_pid:
-                        c_zone = await c.zone_name()
-                        leader_zone = await self.current_leader_client.zone_name()
-                        if c_zone != leader_zone or maybe_solo_zone:
-                            if await is_free(c) and not c.entity_detect_combat_status:
-                                # teleport to leader
-                                await c.send_key(Keycode.F, 0.1)
-
-                                await attempt_activate_mouseless(c)
-
-                                await asyncio.sleep(.4)
-
-                                await teleport_to_friend_from_list(c, name=self.current_leader_client.wizard_name)  # icon_list=1, icon_index=self.current_leader_client.questing_friend_teleport_icon)
-
-                                if c_zone != leader_zone:
-                                    while not await c.is_loading():
-                                        await asyncio.sleep(.1)
-                                        # friend TP may fail due to leader being in a solo zone
-                                        if await is_visible_by_path(c, friend_is_busy_path):
-                                            await click_window_by_path(c, friend_is_busy_path)
-
-                                            solo_zone = await self.current_leader_client.zone_name()
-
-                                            # if leader is in solo zone, others may be too - meaning the user is likely trying to quest multiple clients at the same time.  Keep track of these questing clients
-                                            for p in self.clients:
-                                                if await p.zone_name() == await self.current_leader_client.zone_name():
-                                                    clients_in_solo_zone.append(p)
-
-                                            await attempt_deactivate_mouseless(c)
-                                            leader_in_solo_zone = True
-                                            break
-
-                                    if not leader_in_solo_zone:
-                                        while await c.is_loading():
-                                            was_loading = True
-                                            await asyncio.sleep(0.1)
-
-                                            # friend TP may fail due to leader being in a solo zone
-                                            if await is_visible_by_path(c, friend_is_busy_path):
-                                                await click_window_by_path(c, friend_is_busy_path)
-
-                                                solo_zone = await self.current_leader_client.zone_name()
-
-                                                # if leader is in solo zone, others may be too - meaning the user is likely trying to quest multiple clients at the same time.  Keep track of these questing clients
-                                                for p in self.clients:
-                                                    if await p.zone_name() == await self.current_leader_client.zone_name():
-                                                        clients_in_solo_zone.append(p)
-
-                                                await attempt_deactivate_mouseless(c)
-                                                leader_in_solo_zone = True
-                                                break
-
-                                        # we successfully teleported, which means we are clearly not in a solo zone anymore
-                                        if not leader_in_solo_zone:
-                                            maybe_solo_zone = False
-
-                                        await attempt_deactivate_mouseless(c)
-                                    else:
-                                        break
-                                else:
-                                    await asyncio.sleep(2.0)
-
-                                    # friend TP may fail due to leader being in a solo zone
-                                    if await is_visible_by_path(c, friend_is_busy_path):
-                                        await click_window_by_path(c, friend_is_busy_path)
-
-                                        solo_zone = await self.current_leader_client.zone_name()
-
-                                        # if leader is in solo zone, others may be too - meaning the user is likely trying to quest multiple clients at the same time.  Keep track of these questing clients
-                                        for p in self.clients:
-                                            if await p.zone_name() == await self.current_leader_client.zone_name():
-                                                clients_in_solo_zone.append(p)
-
-                                        await attempt_deactivate_mouseless(c)
-                                        leader_in_solo_zone = True
-                                        break
-                                    else:
-                                        maybe_solo_zone = False
-
-                        # else:
-                        #     await c.teleport(await self.current_leader_client.body.position())
-
-                        # if a client is in the same zone as the leader, it cannot be a solo zone
-                        #     maybe_solo_zone = False
-                        #     await asyncio.sleep(1.0)
-                # leaving a loading screen is not equivalent to being ready to move - give clients time to truly load into a zone
-                if was_loading:
-                    await asyncio.sleep(3.0)
+                clients_in_solo_zone, solo_zone = await self.friend_teleport(maybe_solo_zone)
+                initial_clients_in_solo_zone = clients_in_solo_zone.copy()
 
                 # if client(s) in solo zone, switch to non-leader auto questing and quest each valid client on their own until their zone changes
+                # deck_switching = True
                 if len(clients_in_solo_zone) > 0:
                     for solo_client in clients_in_solo_zone:
                         logger.debug('Client ' + solo_client.title + ' is in solo zone - questing alone')
+
                         solo_client.in_solo_zone = True
 
-                    solo_zone_task = asyncio.create_task(
-                        solo_zone_questing_loop(clients_in_solo=clients_in_solo_zone, zone=solo_zone))
-                    await asyncio.wait([solo_zone_task])
+                    if gear_switching_in_solo_zones:
+                        logger.debug('Switching to second equipment set on all clients.')
+                        await asyncio.gather(*[change_equipment_set(c, 1, handle_mouseless=True) for c in clients_in_solo_zone])
 
-                    for solo_client in clients_in_solo_zone:
-                        logger.debug('Client ' + solo_client.title + ' may have left solo zone')
-                        solo_client.in_solo_zone = False
+                    # loop until we have confirmed that we are no longer in a solo zone
+                    while len(clients_in_solo_zone) > 0 and solo_zone is not None:
+                        solo_zone_task = asyncio.create_task(solo_zone_questing_loop(clients_in_solo=clients_in_solo_zone, zone=solo_zone))
+                        await asyncio.wait([solo_zone_task])
 
-                        maybe_solo_zone = await self.determine_solo_zone()
-                        if maybe_solo_zone:
-                            logger.debug('Some clients appear to still be in the solo zone.')
-                        else:
-                            logger.debug('Clients all appear to have left the solo zone.')
+                        logger.debug('Clients may have left the solo zone - attempting to teleport to leader.')
+                        clients_in_solo_zone, solo_zone = await self.friend_teleport(maybe_solo_zone=True)
 
-                    clients_in_solo_zone = []
 
-    async def heal_and_handle_potions(self):
-        for p in self.clients:
-            if await is_free(p):
-                if await is_potion_needed(
-                        p) and await p.stats.current_mana() > 1 and await p.stats.current_hitpoints() > 1:
-                    await collect_wisps(p)
+                    # for solo_client in clients_in_solo_zone:
+                    #     logger.debug('Client ' + solo_client.title + ' may have left solo zone')
+                    #     solo_client.in_solo_zone = False
+                    #
+                    #     maybe_solo_zone = await self.determine_solo_zone()
+                    #     if maybe_solo_zone:
+                    #         logger.debug('Some clients appear to still be in the solo zone.')
+                    #     else:
+                    #         logger.debug('Clients all appear to have left the solo zone.')
 
-            if await is_free(p):
-                if await is_potion_needed(p, minimum_mana=16):
-                    await use_potion(p)
+                    # we have confirmed that we are out of the solo zone(s) - carry on questing
+                    maybe_solo_zone = await self.determine_solo_zone()
+                    if maybe_solo_zone:
+                        logger.debug('Some clients appear to still be in the solo zone.')
+                    else:
+                        logger.debug('Clients all appear to have left the solo zone.')
 
+                    for solo in initial_clients_in_solo_zone:
+                        solo.in_solo_zone = False
+
+                    if gear_switching_in_solo_zones:
+                        logger.debug('Switching back to first equipment set on all clients.')
+                        await asyncio.gather(*[change_equipment_set(c, 0, handle_mouseless=True) for c in initial_clients_in_solo_zone])
+                else:
+                    maybe_solo_zone = await self.determine_solo_zone()
+
+        return maybe_solo_zone
+
+    async def wait_for_zone_change_safe_recall(self, p: Client, zone_name=None):
+        if zone_name:
+            zone = zone_name
+        else:
+            zone = await p.zone_name()
+
+        while zone == await p.zone_name():
+            # account for dungeon reset popup when attempting to teleport back to previous location
+            window_detected_and_closed = await asyncio.gather(*[click_window_until_closed(p, friend_is_busy_and_dungeon_reset_path) for p in self.clients])
+            # Client has not changed zones, and is not going to - exit function
+            if window_detected_and_closed:
+                break
+                # gather the clients back to one same zone (either through friend tp or not) and continue questing
+                # all_in_hub = True
+                # for c in self.clients:
+                #     if await c.zone_name() != 'WizardCity/WC_Hub':
+                #         all_in_hub = False
+                #
+                # if all_in_hub:
+                #     await asyncio.gather(*[p.teleport(self.current_leader_client.body.position()) for p in self.clients])
+                # else:
+                #     if questing_friend_tp:
+                #         await self.zone_recorrect_friend_tp(maybe_solo_zone=False, gear_switching_in_solo_zones=False)
+                #     else:
+                #         for c in self.clients:
+                #             if await c.zone_name() != 'WizardCity/WC_Hub':
+                #                 await navigate_to_ravenwood(c)
+                #                 await navigate_to_commons_from_ravenwood(c)
+                #
+                #     await asyncio.sleep(2.0)
+            else:
+                await asyncio.sleep(.5)
+
+
+
+    async def heal_and_handle_potions(self, questing_friend_tp: bool):
+        await asyncio.gather(*[self.collect_wisps(p) for p in self.clients])
+        await asyncio.gather(*[self.guarantee_use_potion(p) for p in self.clients])
+
+        any_client_needs_potions = False
         for p in self.clients:
             # If we have less than 1 potion left, send all clients to get potions (even if some don't need it).  Only do this once per questing loop
             if await p.stats.potion_charge() < 1.0 and await p.stats.reference_level() >= 5:
-                await asyncio.gather(*[refill_potions(p, mark=True) for p in self.clients])
-                break
+                any_client_needs_potions = True
+
+        if any_client_needs_potions:
+            # Guaranteed teleport mark placement - marks until mana is lower than starting point
+            for p in self.clients:
+                if await p.zone_name() != 'WizardCity/WC_Hub':
+                    original_mana = await p.stats.current_mana()
+                    while await p.stats.current_mana() >= original_mana:
+                        logger.debug(f'Client {p.title} - Marking Location')
+                        await p.send_key(Keycode.PAGE_DOWN, 0.1)
+                        await asyncio.sleep(.75)
+
+            await asyncio.gather(*[refill_potions(c, mark=False, recall=False, original_zone=await c.zone_name()) for c in self.clients])
+            # return all clients to original location, and if it fails, send all to commons
+            await asyncio.gather(*[self.gather_clients_from_potion_buy(c) for c in self.clients])
+
+    async def collect_wisps(self, p: Client):
+        if await is_free(p):
+            if await is_potion_needed(p) and await p.stats.current_mana() > 1 and await p.stats.current_hitpoints() > 1:
+                await collect_wisps(p)
+
+    async def guarantee_use_potion(self, p: Client):
+        if await is_free(p):
+            if await is_potion_needed(p, minimum_mana=16):
+                original_potion_count = await p.stats.potion_charge()
+                while await p.stats.potion_charge() == original_potion_count and original_potion_count >= 1:
+                    logger.debug(f'Client {p.title} - Using potion')
+                    await click_window_by_path(p, potion_usage_path, True)
+                    await asyncio.sleep(.6)
+
+    async def gather_clients_from_potion_buy(self, p: Client):
+        try:
+            await p.send_key(Keycode.PAGE_UP)
+            logger.debug('Waiting for zone change on all clients.')
+            await safe_wait_for_zone_change(p, name='WizardCity/WC_Hub', handle_hooks_if_needed=True)
+        # something went wrong when placing the mark or recalling / our teleport mark was in a closed off area / instance
+        # send all to the commons and let auto quest handle the rest
+        except (LoadingScreenNotFound, FriendBusyOrInstanceClosed):
+            for c in self.clients:
+                while await c.zone_name() != 'WizardCity/WC_Hub':
+                    await navigate_to_ravenwood(c)
+                    await navigate_to_commons_from_ravenwood(c)
+                    await asyncio.sleep(.5)
 
     # if followers in different zone, try X presses (for X zone changes that require delayed presses between clients)
     async def X_press_zone_recorrect(self):
@@ -706,18 +883,86 @@ class Quester():
         #         print('2')
         #         await asyncio.sleep(0.1)
 
+        
+    async def read_spiral_door_title(self, client: Client):
+        try:
+            title_text_path = await get_window_from_path(client.root_window, spiral_door_title_path)
+            title = await title_text_path.maybe_text()
+        except:
+            title = ""
+            
+        return title
+    
+    async def read_quest_txt(self, client: Client):
+        try:
+            quest_name = await get_window_from_path(client.root_window, quest_name_path)
+            quest = await quest_name.maybe_text()
+        except:
+            print("fail")
+            quest = ""
+        print(quest)    
+        return quest
+
+        
+    def parse_quest_zone(self, str: str):
+        # # <center>Collect Cog in Triton Avenue (0 of 3)</center>
+        center = str.split("<center>") # ['', 'Collect Cog in Triton Avenue (0 of 3)</center>']  
+        center2 = center[1].split("</center>") #['Collect Cog in Triton Avenue (0 of 3)', '']
+        In = center2[0].split(" in ") #['Collect Cog', 'Triton Avenue (0 of 3)']
+        zone_name = In[1] #'Triton Avenue (0 of 3)' or 'Triton Avenue'
+        try:
+            zone_name_final = zone_name.split(" (")[0] #['Triton Avenue' ,'0 of 3)']
+            return zone_name_final # Triton Avenue
+        except:
+            pass
+
+        return zone_name 
+
+    async def find_quest_zone_area_name(self, client: Client, door_locations: list):
+        location = self.parse_quest_zone(await self.read_quest_txt(client))
+
+        location = location.lower()
+        parts_of_string = location.split(" ")
+        for piece in parts_of_string:
+            for d_location in door_locations:
+                if piece in d_location:
+                    self.d_location = d_location
+                    return d_location
+                
+    async def new_world_doors(self, client: Client):
+        if  "Streamportal" in await self.read_spiral_door_title(client):
+            location = await self.find_quest_zone_area_name(client, streamportal_locations)
+            await new_portals_cycle(client, location)
+            return True
+            
+        elif "Nanavator" in await self.read_spiral_door_title(client):
+            location = await self.find_quest_zone_area_name(client, nanavato_locations)
+            await new_portals_cycle(client, location)
+            return True
+        
+        return False
+            
     async def handle_spiral_navigation(self):
-        # Handles spiral door navigation
-        await spiral_door_with_quest(self.current_leader_client)
-
-        await asyncio.sleep(1)
-        leader_world = (await self.current_leader_client.zone_name()).split('/', 1)[0]
-
-        # Follower clients use separate spiral door navigation than leader (since they may not have the same quest)
-        for c in self.clients:
-            if c.process_id != self.current_leader_pid:
-                if await is_visible_by_path(c, spiral_door_teleport_path):
-                    await go_to_new_world(c, leader_world)
+        if await self.new_world_doors(self.current_leader_client):
+            for c in self.clients:
+                if c.process_id != self.current_leader_pid:
+                    if await is_visible_by_path(c, spiral_door_teleport_path):
+                        await new_portals_cycle(c, self.d_location)
+        else:
+            # Handles spiral door navigation
+            await spiral_door_with_quest(self.current_leader_client)
+            
+            await asyncio.sleep(1)
+            leader_world = (await self.current_leader_client.zone_name()).split('/', 1)[0]
+            
+            #handles steam link
+            #await self.new_world_doors(self.current_leader_client)
+            #quest_name_path
+            # Follower clients use separate spiral door navigation than leader (since they may not have the same quest)
+            for c in self.clients:
+                if c.process_id != self.current_leader_pid:
+                    if await is_visible_by_path(c, spiral_door_teleport_path):
+                        await go_to_new_world(c, leader_world)
 
     async def auto_tfc_friend_all_wizards(self):
         for code_generator in self.clients:
@@ -783,7 +1028,6 @@ class Quester():
             await requester.teleport(XYZ(x=-1884.0, y=-2328.0, z=0.0), yaw=0.7693982720375061)
             await asyncio.sleep(.3)
             await requester.send_key(Keycode.W, 0.1)
-
             for acceptor in self.clients:
                 if requester.process_id != acceptor.process_id:
                     friend_already_in_list = await check_for_friend_in_list(requester, acceptor.wizard_name)
@@ -908,7 +1152,6 @@ class Quester():
                 client_quests = await self.get_client_quests(questing_clients)
 
             elif len(client_quests) < original_length:
-
                 # pass leader to next client in dict
                 logger.debug('client(s) fell behind - new leader ' + list(client_quests)[0].title + ' assigned')
                 self.current_leader_client = list(client_quests)[0]
@@ -934,8 +1177,8 @@ class Quester():
         # this may fail - some zones cannot be teleported to even if they have public sigils - detect whether this zone is locked off to teleports
         teleport_banned_zone = False
         for c in self.clients:
-            if await is_visible_by_path(c, friend_is_busy_path):
-                await click_window_by_path(c, friend_is_busy_path)
+            if await is_visible_by_path(c, friend_is_busy_and_dungeon_reset_path):
+                await click_window_by_path(c, friend_is_busy_and_dungeon_reset_path)
                 teleport_banned_zone = True
 
         await asyncio.sleep(.5)
@@ -963,11 +1206,15 @@ class Quester():
     async def auto_collect_rewrite(self, client: Client):
         quest_name_path = ["WorldView", "windowHUD", "QuestHelperHud", "ElementWindow", "",
                            "txtGoalName"]  # path to the yellow text under arrow which tells you your quest
-        quest_item_list = await self.parse_quest_stuff(
-            quest_name_path)  # gets quest name from path and parses it for collect quest item name
-        print(quest_item_list[0])
+        quest_item_list, b = await self.parse_quest_stuff(quest_name_path)  # gets quest name from path and parses it for collect quest item name
 
+        entities_to_skip = ['Basic Positional', 'WispHealth', 'WispMana', 'KT_WispHealth', 'KT_WispMana', 'WispGold', 'DuelCircle', 'Player Object', 'SkeletonKeySigilArt', 'Basic Ambient', 'TeleportPad']
+
+        # method for hard coding collect quests
+        quest_and_name = {'Find Stolen Food in Saltmeadow Swamp ': 'Food Stores'} # , 'TEST': 'TEST'}
         chunk_cords = await self.Nav_Hull()  # list of cords that load in chunk
+        quest_obv = await self.get_truncated_quest_objectives(client)
+
         for points in chunk_cords:  # loops through the points
             points = XYZ(points.x, points.y, points.z - 550)  # sets cord to underground to avoid pull / detection
             await client.teleport(points, move_after=False, wait_on_inuse=True)  # teleports under the area
@@ -979,14 +1226,24 @@ class Quester():
                     object_template = await e.object_template()  # gets entity template
                     display_name_code = await object_template.display_name()  # gets display name code
                     display_name = await self.client.cache_handler.get_langcode_name(display_name_code)  # uses display name code to get display name text
-                    match = fuzz.ratio(display_name.lower(), str(quest_item_list[0]).lower())  # fuzzywuzzy check if display name matches quest item.
+                    match = fuzz.ratio(display_name.lower(), str(quest_item_list).lower())  # fuzzywuzzy check if display name matches quest item.
+                    print(display_name + ' : ' + str(match))
+
                     if match > 80:  # if strings match greater than 80 it means that it's most likely the item
                         while not await is_free(self.client) or self.client.entity_detect_combat_status:
                             await asyncio.sleep(.1)
 
-                        print('display name: ' + display_name)
+                        # print('display name: ' + display_name)
                         if await self.collect_entity(e):  # grabs enity
                             return
+                    elif quest_obv in quest_and_name:
+                            if display_name == quest_and_name.get(quest_obv):
+                                while not await is_free(self.client) or self.client.entity_detect_combat_status:
+                                    await asyncio.sleep(.1)
+
+                                if await self.collect_entity(e):  # grabs enity
+                                    return
+
                 except ValueError:
                     pass
                 except MemoryReadError:
@@ -1002,16 +1259,21 @@ class Quester():
                     entities_to_skip = ['Basic Positional', 'WispHealth', 'WispMana', 'KT_WispHealth', 'KT_WispMana', 'WispGold', 'DuelCircle', 'Player Object', 'SkeletonKeySigilArt', 'Basic Ambient']
                     if e_name not in entities_to_skip:  # helps speed things up
                         name_list = e_name.split('_')
+                        if len(name_list) == 1:
+                            name_list = name_list[0].split('-')
+
                         edited_name = ''.join(name_list[1:])
                         # do stripping symbols stuff with edited_name
                         edit_name2 = ''.join([i for i in edited_name if not i.isdigit()])
                         edit_name3 = str(edit_name2).replace("_", "")
-                        match = fuzz.ratio(edit_name3.lower(), str(quest_item_list[0]).lower())
+
+                        match = fuzz.ratio(edit_name3.lower(), str(quest_item_list).lower())
+                        # print('file name: ' + edit_name3)
+                        # print('fuzz levels: ' + str(match))
                         if int(match) > 50:
                             while not await is_free(self.client) or self.client.entity_detect_combat_status:
                                 await asyncio.sleep(.1)
 
-                            print('file name: ' + edit_name3)
                             if await self.collect_entity(e):  # grabs enity
                                 return
                 except:
@@ -1047,26 +1309,83 @@ class Quester():
                     return True
         return False
 
+
+
+    async def dungeon_recall(self, p: Client):
+        original_zone = await p.zone_name()
+        dungeon_recalled = await click_window_until_closed(p, dungeon_recall_path)
+
+        if dungeon_recalled:
+            while original_zone == await p.zone_name():
+                await asyncio.sleep(1.0)
+                dungeon_full = await click_window_until_closed(p, friend_is_busy_and_dungeon_reset_path)
+                if dungeon_full:
+                    await asyncio.sleep(1.0)
+                    return False
+
+            return True
+
+    async def open_character_screen(self, p: Client):
+        while not await is_visible_by_path(p, close_spellbook_path):
+            await p.send_key(Keycode.C, 0.1)
+            await asyncio.sleep(.3)
+
+    async def close_character_screen(self, p: Client):
+        while await is_visible_by_path(p, close_spellbook_path):
+            await p.send_key(Keycode.C, 0.1)
+            await asyncio.sleep(.3)
+
     # @logger.catch()
-    async def auto_quest_leader(self, questing_friend_tp: bool):
+    async def auto_quest_leader(self, questing_friend_tp: bool, gear_switching_in_solo_zones: bool, hitting_client, ignore_pet_level_up: bool, play_dance_game: bool):
         follower_clients = await self.get_follower_clients()
+        questing_clients = await self.get_questing_clients()
 
-        # read and store the name of the client's wizard
-        if questing_friend_tp:
-            await asyncio.gather(*[set_wizard_name(c) for c in self.clients])
+        # read and store the name of the client's wizard, and check energy
+        if questing_friend_tp or self.current_leader_client.auto_pet_status:
+            # open character screen
 
-            # clients_already_added = True
-            friend_lists = dict()
-            for requester in self.clients:
-                friend_names = []
-                for acceptor in self.clients:
-                    if requester.process_id != acceptor.process_id:
-                        friend_names.append(acceptor.wizard_name)
+            await asyncio.gather(*[self.open_character_screen(c) for c in self.clients])
 
-                friend_lists.update({requester: friend_names})
+            await asyncio.gather(*[set_wizard_name_from_character_screen(c) for c in self.clients])
+            energy_info = await asyncio.gather(*[return_wizard_energy_from_character_screen(c) for c in questing_clients])
+
+            # close character screen
+            await asyncio.gather(*[self.close_character_screen(c) for c in self.clients])
+
+            auto_pet_on = False
+            for p in self.clients:
+                if p.auto_pet_status:
+                    auto_pet_on = True
+
+            if auto_pet_on:
+                # potentially run auto_pet once initially, if all questing_clients have high energy
+                all_high_energy = True
+                for i, c in enumerate(questing_clients):
+                    # current energy / total energy - percent of remaining energy
+                    if ((energy_info[i][0] / energy_info[i][1]) * 100) < 70:
+                        all_high_energy = False
+
+                if all_high_energy:
+                    # buy potions if necessary, otherwise auto pet will fail
+                    await self.heal_and_handle_potions(questing_friend_tp=False)
+
+                    logger.debug('All questing clients have high energy, training pets on all clients.')
+                    await asyncio.gather(*[auto_pet(c, ignore_pet_level_up, play_dance_game, questing=True) for c in self.clients])
 
             # Working but inconsistent code for checking if all clients are friends, and then automatically adding them
             # ---------------------------------------------------------------------------------------------------------
+
+            # clients_already_added = True
+            # friend_lists = dict()
+            # for requester in self.clients:
+            #     friend_names = []
+            #     for acceptor in self.clients:
+            #         if requester.process_id != acceptor.process_id:
+            #             friend_names.append(acceptor.wizard_name)
+            #
+            #     friend_lists.update({requester: friend_names})
+
+
             # check if all clients have all other clients friended
             # check_all_friends = [asyncio.create_task(check_for_multiple_friends_in_list(checker, friend_lists[checker])) for checker in friend_lists]
             # done, pending = await asyncio.wait(check_all_friends)
@@ -1095,6 +1414,7 @@ class Quester():
         # determining questing clients from booster clients requires them to be within render distance of each other
         # to make questing as efficient as possible, recorrect zones right off the bat when questing first starts
         leader_pos = await self.current_leader_client.body.position()
+        teleported = False
         for c in self.clients:
             if await c.zone_name() == await self.current_leader_client.zone_name():
                 errored = True
@@ -1103,9 +1423,13 @@ class Quester():
                     try:
                         await c.teleport(leader_pos)
                         errored = False
+                        teleported = True
                     except ValueError:
                         errored = True
                         await asyncio.sleep(1.0)
+
+        if teleported:
+            await asyncio.sleep(2.0)
 
         if len(self.clients) > 1:
             maybe_solo_zone = await self.determine_solo_zone()
@@ -1114,11 +1438,10 @@ class Quester():
 
         # only friend TPs if clients are in different zones or we think we may be in a solo zone
         if questing_friend_tp:
-            await self.zone_recorrect_friend_tp(maybe_solo_zone=maybe_solo_zone)
+            await self.zone_recorrect_friend_tp(maybe_solo_zone=maybe_solo_zone, gear_switching_in_solo_zones=gear_switching_in_solo_zones)
             maybe_solo_zone = await self.determine_solo_zone()
 
         # leader and follower clients can dynamically change during auto questing to account for clients being left behind
-        questing_clients = await self.get_questing_clients()
         client_quests = await self.get_client_quests(questing_clients)
 
         if len(client_quests) > 0:
@@ -1133,12 +1456,45 @@ class Quester():
 
         leaders_previous_zone = await self.client.zone_name()
 
+        iterations_since_last_quest_change = 0
+        leader_last_full_quest = await get_quest_name(self.current_leader_client)
+        last_leader_pid = self.current_leader_client.process_id
+        last_leader_zone = await self.current_leader_client.zone_name()
+
+        # paths to exit out of when they pop up near the end of the loop
+        end_of_loop_paths = (exit_recipe_shop_path, exit_equipment_shop_path, cancel_multiple_quest_menu_path, cancel_spell_vendor, exit_snack_shop_path, exit_reagent_shop_path, exit_tc_vendor, exit_minigame_sigil, exit_wysteria_tournament, exit_dungeon_path, exit_zafaria_class_picture_button, exit_pet_leveled_up_button_path, avalon_badge_exit_button_path, potion_exit_path)
         # main loop
         while self.client.questing_status:
             await asyncio.sleep(.4)
 
             # Collect wisps, use potions, or get potions if necessary
-            await self.heal_and_handle_potions()
+            await self.heal_and_handle_potions(questing_friend_tp)
+
+            # don't recall on secondary clients unless we've already successfully recalled on the primary
+            dungeon_recalled = await self.dungeon_recall(self.current_leader_client)
+            if dungeon_recalled:
+                await asyncio.gather(*[self.dungeon_recall(p) for p in follower_clients])
+
+            auto_pet_on = False
+            for p in self.clients:
+                if p.auto_pet_status:
+                    auto_pet_on = True
+                    break
+
+            # train pet on all clients if any questing client levels up
+            if auto_pet_on:
+                any_client_leveled_up = False
+                for c in questing_clients:
+                    char_level = await c.stats.reference_level()
+                    if char_level > c.character_level:
+                        any_client_leveled_up = True
+                        break
+                    # else:
+                    #    print('client: ' + c.title + ' leveled up')
+
+                if any_client_leveled_up:
+                    logger.debug('One or more questing clients leveled up - training pets on all questing clients.')
+                    await asyncio.gather(*[auto_pet(c, ignore_pet_level_up, play_dance_game, questing=True) for c in self.clients])
 
             # If zone changed, try to determine if we are in a solo zone
             leaders_zone = await self.current_leader_client.zone_name()
@@ -1157,9 +1513,11 @@ class Quester():
 
             # if followers in wrong zone, first attempt to click X - this may send them into the next zone if they are near an interactible door
             # don't do this when friend tp is active (as x press correction for some reason appears to be inconsistent)
-            if (not await self.followers_in_correct_zone() or maybe_solo_zone) and not questing_friend_tp:
+            if not await self.followers_in_correct_zone() or maybe_solo_zone:
                 logger.debug('Clients may be in wrong zone - attempting to correct with X press')
                 await self.X_press_zone_recorrect()
+
+                await asyncio.gather(*[exit_menus(c, end_of_loop_paths) for c in self.clients])
 
             if not await self.followers_in_correct_zone() or maybe_solo_zone:
                 if not questing_friend_tp:
@@ -1171,94 +1529,152 @@ class Quester():
                     await self.zone_recorrect_hub()
                 else:
                     # if still in the wrong zone, try friend teleport
-                    await self.zone_recorrect_friend_tp(maybe_solo_zone)
+                    try:
+                        maybe_solo_zone = await self.zone_recorrect_friend_tp(maybe_solo_zone, gear_switching_in_solo_zones)
+                    except:
+                        print(traceback.print_exc())
+
                     await asyncio.sleep(2.0)
 
             if await is_free(self.current_leader_client):
                 distance = calc_Distance(quest_xyz, XYZ(0.0, 0.0, 0.0))
                 if distance > 1:
                     if await is_free(self.current_leader_client):
-                        try:
+                        # try:
                             for c in self.clients:
                                 if c.entity_detect_combat_status:
                                     await asyncio.sleep(.1)
 
                             leader_objective = await self.get_truncated_quest_objectives(self.current_leader_client)
 
+                            # In its current form, this attempts to correct for situations where you are standing too close to an NPC or sigil, and need to move away then return to get the popup to talk / enter
+                            # if after a certain number of loops we've failed to move on from our quest, something is wrong, and we try to correct for this in case this is the cause
+
+                            # this could be expanded to matching entity name to mob name for situations like the Labyrinth where the game tells you to defeat an enemy but gives you an inaccurate location
+
+                            # logger.info('ITERATIONS: ' + str(iterations_since_last_quest_change))
+                            if last_leader_pid == self.current_leader_client.process_id and last_leader_zone == await self.current_leader_client.zone_name():
+                                # more serious than 5 - the issue may be that the XYZ is just incorrect
+                                # we should scan for entities, teleport to the one that is closest to the given XYZ
+                                # if that fails, try the next one
+                                # if iterations_since_last_quest_change == 7:
+
+                                # first check - most likely scenario (and easiest to solve) is that we just need to move away and back towards the NPC or sigil
+                                if iterations_since_last_quest_change >= 5:
+                                    location = await self.current_leader_client.body.position()
+                                    await asyncio.gather(*[p.teleport(XYZ(location.x + 500, location.y, location.z - 1500)) for p in self.clients])
+                                    await asyncio.sleep(2.0)
+
                             # complex teleport logic for defeat quests to prevent mob battle separation
                             if 'defeat' in leader_objective.lower():
-                                logger.debug(
-                                    'Leader ' + self.current_leader_client.title + ' on defeat quest - staggering teleports')
+                                # if the hitting client is the leader client, they would teleport first, forcing them into battle first
+                                # we use a proxy leader client instead during battle teleports so that in the case that the hitting client is the leader, we can still teleport them last
+                                ignore_hitter = True
+                                proxy_leader_is_questing = True
+                                if hitting_client is not None:
+                                    if hitting_client in self.current_leader_client.title:
+                                        ignore_hitter = False
+                                        followup_teleport_clients = follower_clients.copy()
+                                        proxy_leader_client = None
+                                        proxy_leader_is_questing = True
+                                        for c in follower_clients:
+                                            # prefer other concurrent questers as the proxy leader (in case we run into a solo zone)
+                                            if proxy_leader_client is None:
+                                                if await self.get_truncated_quest_objectives(c) == await self.get_truncated_quest_objectives(self.current_leader_client):
+                                                    proxy_leader_client = c
+                                                    break
+
+                                            # if proxy_leader_client is None:
+                                            #     followup_teleport_clients.append(c)
+                                            # else:
+                                            #     if c.process_id != proxy_leader_client.process_id:
+                                            #         followup_teleport_clients.append(c)
+
+                                            # elif c.process_id != follower_clients[0]:
+                                            #     followup_teleport_clients.append(c)
+
+                                        # none of our follower clients are on the same quest (user has a really strange setup, this should never happen in practice)
+                                        # resort to letting a non-questing client be the proxy leader
+                                        if proxy_leader_client is None:
+                                            proxy_leader_is_questing = False
+                                            proxy_leader_client = follower_clients[0]
+
+                                        followup_teleport_clients.remove(proxy_leader_client)
+                                        followup_teleport_clients.append(self.current_leader_client)
+
+                                # user did not set a hitter client or the hitter client is not the current leader
+                                # in this case, change nothing - leader remains leader and followers remain followers
+                                if ignore_hitter:
+                                    proxy_leader_client = self.current_leader_client
+                                    followup_teleport_clients = follower_clients
+
+                                logger.debug('Leader ' + self.current_leader_client.title + ' on defeat quest - staggering teleports')
                                 leader_client_objective_xyz = await self.current_leader_client.quest_position.position()
 
-                                location_before_sendback = await self.current_leader_client.body.position()
-                                zone_before_teleport = await self.current_leader_client.zone_name()
-                                await self.current_leader_client.teleport(leader_client_objective_xyz)
+                                location_before_sendback = await proxy_leader_client.body.position()
+                                zone_before_teleport = await proxy_leader_client.zone_name()
+                                await proxy_leader_client.teleport(leader_client_objective_xyz)
                                 await asyncio.sleep(1.0)
 
                                 # we collided and were sent back - we likely aren't in the right zone for our defeat quest
-                                distance = calc_Distance(location_before_sendback,
-                                                         await self.current_leader_client.body.position())
+                                distance = calc_Distance(location_before_sendback, await proxy_leader_client.body.position())
 
                                 # leader client collided and got sent back
                                 if distance < 20:
                                     # dist = await self.distance_to_nearest_mob(self.current_leader_client, is_mob=True)
-                                    logger.debug(
-                                        'client ' + self.current_leader_client.title + ' collided on initial teleport')
-                                    await navmap_tp(client=self.current_leader_client,
-                                                    xyz=leader_client_objective_xyz)  # , leader_client=self.current_leader_client)
+                                    logger.debug('client ' + proxy_leader_client.title + ' collided on initial teleport')
+                                    await navmap_tp_leader_quest(client=proxy_leader_client, xyz=leader_client_objective_xyz, leader_client=self.current_leader_client)
 
                                 # leader did not collide
                                 # else:
                                 await asyncio.sleep(1.0)
-                                while await self.current_leader_client.is_loading():
+                                while await proxy_leader_client.is_loading():
                                     await asyncio.sleep(.1)
 
                                 # leader_current_zone = await self.current_leader_client.zone_name()
-                                detected_dungeon = await self.detected_interact_from_popup_(self.current_leader_client)
+                                detected_dungeon = await self.detected_interact_from_popup_(proxy_leader_client)
 
                                 # changed zones or we are in front of an interactible
-                                if await self.current_leader_client.zone_name() != zone_before_teleport or detected_dungeon:
+                                if await proxy_leader_client.zone_name() != zone_before_teleport or detected_dungeon:
                                     logger.debug('leader zone changed or interactible reached - syncing all clients')
-                                    await asyncio.gather(*[navmap_tp(client=c, xyz=leader_client_objective_xyz,
-                                                                     leader_client=self.current_leader_client) for c in
-                                                           follower_clients])
+                                    try:
+                                        await asyncio.gather(*[navmap_tp_leader_quest(client=c, xyz=leader_client_objective_xyz, leader_client=self.current_leader_client) for c in followup_teleport_clients])
+                                    except:
+                                        print(traceback.print_exc())
 
                                 # objective changed, let questing loop cycle and assign a new leader in case some got left behind
-                                elif leader_objective != await self.get_truncated_quest_objectives(
-                                        self.current_leader_client):
+                                # ignore this logic if the proxy leader is not a questing client - there is no way to determine if objective changed in this case and users should avoid this setup
+                                elif proxy_leader_is_questing and leader_objective != await self.get_truncated_quest_objectives(proxy_leader_client):
                                     pass
 
                                 # leader is likely waiting for combat in the correct zone
                                 else:
                                     logger.debug('leader waiting for combat')
                                     await asyncio.sleep(1)
-                                    sprinter = SprintyClient(self.current_leader_client)
-                                    while not self.current_leader_client.entity_detect_combat_status:
+                                    sprinter = SprintyClient(proxy_leader_client)
+                                    while not proxy_leader_client.entity_detect_combat_status:
                                         try:
                                             await sprinter.tp_to_closest_mob()
                                         # wizwalker throws should update bool even with wait_on_inuse on
                                         except ValueError:
                                             await asyncio.sleep(1.0)
 
-                                        await asyncio.sleep(1.0)
+                                        await asyncio.sleep(5.0)
 
-                                    while self.current_leader_client.entity_detect_combat_status:
+                                    while proxy_leader_client.entity_detect_combat_status:
                                         await asyncio.sleep(.1)
 
                             # if we aren't doing a mob / boss fight, we have no need to stagger teleports
                             # furthermore staggered teleports can break certain quests in dungeons for certain clients
                             else:
-                                await asyncio.gather(
-                                    *[navmap_tp(p, quest_xyz, leader_client=self.current_leader_client) for p in
-                                      self.clients])
+                                await asyncio.gather(*[navmap_tp_leader_quest(p, quest_xyz, leader_client=self.current_leader_client) for p in self.clients])
 
                             for c in self.clients:
                                 while await c.is_loading():
                                     await asyncio.sleep(0.1)
-                        except:
-                            # some level of error output may be required in navmap_tp, at the moment it is not producing output without traceback
-                            print(traceback.print_exc())
+                        # except:
+                        #     # some level of error output may be required in navmap_tp, at the moment it is not producing output without traceback
+                        #     print(traceback.print_exc())
 
                     await asyncio.sleep(0.7)
 
@@ -1287,14 +1703,51 @@ class Quester():
 
                                 if num_visible_clients == len(self.clients):
                                     pass
+
                                 elif num_visible_clients > 1:
-                                    # teleport all, this clearly isnt a solo zone
+                                    # teleport all, this clearly isn't a solo zone
                                     logger.debug('One or more clients was separated from the group - teleporting all to leader')
                                     await self.correct_dungeon_desync(follower_clients)
                         else:
-                            original_zone = await self.current_leader_client.zone_name()
                             logger.debug('Sending X press to all clients')
                             await asyncio.gather(*[p.send_key(Keycode.X, 0.1) for p in self.clients])
+
+                            if 'to talk' in sigil_msg_check.lower():
+                                logger.debug('Talking to NPC')
+
+                                # wait a second for initial dialogue to appear
+                                await asyncio.sleep(1.0)
+
+                                # let auto-dialogue do its thing
+                                while not await is_free(self.current_leader_client) or self.current_leader_client.entity_detect_combat_status:
+                                    await asyncio.sleep(.1)
+
+                                # wait 2.5 seconds to account for normal delay after turning in a regular quest
+                                # in testing, it took a whole 1.5 seconds to switch from turning in a quest to getting the new quest
+                                await asyncio.sleep(1.0)
+                                after_talking_paths = (exit_zafaria_class_picture_button, exit_pet_leveled_up_button_path, avalon_badge_exit_button_path)
+                                await asyncio.gather(*[exit_menus(c, after_talking_paths) for c in self.clients])
+                                await asyncio.sleep(1.5)
+                                dialogue_text = await self.read_dialogue_text_(self.current_leader_client)
+
+                                # we are still in dialogue of some fashion
+                                if dialogue_text != '':
+                                    logger.info('Detected forced-animation dialogue.  Waiting for dialogue to end.')
+                                    in_dialogue = True
+                                    while in_dialogue:
+                                        while dialogue_text != '':
+                                            await asyncio.sleep(1.0)
+                                            dialogue_text = await self.read_dialogue_text_(self.current_leader_client)
+
+                                        logger.info('Sleeping for 10 seconds as a precaution to prevent leaving main quest behind.')
+                                        await asyncio.sleep(10.0)
+
+                                        # check dialogue again after a delay incase we only momentarily lost dialogue, but are really still talking to the NPC
+                                        dialogue_text = await self.read_dialogue_text_(self.current_leader_client)
+                                        if dialogue_text == '':
+                                            in_dialogue = False
+
+                            # original_zone = await self.current_leader_client.zone_name()
 
                             await asyncio.sleep(2)
                             was_loading = False
@@ -1309,7 +1762,7 @@ class Quester():
 
                             # Exit NPC menus (spell menus, quest menus, etc)
                             # await asyncio.sleep(2)
-                            await asyncio.gather(*[exit_menus(c) for c in self.clients])
+                            await asyncio.gather(*[exit_menus(c, end_of_loop_paths) for c in self.clients])
 
                             await asyncio.sleep(0.75)
 
@@ -1343,10 +1796,16 @@ class Quester():
                         # Key - truncated quest name
                         # Values - 0: time between entity respawns, 1-... : xyz locations of separate entities belonging to the quest
                         compatible_hardcoded_quests = {'collect sea foam crystal in the floating land': [35, XYZ(x=5330.3466796875, y=-1514.7388916015625, z=-499.20001220703125), XYZ(x=6373.23046875, y=-4622.3076171875, z=-534.3988647460938), XYZ(x=4883.55419921875, y=-5877.2265625, z=-518.2752685546875), XYZ(x=2708.878662109375, y=-4461.57568359375, z=-499.1999816894531)] }
-                        incompatible_hardcoded_quests = {'find submarine parts in the floating land': [40, XYZ(x=-17412.53515625, y=10505.794921875, z=-429.19927978515625), XYZ(x=-17088.447265625, y=12284.244140625, z=-410.1100769042969), XYZ(x=-21681.78125, y=11547.5966796875, z=-429.19927978515625)]}
+                        incompatible_hardcoded_quests = {
+                            'find submarine parts in the floating land': [40, XYZ(x=-17412.53515625, y=10505.794921875, z=-429.19927978515625), XYZ(x=-17088.447265625, y=12284.244140625, z=-410.1100769042969), XYZ(x=-21681.78125, y=11547.5966796875, z=-429.19927978515625)]
+                            , 'collect sea cucumbers in pitch black lake': [40, XYZ(x=-8995.333984375, y=-830.6781616210938, z=-97.31965637207031), XYZ(x=-9911.9404296875, y=823.7628173828125, z=-97.31971740722656), XYZ(x=-11497.998046875, y=-1030.2618408203125, z=-97.32334899902344), XYZ(x=-12099.0517578125, y=-4674.13623046875, z=-96.95536804199219), XYZ(x=-14215.37109375, y=-4371.93798828125, z=-97.32661437988281), XYZ(x=-14287.5556640625, y=-2835.4814453125, z=-97.3197021484375)]
+                            , 'catch vonda fish in pitch black lake': [3, XYZ(x=-10030.9912109375, y=-7925.51953125, z=-347.3206787109375)]
+                            , 'break mining equipment in tyrian gorge': [25, XYZ(x=-2529.12890625, y=-3015.832763671875, z=-906.33837890625), XYZ(x=-3181.15234375, y=-6233.39306640625, z=-924.6146240234375), XYZ(x=1495.8695068359375, y=-7369.19580078125, z=-905.3265380859375), XYZ(x=-204.098876953125, y=-8468.421875, z=236.10702514648438), XYZ(x=2508.4169921875, y=-4712.10302734375, z=-1232.338134765625)]
+                            , 'steal barrel of kermes fire in tyrian gorge': [35, XYZ(x=1352.575927734375, y=-4787.16552734375, z=-1098.1168212890625), XYZ(x=-1936.0185546875, y=-3954.15380859375, z=-1077.83837890625), XYZ(x=-1820.606201171875, y=-6331.4541015625, z=-1077.849853515625), XYZ(x=517.3740844726562, y=-7042.94287109375, z=-1077.84130859375), XYZ(x=-4628.16650390625, y=-5603.2578125, z=-906.51318359375), XYZ(x=-3216.014892578125, y=-5965.7412109375, z=-932.0715942382812), XYZ(x=-1106.3753662109375, y=-3800.721923828125, z=-905.3256225585938), XYZ(x=-451.9595031738281, y=-4547.75537109375, z=-905.325927734375)]
+                        }
 
-                        forbidden_quests = ['Break Mining Equipment in Tyrian Gorge',
-                                            'Steal Barrel of Kermes Fire in Tyrian Gorge']
+                        forbidden_quests = []  # ['Break Mining Equipment in Tyrian Gorge',
+                                            # 'Steal Barrel of Kermes Fire in Tyrian Gorge']
 
                         if any(map(truncated_quest_obj.__contains__, incompatible_hardcoded_quests.keys())):
                             logger.debug('Hardcoded collect')
@@ -1453,16 +1912,47 @@ class Quester():
                     else:
                         logger.debug('False collect quest detected.  Quest position: ' + str(distance))
 
+            # keep track of how many loops we've gone through without changing our quest
+            # if leader happened to change, reset the counter
+            leader_full_current_quest = await get_quest_name(self.current_leader_client)
+            # quest hasnt changed, new leader has not been assigned, and zone hasnt changed
+            if leader_full_current_quest == leader_last_full_quest and last_leader_pid == self.current_leader_client.process_id and last_leader_zone == await self.current_leader_client.zone_name():
+                iterations_since_last_quest_change += 1
+            else:
+                leader_last_full_quest = await get_quest_name(self.current_leader_client)
+                last_leader_pid = self.current_leader_client.process_id
+                last_leader_zone = await self.current_leader_client.zone_name()
+                iterations_since_last_quest_change = 0
+
+    async def handle_questing_zone_change(self):
+        if await is_visible_by_path(self.client, exit_dungeon_path):
+            await self.client.mouse_handler.activate_mouseless()
+            await asyncio.sleep(1.0)
+            await click_window_by_path(self.client, exit_dungeon_path)
+            await self.client.wait_for_zone_change()
+            await asyncio.sleep(1.0)
+            await self.client.mouse_handler.deactivate_mouseless()
+        else:
+            while await self.client.is_loading():
+                await asyncio.sleep(.1)
+
     # @logger.catch()
-    async def auto_quest_solo(self):
+    async def auto_quest_solo(self, auto_pet_disabled=False, ignore_pet_level_up=False, play_dance_game=False):
+        #print(await self.read_spiral_door_title(self.client))
         if await is_free(self.client):
-            if await is_potion_needed(
-                    self.client) and await self.client.stats.current_mana() > 1 and await self.client.stats.current_hitpoints() > 1:
+            if await is_potion_needed(self.client) and await self.client.stats.current_mana() > 1 and await self.client.stats.current_hitpoints() > 1:
                 await collect_wisps(self.client)
 
         if await is_free(self.client):
             await auto_potions(self.client, True, buy=True)
+
             quest_xyz = await self.client.quest_position.position()
+
+            if self.client.auto_pet_status and not auto_pet_disabled:
+                # client has leveled up
+                if self.client.character_level < await self.client.stats.reference_level():
+                    logger.debug('Client ' + self.client.title + ' leveled up - training pet.')
+                    await auto_pet(self.client, ignore_pet_level_up, play_dance_game, questing=True)
 
             distance = calc_Distance(quest_xyz, XYZ(0.0, 0.0, 0.0))
             if distance > 1:
@@ -1475,14 +1965,16 @@ class Quester():
                     # some level of error output may be required in navmap_tp, at the moment it is not producing output without traceback
                     print(traceback.print_exc())
 
-                await asyncio.sleep(0.5)
+                # confirm exit dungeon early button or wait for client to exit loading
+                await self.handle_questing_zone_change()
+
+                await asyncio.sleep(.5)
                 if await is_visible_by_path(self.client, cancel_chest_roll_path):
                     # Handles chest reroll menu, will always cancel
                     await click_window_by_path(self.client, cancel_chest_roll_path)
 
                 current_pos = await self.client.body.position()
-                if await is_visible_by_path(self.client, npc_range_path) and calc_Distance(quest_xyz,
-                                                                                           current_pos) < 750.0:
+                if await is_visible_by_path(self.client, npc_range_path) and calc_Distance(quest_xyz, current_pos) < 750.0:
                     # Handles interactables
                     sigil_msg_check = await self.read_popup_(self.client)
                     if "to enter" in sigil_msg_check.lower():
@@ -1503,7 +1995,8 @@ class Quester():
                         await asyncio.sleep(0.75)
                         if await is_visible_by_path(self.client, spiral_door_teleport_path):
                             # Handles spiral door navigation
-                            await spiral_door_with_quest(self.client)
+                            if await self.new_world_doors(self.client) == False:
+                                await spiral_door_with_quest(self.client)
 
                 quest_objective = await get_quest_name(self.client)
 
@@ -1527,10 +2020,10 @@ class Quester():
                 if distance < 1:
                     await self.auto_collect_rewrite(self.client)
 
-    async def auto_quest(self):
+    async def auto_quest(self, ignore_pet_level_up: bool, play_dance_game: bool):
         while self.client.questing_status:
             await asyncio.sleep(1)
-            await self.auto_quest_solo()
+            await self.auto_quest_solo(ignore_pet_level_up=ignore_pet_level_up, play_dance_game=play_dance_game)
 
     async def handle_sigil_wait(self, min_sigil_distance: float = 750.0):
         sprinter = SprintyClient(self.client)

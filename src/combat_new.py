@@ -4,7 +4,7 @@ from wizwalker.errors import ExceptionalTimeout
 from wizwalker.combat import CombatHandler, CombatCard, CombatMember
 from wizwalker.memory.memory_objects.spell_effect import DynamicSpellEffect
 from wizwalker.memory.memory_objects.enums import SpellEffects
-from src.combat_objects import card_id_to_effects, get_school_stat, get_game_stats, get_shadow_effects, get_hanging_effects, get_aura_effects, id_to_card, ids_from_cards, id_to_member
+from src.combat_objects import spell_id_to_effects, get_school_stat, get_game_stats, get_shadow_effects, get_hanging_effects, get_aura_effects, id_to_card, id_to_total_effects, ids_from_cards, id_to_member
 
 
 hit_enchant_effects = [SpellEffects.modify_card_damage, SpellEffects.modify_card_accuracy, SpellEffects.modify_card_armor_piercing]
@@ -26,7 +26,7 @@ class Fighter(CombatHandler):
 	def __init__(self, client: Client, clients: list[Client]):
 		self.client = client
 		self.clients = clients
-		self.card_ids: List[CombatCard] = []
+		self.spell_ids: List[CombatCard] = []
 		self.duel_status = 'pve'
 
 
@@ -34,69 +34,20 @@ class Fighter(CombatHandler):
 			async def _inner() -> List[CombatCard]:
 				cards = await super(Fighter, self).get_cards()
 				rese, res = [], []
+
 				for card in cards:
 					if await card.is_enchanted():
 						rese.append(card)
 					else:
 						res.append(card)
+
 				return rese + res
+
 			try:
 				return await utils.maybe_wait_for_any_value_with_timeout(_inner, sleep_time=0.2, timeout=2.0)
+
 			except ExceptionalTimeout:
 				return []
-
-
-	async def get_card_ids(self, cards: List[CombatCard] = None) -> List[int]:
-		if not cards:
-			await self.get_cards()
-
-		# DO NOT CHANGE THIS UNLESS SLACK GIVES THE OK OR THERE IS SOME PROBLEM THAT YOU INTEND TO FIX
-		card_ids = await ids_from_cards(cards)
-
-		return card_ids
-
-
-	async def member_from_id(self, id: int, members: List[CombatMember] = None) -> CombatMember:
-		if not members:
-			members = await self.get_members()
-
-		member = await id_to_member(members, id)
-
-		return member
-
-
-	async def effects_from_id(self, id: int, cards: List[CombatCard] = None) -> List[DynamicSpellEffect]:
-		'''Gets the CombatCard corresponding to a specific spell ID, and returns its SpellEffects'''
-		if not cards:
-			cards = await self.get_cards()
-
-		spell_effects = await card_id_to_effects(cards, id)
-
-		return spell_effects
-
-
-	async def effect_types_from_id(self, id: int, cards: List[CombatCard] = None) -> List[SpellEffects]:
-		'''Gets the CombatCard corresponding to a specific spell ID, and returns its SpellEffects types'''
-		if not cards:
-			cards = await self.get_cards()
-
-		spell_effects = await card_id_to_effects(cards, id)
-
-		if spell_effects:
-			effect_types: List[SpellEffects] = [await e.effect_type() for e in spell_effects]
-			return effect_types
-
-		raise ValueError
-
-
-	async def card_from_id(self, id: int, cards: List[CombatCard] = None) -> CombatCard:
-		'''Returns the CombatCard corresponding to a specific spell ID'''
-		if not cards:
-			cards = await self.get_cards()
-
-		card = await id_to_card(cards, id)
-
-		return card
 
 
 	async def is_enchantable(self, card: CombatCard) -> bool:
@@ -111,21 +62,21 @@ class Fighter(CombatHandler):
 		enchant_ids = []
 		non_enchant_ids = []
 
-		for card_id in self.card_ids:
-			card = await self.card_from_id(card_id, cards)
+		for spell_id in self.spell_ids:
+			card = await id_to_card(cards, spell_id)
 
 			if await card.type_name() == 'Enchantment':
-				spell_effects = await self.effect_types_from_id(card_id, cards)
+				spell_effects = await spell_id_to_effects(spell_id, cards)
 				for effect in spell_effects:
 					if effect in total_enchant_effects:
-						enchant_ids.append(card_id)
+						enchant_ids.append(spell_id)
 						break
 
 				else:
-					non_enchant_ids.append(card_id)
+					non_enchant_ids.append(spell_id)
 
 			else:
-				non_enchant_ids.append(card_id)
+				non_enchant_ids.append(spell_id)
 
 		return Tuple[enchant_ids, non_enchant_ids]
 
@@ -137,24 +88,25 @@ class Fighter(CombatHandler):
 		enchant_ids, non_enchant_ids = await self.assign_enchants(cards)
 		valid_types_for_id = {}
 
-		for card_id in non_enchant_ids:
-			card = await self.card_from_id(card_id, cards)
+		for spell_id in non_enchant_ids:
+			card = await id_to_card(cards, spell_id)
 			card_type = await card.type_name()
 			if card_type in enchant_effects and await self.is_enchantable(card):
-				valid_types_for_id[card_id] = enchant_effects[card_id]
+				valid_types_for_id[spell_id] = enchant_effects[spell_id]
 
 		used_enchant_ids = []
 
-		for card_id in valid_types_for_id:
-			matching_enchant_types = valid_types_for_id[card_id]
+		for spell_id in valid_types_for_id:
+			matching_enchant_types = valid_types_for_id[spell_id]
 
 			for e_id in enchant_ids:
-				spell_effects = await self.effect_types_from_id(e_id)
+				spell_effects = await spell_id_to_effects(e_id, await self.get_cards())
+				spell_effects_types = [await effect.effect_type() for effect in spell_effects]
 
-				if any([effect in matching_enchant_types for effect in spell_effects]) and e_id not in used_enchant_ids:
+				if any([effect in matching_enchant_types for effect in spell_effects_types]) and e_id not in used_enchant_ids:
 					cards = await self.get_cards()
-					enchant = await self.card_from_id(e_id, cards)
-					card = await self.card_from_id(card_id, cards)
+					enchant = await id_to_card(e_id, cards)
+					card = await id_to_card(spell_id, cards)
 					await enchant.cast(card, sleep_time=0.1)
 					used_enchant_ids.append(e_id)
 					break

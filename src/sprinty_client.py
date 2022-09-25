@@ -225,12 +225,20 @@ class SprintyClient():
 		return await self.client.stats.potion_charge() >= 1.0
 
 
-	async def use_potion(self) -> bool:
+	async def use_potion(self, handle_hooks: bool = False) -> bool:
 		if await self.has_potion():
+			if handle_hooks:
+				await self.client.mouse_handler.activate_mouseless()
+
 			try:
 				await self.client.mouse_handler.click_window_with_name("btnPotions")
 			except ValueError:
+				if handle_hooks:
+					await self.client.mouse_handler.deactivate_mouseless()
 				return False
+
+			if handle_hooks:
+				await self.client.mouse_handler.deactivate_mouseless()
 			return True
 		return False
 
@@ -239,12 +247,12 @@ class SprintyClient():
 		return await self.needs_health(health_percent) or await self.needs_mana(mana_percent)
 
 
-	async def use_potion_if_needed(self, health_percent: int = 20, mana_percent: int = 10) -> bool:
+	async def use_potion_if_needed(self, health_percent: int = 20, mana_percent: int = 10, handle_hooks: bool = False) -> bool:
 		"""
 		:param health_percent: How low health needs to be in percent
 		:param mana_percent: How low mana needs to be in percent
 		:return: False if it needed a potion but doesn't have any and True if it needed no potion or used one
 		"""
 		if await self.needs_potion(health_percent, mana_percent):
-			return await self.use_potion()
+			return await self.use_potion(handle_hooks)
 		return True

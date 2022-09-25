@@ -1,6 +1,5 @@
 import asyncio
-
-from wizwalker import XYZ, Client, Keycode
+from wizwalker import XYZ, Orient, Client, Keycode
 from wizwalker.file_readers.wad import Wad
 import math
 import struct
@@ -8,6 +7,7 @@ from io import BytesIO
 from typing import Tuple, Union
 from src.utils import is_free, get_quest_name, is_visible_by_path, get_popup_title
 from src.paths import npc_range_path
+from enum import auto, IntEnum
 
 type_format_dict = {
 "char": "<c",
@@ -96,6 +96,238 @@ def parse_nav_data(file_data: Union[bytes, TypedBytes]):
         edges.append((start, stop))
     return vertices, edges
 
+def collision_reading(file_data: Union[bytes, TypedBytes]):
+    class Box:
+        def __init__(self, length, width, depth):
+            self.length = length
+            self.width = width
+            self.depth = depth
+    class Ray:
+        def __init__(self, postiton, direction, length):
+            self.postiton = postiton
+            self.direction = direction
+            self.length = length
+    class Sphere:
+            def __init__(self, radius):
+                self.radius = radius   
+    class Cylinder:
+        def __init__(self, radius, length):
+                self.radius = radius
+                self.length = length
+    class Tube:
+        def __init__(self, radius, length):
+                self.radius = radius
+                self.length = length
+    class Plane:
+        def __init__(self, normal, distance):
+                self.normal = normal
+                self.distance = distance
+    class Mesh:
+        def __init__(self, vertices, faces):
+            self.vertices = vertices
+            self.faces = faces
+    class P_Geometry:
+        def __init__(self, name, rotation, location, scale, material, params):
+                self.name = name
+                self.rotation = rotation
+                self.location = location
+                self.scale = scale
+                self.material = material
+                self.params = params
+    class Geometry:
+        def __init__(self, category_bits, collide_bits, proxy_geometry):
+            self.category_bits = category_bits
+            self.collide_bits = collide_bits
+            self.proxy_geometry = proxy_geometry
+            
+    def BigString(file_data: Union[bytes, TypedBytes]): # may god help me
+        length = file_data.read_typed("unsigned int")
+        data =[]
+        for idx in range(length):
+            data.append(file_data.read_typed("char"))
+        
+        data = b''.join(data)
+        string = data.decode('utf-8')
+        
+        return string
+        
+    def FloatVec3(file_data: Union[bytes, TypedBytes]):
+        def f_values(file_data: Union[bytes, TypedBytes]):
+            V1 = file_data.read_typed("float")
+            V2 = file_data.read_typed("float")
+            V3 = file_data.read_typed("float")
+            return (V1, V2, V3)
+        return f_values(file_data)
+        
+    def IntVec3(file_data: Union[bytes, TypedBytes]):
+        def i_values(file_data: Union[bytes, TypedBytes]):
+            I1 = file_data.read_typed("unsigned int")
+            I2 = file_data.read_typed("unsigned int")
+            I3 = file_data.read_typed("unsigned int")
+            return (I1, I2, I3)
+        return i_values(file_data)
+    
+    class ProxyType(IntEnum):
+            box = 0
+            ray = auto()
+            sphere = auto()
+            cylinder = auto()
+            tube = auto()
+            plane = auto()
+            mesh = auto()
+            invalid = auto()
+            
+    def proxytype(file_data: Union[bytes, TypedBytes]):
+        type = file_data.read_typed("unsigned int")
+        return ProxyType(type)
+    
+    def BoxGeomParams(file_data: Union[bytes, TypedBytes]):
+        length = file_data.read_typed("float")
+        width = file_data.read_typed("float")
+        depth = file_data.read_typed("float")
+        return Box(length, width, depth)
+    
+    def RayGeomParams(file_data: Union[bytes, TypedBytes]):
+        position = file_data.read_typed("float")
+        direction = file_data.read_typed("float")
+        length = file_data.read_typed("float")
+        return Ray(position, direction, length)
+    
+    def SphereGeomParams(file_data: Union[bytes, TypedBytes]):
+        radius = file_data.read_typed("float")
+        return Sphere(radius)
+    
+    def CylinderGeomParams(file_data: Union[bytes, TypedBytes]):
+        radius = file_data.read_typed("float")
+        length = file_data.read_typed("float")
+        return Cylinder(radius, length)
+    
+    def TubeGeomParams(file_data: Union[bytes, TypedBytes]):
+        radius = file_data.read_typed("float")
+        length = file_data.read_typed("float")
+        return Tube(radius, length)
+    
+    def PlaneGeomParams(file_data: Union[bytes, TypedBytes]):
+        def n_values(file_data: Union[bytes, TypedBytes]):
+            N1 = file_data.read_typed("float")
+            N2 = file_data.read_typed("float")
+            N3 = file_data.read_typed("float")
+    
+            return (N1, N2, N3)
+        
+        normal = n_values(file_data)
+        distance = file_data.read_typed("float")
+        return Plane(normal, distance)
+    
+    def MeshGeomParams(file_data: Union[bytes, TypedBytes]):
+        return
+    
+    def Face(file_data: Union[bytes, TypedBytes]):
+        face = IntVec3(file_data)
+        normal = FloatVec3(file_data)
+        return face, normal
+        
+    def ProxyMesh(file_data: Union[bytes, TypedBytes]):
+        vertext_count = file_data.read_typed("unsigned int")
+        face_count = file_data.read_typed("unsigned int")
+        
+        vertices = []
+        for idx in range(vertext_count):
+            vertices.append(FloatVec3(file_data))
+            
+        faces = []
+        for idx in range(face_count):
+            faces.append(Face(file_data))
+            
+        return Mesh(vertices, faces)
+        
+    def ProxyGeometry(file_data: Union[bytes, TypedBytes]):
+        name = BigString(file_data)
+        def f_rotation(file_data: Union[bytes, TypedBytes]):
+            R1 = file_data.read_typed("float")
+            R2 = file_data.read_typed("float")
+            R3 = file_data.read_typed("float")
+            R4 = file_data.read_typed("float")
+            R5 = file_data.read_typed("float")
+            R6 = file_data.read_typed("float")
+            R7 = file_data.read_typed("float")
+            R8 = file_data.read_typed("float")
+            R9 = file_data.read_typed("float")
+            return (R1,R2,R3,R4,R5,R6,R7,R8,R9)
+        rotation = f_rotation(file_data)
+        
+        def f_location(file_data: Union[bytes, TypedBytes]):
+            L1 = file_data.read_typed("float")
+            L2 = file_data.read_typed("float")
+            L3 = file_data.read_typed("float")
+            return (L1,L2,L3)
+        location = f_location(file_data)
+        
+        scale = file_data.read_typed("float")
+        material = BigString(file_data)
+        
+        proxy = proxytype(file_data)
+        if proxy == ProxyType.box:
+            params = BoxGeomParams(file_data)
+        elif proxy == ProxyType.ray:
+            params = RayGeomParams(file_data)
+        elif proxy == ProxyType.sphere:
+            params = SphereGeomParams(file_data)
+        elif proxy == ProxyType.cylinder:
+            params = CylinderGeomParams(file_data)
+        elif proxy == ProxyType.tube:
+            params = TubeGeomParams(file_data)
+        elif proxy == ProxyType.plane:
+            params = PlaneGeomParams(file_data)
+        elif proxy == ProxyType.mesh:
+            params = MeshGeomParams(file_data)
+            
+            
+        return P_Geometry(name, rotation, location, scale, material, params)
+
+    def geometry(file_data: Union[bytes, TypedBytes]):
+        proxy = proxytype(file_data)
+        category_bits = file_data.read_typed("unsigned int") 
+        collide_bits = file_data.read_typed("unsigned int") 
+
+        if proxy == ProxyType.mesh:
+            proxy_geometry = ProxyMesh(file_data)
+        else:
+            proxy_geometry = ProxyGeometry(file_data)
+        return Geometry(category_bits, collide_bits, proxy_geometry)
+    
+    if isinstance(file_data, bytes):
+        file_data = TypedBytes(file_data)
+        
+    geometry_list = []
+    geometry_count = file_data.read_typed("unsigned int")
+    for idx in range(geometry_count):
+        proxy = proxytype(file_data)
+        category_bits = file_data.read_typed("unsigned int") 
+        collide_bits = file_data.read_typed("unsigned int") 
+        
+        if proxy == ProxyType.mesh:
+            proxy_geometry = ProxyMesh(file_data)
+            geometry_list.append(Geometry(category_bits, collide_bits, proxy_geometry))
+            return geometry_list
+        else:
+            proxy_geometry = ProxyGeometry(file_data)
+            geometry_list.append(Geometry(category_bits, collide_bits, proxy_geometry))
+    return geometry_list
+    
+async def get_collision_data(client: Client, zone: str = None) -> list[XYZ]:
+    if not zone:
+        zone = await client.zone_name()
+
+    wad = await load_wad(zone)
+    
+    collision_data = await wad.get_file("collision.bcd")
+    try:
+        values = collision_reading(collision_data)
+    except:
+        raise Exception('Zone did not have valid collision data')
+
+    return values
 
 def calc_PointOn3DLine(xyz_1 : XYZ, xyz_2 : XYZ, additional_distance):
     # extends a point on the line created by 2 XYZs by additional_distance. xyz_1 is the origin.
@@ -321,6 +553,114 @@ async def split_walk(client: Client, xyz: XYZ = None, segments: int = 5, origina
         await asyncio.sleep(0)
 
 
+async def navmap_tp_leader_quest(client: Client, xyz: XYZ = None, minimum_distance_increment: int = 250, walk_after=True, pet_mode: bool = False, leader_client: Client = None):
+    if await is_free(client):
+        original_zone_name = await client.zone_name()
+        if leader_client:
+            original_quest_xyz = await leader_client.quest_position.position()
+            original_quest_objective = await get_quest_name(leader_client)
+        else:
+            original_quest_xyz = xyz
+            original_quest_objective = await get_quest_name(client)
+
+        original_position = await client.body.position()
+        if xyz:
+            quest_pos = xyz
+        else:
+            quest_pos = await client.quest_position.position()
+
+        minimum_vertex_distance = minimum_distance_increment
+        await teleport_move_adjust(client, quest_pos, pet_mode=pet_mode)
+        while not await is_free(client) or client.entity_detect_combat_status:
+            await asyncio.sleep(0.1)
+        current_zone = await client.zone_name()
+        navmap_errored = False
+        try:
+            wad = await load_wad(current_zone)
+            nav_data = await wad.get_file("zone.nav")
+            vertices = []
+            vertices, _ = parse_nav_data(nav_data)
+        except:
+            await auto_adjusting_teleport(client, xyz)
+
+            if walk_after:
+                navmap_errored = True
+                if leader_client:
+                    await split_walk(client, quest_pos, original_zone=original_zone_name, leader_client=leader_client)
+                else:
+                    await split_walk(client, quest_pos, original_zone=original_zone_name)
+        squared_distances = [calc_squareDistance(quest_pos, n) for n in vertices]
+        sorted_distances = sorted(squared_distances)
+        while not navmap_errored:
+        # while are_xyzs_within_threshold(xyz_1=(await client.body.position()), xyz_2=original_position, threshold=100) and await client.zone_name() == original_zone_name and not await client.is_loading():
+            current_pos = await client.body.position()
+            if await client.zone_name() == original_zone_name and await is_free(client) and not client.entity_detect_combat_status:
+                if are_xyzs_within_threshold(xyz_1=current_pos, xyz_2=original_position, threshold=100):
+                    pass
+                else:
+                    break
+            else:
+                break
+            # set minimum distance between 2 chosen vertices
+            minimum_vertex_distance += minimum_distance_increment
+            for s in sorted_distances:
+                current_index = sorted_distances.index(s)
+                if current_index + 1 < len(sorted_distances):
+                    # this is REALLY inefficient but I'll fix it later maybe
+                    # selection of the 2 closest vertices that satisfy the criteria
+                    vertex = vertices[int(squared_distances.index(sorted_distances[current_index]))]
+                    next_vertex = vertices[int(squared_distances.index(sorted_distances[current_index + 1]))]
+                    between_vertices = calc_Distance(vertex, next_vertex)
+                    quest_to_vertex = calc_Distance(quest_pos, next_vertex)
+                    if between_vertices >= quest_to_vertex or between_vertices < minimum_vertex_distance:
+                        pass
+                    elif between_vertices < quest_to_vertex and between_vertices >= minimum_vertex_distance:
+                        adjusted_pos = calc_AveragePoint([vertex, next_vertex, quest_pos, quest_pos])
+                        final_adjusted_pos = XYZ(x=adjusted_pos.x, y=adjusted_pos.y, z=max([quest_pos.z, adjusted_pos.z]))
+                        if await client.zone_name() == original_zone_name and await is_free(client) and not client.entity_detect_combat_status:
+                            await teleport_move_adjust(client, final_adjusted_pos, pet_mode=pet_mode)
+                        elif not await is_free(client) or client.entity_detect_combat_status:
+                            break
+                        break
+                    else:
+                        pass
+                else:
+                    break
+
+        if walk_after:
+            if leader_client:
+                await split_walk(client, quest_pos, original_zone=original_zone_name, leader_client=leader_client)
+            else:
+                await split_walk(client, quest_pos, original_zone=original_zone_name)
+        await asyncio.sleep(0.3)
+
+        current_pos = await client.body.position()
+
+        # auto quest with leader needs to keep control of its follower clients, so use leader's quest objective instead of follower's
+        if leader_client:
+            current_quest_xyz = await leader_client.quest_position.position()
+            current_quest_objective = await get_quest_name(leader_client)
+        else:
+            current_quest_xyz = await client.quest_position.position()
+            current_quest_objective = await get_quest_name(client)
+
+        current_zone = await client.zone_name()
+        original_stats = [original_quest_objective, original_zone_name]
+        current_stats = [current_quest_objective, current_zone]
+
+        if all([await is_free(client), not client.entity_detect_combat_status, not await is_visible_by_path(client, npc_range_path), are_xyzs_within_threshold(original_quest_xyz, current_quest_xyz, 50), current_stats == original_stats]):
+            if leader_client:
+                await auto_adjusting_teleport(client, leader_client=leader_client)
+            else:
+                await auto_adjusting_teleport(client)
+
+            if walk_after:
+                if leader_client:
+                    await split_walk(client, quest_pos, original_zone=original_zone_name, leader_client=leader_client)
+                else:
+                    await split_walk(client, quest_pos, original_zone=original_zone_name)
+
+
 async def navmap_tp(client: Client, xyz: XYZ = None, minimum_distance_increment: int = 250, walk_after=True, pet_mode: bool = False, leader_client: Client = None):
     if await is_free(client):
         original_zone_name = await client.zone_name()
@@ -530,53 +870,16 @@ def calculate_pitch(xyz_1: XYZ, xyz_2: XYZ) -> float:
     return -math.atan2(z, math.sqrt(x ** 2 + y ** 2))
 
 
-
-class YPR:
-    # Object for Yaw, Roll, and Pitch
-    def __init__(self, y: float, p: float, r: float):
-        self.y = y
-        self.p = p
-        self.r = r
-
-    def __str__(self):
-        return f"<YPR ({self.y}, {self.p}, {self.r})>"
-
-    def __repr__(self):
-        return str(self)
-
-    def __iter__(self):
-        return iter((self.y, self.p, self.r))
+async def get_degree_orientation(client: Client) -> Orient:
+    # Returns a Orient for the client body
+    p, r, y = await client.body.orientation()
+    return Orient(math.degrees(p), math.degrees(r), math.degrees(y))
 
 
-
-async def write_ypr(client: Client, ypr: YPR):
-    # Writes the YPR to a client (Yaw, Roll, Pitch)
-    await client.body.write_yaw(ypr.y)
-    await client.body.write_pitch(ypr.p)
-    await client.body.write_roll(ypr.r)
-
-
-async def get_rotations(client: Client) -> YPR:
-    # Returns a YPR for the client body
-    y = await client.body.yaw()
-    p = await client.body.pitch()
-    r = await client.body.roll()
-
-    return YPR(y, p, r)
-
-async def get_degree_rotations(client: Client) -> YPR:
-    # Returns a YPR for the client body
-    y = await client.body.yaw()
-    p = await client.body.pitch()
-    r = await client.body.roll()
-
-    return YPR(math.degrees(y), math.degrees(p), math.degrees(r))
-
-def calc_frontal_XYZ(xyz: XYZ, ypr: YPR, distance: float) -> XYZ:
+def calc_frontal_XYZ(xyz: XYZ, orientation: Orient, distance: float) -> XYZ:
     # Simpler version of calc_FrontalVector that is meant for just pure math stuff. This should honestly be used instead but I lack the time to spend redoing old stuff. -slack
-
-    x = distance * math.cos(ypr.y) * math.sin(ypr.p)
-    y = distance * math.sin(ypr.y) * math.sin(ypr.p)
-    z = distance * math.cos(ypr.p)
+    x = distance * math.cos(orientation.yaw) * math.sin(orientation.pitch)
+    y = distance * math.sin(orientation.yaw) * math.sin(orientation.pitch)
+    z = distance * math.cos(orientation.pitch)
 
     return XYZ(xyz.x + x, xyz.y + y, xyz.z + z)
