@@ -614,6 +614,8 @@ async def main():
 
 	async def toggle_sigil_hotkey():
 		global sigil_task
+		global questing_status
+		global questing_task
 		global gui_send_queue
 
 		if not freecam_status:
@@ -631,6 +633,15 @@ async def main():
 
 			else:
 				logger.debug(f'{toggle_auto_sigil_key} key pressed, enabling auto sigil.')
+				if questing_task is not None and not questing_task.cancelled():
+					logger.debug(f'{toggle_auto_questing_key} key pressed, disabling auto questing.')
+					gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('QuestingStatus', 'Disabled')))
+					questing_task.cancel()
+					for p in walker.clients:
+						p.questing_status = False
+					questing_status = False
+					questing_task = None
+
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('SigilStatus', 'Enabled')))
 				sigil_task = asyncio.create_task(try_task_coro(sigil_loop, walker.clients, True))
 
@@ -664,8 +675,10 @@ async def main():
 
 
 	async def toggle_questing_hotkey():
+		global sigil_task
 		global questing_task
 		global questing_status
+		global sigil_status
 		global gui_send_queue
 
 		if not freecam_status:
@@ -682,6 +695,15 @@ async def main():
 			else:
 				for p in walker.clients:
 					p.sigil_status = False
+
+				if sigil_task is not None and not sigil_task.cancelled():
+					logger.debug(f'{toggle_auto_sigil_key} key pressed, disabling auto sigil.')
+					gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('SigilStatus', 'Disabled')))
+					sigil_task.cancel()
+					sigil_task = None
+					for p in walker.clients:
+						p.sigil_status = False
+					sigil_status = False
 
 				logger.debug(f'{toggle_auto_questing_key} key pressed, enabling auto questing.')
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('QuestingStatus', 'Enabled')))
