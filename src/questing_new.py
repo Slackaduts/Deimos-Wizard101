@@ -26,7 +26,7 @@ class Quester():
         self.current_leader_pid = leader_pid
         self.d_location = None
     
-    async def read_popup_(self, p: Client):
+    async def read_popup_(self, p: Client) -> str:
         try:
             popup_text_path = await get_window_from_path(p.root_window, popup_msgtext_path)
             txtmsg = await popup_text_path.maybe_text()
@@ -34,7 +34,7 @@ class Quester():
             txtmsg = ""
         return txtmsg
 
-    async def read_dialogue_text_(self, p: Client):
+    async def read_dialogue_text_(self, p: Client) -> str:
         try:
             dialogue_text = await get_window_from_path(p.root_window, dialog_text_path)
             txtmsg = await dialogue_text.maybe_text()
@@ -42,20 +42,21 @@ class Quester():
             txtmsg = ''
         return txtmsg
 
-    async def detected_interact_from_popup_(self, p: Client):
+    async def detected_interact_from_popup_(self, p: Client) -> bool:
         try:
             popup_text_path = await get_window_from_path(p.root_window, popup_msgtext_path)
             txtmsg = await popup_text_path.maybe_text()
         except:
             txtmsg = ""
 
-        if 'to enter' in txtmsg.lower() or 'to interact' in txtmsg.lower() or 'to activate' in txtmsg.lower() or 'to teleport' in txtmsg.lower():
+        msg = txtmsg.lower()
+        if 'to enter' in msg or 'to interact' in msg or 'to activate' in msg or 'to teleport' in msg:
             return True
         else:
             return False
 
     async def find_safe_entities_from(self, fixed_position1, fixed_position2, safe_distance: float = 700,
-                                      is_mob: bool = False):
+                                      is_mob: bool = False) -> bool:
         cli = SprintyClient(self.client)
         mob_positions = []
         can_Teleport = bool
@@ -85,148 +86,7 @@ class Quester():
             pass
         return can_Teleport
 
-    async def find_quest_entites(self, parsed_quest_info: list, entity: dict, quest_name_path, safe_cords):
-        collect_counter = 0
-        points = await self.Nav_Hull()
-        Hull = points  # [0::2]  # TODO remove points that are close to draw distance of each other
-        # teleport around the hull and collect rendered objects, add them to a dict and their location
-        for points in Hull:
-            points = XYZ(points.x, points.y, points.z - 550)
-
-            while not await is_free(self.client) or self.client.entity_detect_combat_status:
-                await asyncio.sleep(0.1)
-
-            if await is_free(self.client) and not self.client.entity_detect_combat_status:
-                await self.client.teleport(points, move_after=False, wait_on_inuse=True)
-                await self.client.teleport(points, wait_on_inuse=True)
-
-            entities = await self.client.get_base_entity_list()
-            for e in entities:
-                try:
-                    object_template = await e.object_template()
-                    display_name_code = await object_template.display_name()
-                    display_name = await self.client.cache_handler.get_langcode_name(display_name_code)
-
-                    match = fuzz.ratio(display_name.lower(), str(parsed_quest_info[0]).lower())
-                    if match > 80:
-                        duplicate = False
-                        try:
-                            xyz = await e.location()
-                        except:
-                            print(traceback.format_exc())
-
-                        if display_name in entity:
-                            for i in entity[display_name]:
-                                if str(i) == str(xyz):
-                                    duplicate = True
-                            if duplicate == False:
-
-                                can_Teleport = await self.find_safe_entities_from(xyz, None, safe_distance=2600,
-                                                                                  is_mob=True)  # checks if safe to collect
-                                while not await is_free(self.client) or self.client.entity_detect_combat_status:
-                                    pass
-
-                                if can_Teleport and await is_free(
-                                        self.client) and not self.client.entity_detect_combat_status:
-                                    entity[display_name].append(xyz)
-
-                                    try:
-                                        try:
-                                            await navmap_tp(self.client, xyz)  # teleports to the npc
-                                        except:
-                                            print(traceback.format_exc())
-
-                                        # await asyncio.sleep(1)
-                                        await asyncio.sleep(.2)
-                                        if await is_visible_by_path(self.client, path=npc_range_path):
-                                            for i in range(5):
-                                                await asyncio.gather(*[p.send_key(Keycode.X, .1) for p in self.clients])
-
-                                            print('Collecting')
-                                            collect_counter = collect_counter + 1
-                                    # await asyncio.sleep(2)
-                                    except:
-                                        await asyncio.sleep(0.01)
-                                await self.combat()
-                                try:
-                                    _, count = await self.parse_quest_stuff(
-                                        quest_name_path)  # breaks when collect quest format for the string under the pointer
-
-                                    try:
-                                        count_nums = count.split(" / ")
-                                    # for quests that ask for only one pickup (not tested - there are likely other areas that will crash these quests)
-                                    except:
-                                        count_nums = [0, 1]
-
-                                    print(count_nums)
-                                    if collect_counter >= (int(count_nums[1]) - int(count_nums[0])):
-                                        await self.client.teleport(safe_cords, wait_on_inuse=True)
-                                        print("finished quest")
-                                        return True
-                                except IndexError:
-                                    await self.client.teleport(safe_cords, wait_on_inuse=True)
-                                    print("finished quest")
-                                    return True
-                        else:
-                            # create a new array in this slot
-
-                            can_Teleport = await self.find_safe_entities_from(xyz, None, safe_distance=2600,
-                                                                              is_mob=True)  # checks if safe to collect
-
-                            while not await is_free(self.client) or self.client.entity_detect_combat_status:
-                                await asyncio.sleep(0.1)
-
-                            if can_Teleport and await is_free(
-                                    self.client) and not self.client.entity_detect_combat_status:
-                                entity[display_name] = [xyz]
-
-                                try:
-                                    try:
-                                        await navmap_tp(self.client, xyz)  # teleports to the npc
-                                    except:
-                                        print(traceback.format_exc())
-
-                                    # await asyncio.sleep(1)
-                                    await asyncio.sleep(.2)
-                                    if await is_visible_by_path(self.client, path=npc_range_path):
-                                        for i in range(5):
-                                            await asyncio.gather(*[p.send_key(Keycode.X, .1) for p in self.clients])
-
-                                        print('Collecting')
-                                        collect_counter = collect_counter + 1
-                                except:
-                                    await asyncio.sleep(0.01)
-                            await self.combat()
-                            try:
-                                _, count = await self.parse_quest_stuff(
-                                    quest_name_path)  # breaks when collect quest format for the string under the pointer
-
-                                try:
-                                    count_nums = count.split(" / ")
-                                # for quests that ask for only one pickup (not tested - there are likely other areas that will crash these quests)
-                                except:
-                                    count_nums = [0, 1]
-
-                                if collect_counter >= (int(count_nums[1]) - int(count_nums[0])):
-                                    await self.client.teleport(safe_cords, wait_on_inuse=True)
-                                    print("finished quest")
-                                    return True
-                            except IndexError:
-                                await self.client.teleport(safe_cords, wait_on_inuse=True)
-                                print("finished quest")
-                                return True
-
-                        # break
-                except MemoryReadError:
-                    await asyncio.sleep(0.05)
-                except AttributeError:
-                    await asyncio.sleep(0.05)
-                except ValueError:
-                    pass
-
-        return entity
-
-    async def Nav_Hull(self):
+    async def Nav_Hull(self) -> list[XYZ]:
         wad = await self.load_wad(await self.client.zone_name())
         nav_data = await wad.get_file("zone.nav")
         vertices = []
@@ -253,7 +113,7 @@ class Quester():
         full = calc_chunks(master_list, entity_distance=1500)
         return full
 
-    async def parse_quest_stuff(self, quest_name_path):
+    async def parse_quest_stuff(self, quest_name_path) -> tuple[str, str]:
         quest_name = await get_window_from_path(self.client.root_window, quest_name_path)
         unsplitted = await quest_name.maybe_text()
         try:
@@ -262,23 +122,23 @@ class Quester():
             return False
         except IndexError:
             pass
-        split1_qst = unsplitted.split("<center>Collect ")
-        if not len(split1_qst) > 1:
-            split1_qst = unsplitted.split("<center>Open ")
-            if not len(split1_qst) > 1:
-                split1_qst = unsplitted.split("<center>Use ")
-                if not len(split1_qst) > 1:
-                    split1_qst = unsplitted.split("<center>Find ")
-                    if not len(split1_qst) > 1:
-                        split1_qst = unsplitted.split("<center>Gather ")
-                        if not len(split1_qst) > 1:
-                            split1_qst = unsplitted.split("<center>Destroy ")
-                            if not len(split1_qst) > 1:
-                                split1_qst = unsplitted.split("<center>Smash ")
-                                if not len(split1_qst) > 1:
-                                    split1_qst = unsplitted.split("<center>Repair ")
-                                    if not len(split1_qst) > 1:
-                                        split1_qst = unsplitted.split("<center>Free ")
+
+        splitters = [
+            "<center>Collect ",
+            "<center>Open ",
+            "<center>Use ",
+            "<center>Find ",
+            "<center>Gather ",
+            "<center>Destroy ",
+            "<center>Smash ",
+            "<center>Repair ",
+            "<center>Free "
+        ]
+        split1_qst = []
+        for s in splitters:
+            split1_qst = unsplitted.split(s)
+            if len(split1_qst) > 0:
+                break
 
         try:
             split2_qst = split1_qst[1].split(" in")  # Parsing the quest name
@@ -309,12 +169,7 @@ class Quester():
     async def load_wad(self, path: str):
         return Wad.from_game_data(path.replace("/", "-"))
 
-    async def combat(self):
-        # while await battle.is_fighting() == True and self.client.questing_status:
-        while await self.client.in_battle():
-            await asyncio.sleep(0.1)
-
-    async def followers_in_correct_zone(self):
+    async def followers_in_correct_zone(self) -> bool:
         zone = await self.current_leader_client.zone_name()
         is_correct_zone = True
         for c in self.clients:
@@ -323,7 +178,7 @@ class Quester():
 
         return is_correct_zone
 
-    async def determine_solo_zone(self):
+    async def determine_solo_zone(self) -> bool:
         sprinter = SprintyClient(self.current_leader_client)
         entities = await sprinter.get_base_entity_list()
 
@@ -341,7 +196,7 @@ class Quester():
         else:
             return False
 
-    async def get_truncated_quest_objectives(self, p: Client):
+    async def get_truncated_quest_objectives(self, p: Client) -> str:
         quest_objective = await get_quest_name(p)
         if '(' in quest_objective:
             quest_objective = quest_objective.split('(', 1)
@@ -350,7 +205,7 @@ class Quester():
         return quest_objective
 
     # get a list of clients that are questing alongside the leader (not boosting)
-    async def get_questing_clients(self):
+    async def get_questing_clients(self) -> list[Client]:
         questing_clients = [self.current_leader_client]
         quest_objective_leader = await self.get_truncated_quest_objectives(self.current_leader_client)
 
@@ -363,21 +218,21 @@ class Quester():
         return questing_clients
 
     # get a dict of client quests for clients that are on the same quest as the leader
-    async def get_client_quests(self, questing_clients: list[Client]):
+    async def get_client_quests(self, questing_clients: list[Client]) -> dict[Client, str]:
         quest_objective_leader = await self.get_truncated_quest_objectives(self.current_leader_client)
 
         client_quests = dict()
-        client_quests.update({self.current_leader_client: quest_objective_leader})
+        client_quests[self.current_leader_client] = quest_objective_leader
 
         for c in questing_clients:
             quest_objective_follower = await self.get_truncated_quest_objectives(c)
 
             if quest_objective_follower == quest_objective_leader and c.process_id != self.current_leader_client.process_id:
-                client_quests.update({c: quest_objective_follower})
+                client_quests[c] = quest_objective_follower
 
         return client_quests
 
-    async def get_follower_clients(self):
+    async def get_follower_clients(self) -> list[Client]:
         follower_clients = []
         for c in self.clients:
             if c.process_id != self.current_leader_client.process_id:
@@ -386,16 +241,17 @@ class Quester():
         return follower_clients
 
     async def zone_recorrect_hub(self):
-        if not await self.followers_in_correct_zone():
-            for p in self.clients:
-                await p.send_key(Keycode.END)
-                await p.send_key(Keycode.END)
-                await asyncio.sleep(3)
-                # use is_loading instead of wait_for_change, as one client could already be in the hub
-                while await p.is_loading():
-                    await asyncio.sleep(0.1)
+        if await self.followers_in_correct_zone():
+            return
+        for p in self.clients:
+            await p.send_key(Keycode.END)
+            await p.send_key(Keycode.END)
+            await asyncio.sleep(3)
+            # use is_loading instead of wait_for_change, as one client could already be in the hub
+            while await p.is_loading():
+                await asyncio.sleep(0.1)
 
-            await asyncio.sleep(2)
+        await asyncio.sleep(2)
 
     async def friend_teleport(self, maybe_solo_zone: bool):
         clients_in_solo_zone = []
@@ -621,7 +477,7 @@ class Quester():
 
         await asyncio.gather(*[c.wait_for_zone_change() for c in self.clients])
         
-    async def read_spiral_door_title(self, client: Client):
+    async def read_spiral_door_title(self, client: Client) -> str:
         try:
             title_text_path = await get_window_from_path(client.root_window, spiral_door_title_path)
             title = await title_text_path.maybe_text()
@@ -630,7 +486,7 @@ class Quester():
             
         return title
     
-    async def read_quest_txt(self, client: Client):
+    async def read_quest_txt(self, client: Client) -> str:
         try:
             quest_name = await get_window_from_path(client.root_window, quest_name_path)
             quest = await quest_name.maybe_text()
@@ -638,7 +494,7 @@ class Quester():
             quest = ""
         return quest
 
-    def parse_quest_zone(self, str: str):
+    def parse_quest_zone(self, str: str) -> str:
         # # <center>Collect Cog in Triton Avenue (0 of 3)</center>
         center = str.split("<center>") # ['', 'Collect Cog in Triton Avenue (0 of 3)</center>']  
         center2 = center[1].split("</center>") #['Collect Cog in Triton Avenue (0 of 3)', '']
@@ -652,7 +508,7 @@ class Quester():
 
         return zone_name 
 
-    async def find_quest_zone_area_name(self, client: Client, door_locations: list):
+    async def find_quest_zone_area_name(self, client: Client, door_locations: list) -> Optional[str]:
         location = self.parse_quest_zone(await self.read_quest_txt(client))
 
         location = location.lower()
@@ -663,7 +519,7 @@ class Quester():
                     self.d_location = d_location
                     return d_location
                 
-    async def new_world_doors(self, client: Client):
+    async def new_world_doors(self, client: Client) -> bool:
         if  "Streamportal" in await self.read_spiral_door_title(client):
             location = await self.find_quest_zone_area_name(client, streamportal_locations)
             await new_portals_cycle(client, location)
@@ -837,7 +693,7 @@ class Quester():
 
             await requester.teleport(requester_original_position)
 
-    async def num_clients_in_same_area(self):
+    async def num_clients_in_same_area(self) -> int:
         sprinter = SprintyClient(self.current_leader_client)
         entities = await sprinter.get_base_entity_list()
 
@@ -861,7 +717,7 @@ class Quester():
         return player_count
 
     async def determine_new_leader_and_followers(self, client_quests: dict, questing_clients: list[Client],
-                                                 follower_clients: list[Client]):
+                                                 follower_clients: list[Client]) -> tuple[list[Client], dict[Client, str]]:
         original_length = len(client_quests)
         if len(client_quests) > 0:
             for c in questing_clients:
@@ -929,18 +785,12 @@ class Quester():
         for c in self.clients:
             await c.mouse_handler.deactivate_mouseless()
 
-    async def auto_collect_rewrite(self, client: Client):
-        quest_name_path = ["WorldView", "windowHUD", "QuestHelperHud", "ElementWindow", "",
-                           "txtGoalName"]  # path to the yellow text under arrow which tells you your quest
+    async def auto_collect_rewrite(self, client: Client):        
         quest_item_list, _ = await self.parse_quest_stuff(quest_name_path)  # gets quest name from path and parses it for collect quest item name
 
         entities_to_skip = ['Basic Positional', 'WispHealth', 'WispMana', 'KT_WispHealth', 'KT_WispMana', 'WispGold', 'DuelCircle', 'Player Object', 'SkeletonKeySigilArt', 'Basic Ambient', 'TeleportPad']
 
-        # method for hard coding collect quests
-        quest_and_name = {'Find Stolen Food in Saltmeadow Swamp ': 'Food Stores'}
         chunk_cords = await self.Nav_Hull()  # list of cords that load in chunk
-        quest_obv = await self.get_truncated_quest_objectives(client)
-
         for points in chunk_cords:  # loops through the points
             points = XYZ(points.x, points.y, points.z - 550)  # sets cord to underground to avoid pull / detection
             await client.teleport(points, move_after=False, wait_on_inuse=True)  # teleports under the area
@@ -959,17 +809,8 @@ class Quester():
                         while not await is_free(self.client) or self.client.entity_detect_combat_status:
                             await asyncio.sleep(.1)
 
-                        # print('display name: ' + display_name)
                         if await self.collect_entity(e):  # grabs enity
                             return
-                    elif quest_obv in quest_and_name:
-                            if display_name == quest_and_name.get(quest_obv):
-                                while not await is_free(self.client) or self.client.entity_detect_combat_status:
-                                    await asyncio.sleep(.1)
-
-                                if await self.collect_entity(e):  # grabs enity
-                                    return
-
                 except ValueError:
                     pass
                 except MemoryReadError:
@@ -982,7 +823,6 @@ class Quester():
                 try:
                     temp = await e.object_template()
                     e_name = str(await temp.object_name())  # entity name
-                    entities_to_skip = ['Basic Positional', 'WispHealth', 'WispMana', 'KT_WispHealth', 'KT_WispMana', 'WispGold', 'DuelCircle', 'Player Object', 'SkeletonKeySigilArt', 'Basic Ambient']
                     if e_name not in entities_to_skip:  # helps speed things up
                         name_list = e_name.split('_')
                         if len(name_list) == 1:
@@ -1003,14 +843,13 @@ class Quester():
                 except:
                     pass
 
-    async def collect_entity(self, e: DynamicClientObject):
+    async def collect_entity(self, e: DynamicClientObject) -> bool:
         xyz = await e.location()  # gets entities xyz
         for _ in range(2):  # try's to collect item twice if not safe
             can_Teleport = await self.find_safe_entities_from(xyz, None, safe_distance=2600, is_mob=True)  # checks if safe to collect
             if can_Teleport:
                 safe_location = await self.client.body.position()
                 try:
-                    # await self.client.teleport(xyz)
                     await navmap_tp(self.client, xyz)  # teleports to the xyz
                 except:
                     print(traceback.format_exc())
@@ -1026,11 +865,10 @@ class Quester():
 
                     # return client to their previous safe location before grabbing the entity
                     await self.client.teleport(safe_location)
-                    # collected = True
                     return True
         return False
 
-    async def dungeon_recall(self, p: Client):
+    async def dungeon_recall(self, p: Client) -> Optional[bool]:
         original_zone = await p.zone_name()
         dungeon_recalled = await click_window_until_closed(p, dungeon_recall_path)
 
@@ -1054,6 +892,7 @@ class Quester():
             await p.send_key(Keycode.C, 0.1)
             await asyncio.sleep(.3)
 
+    # TODO: Slay the beast
     async def auto_quest_leader(self, questing_friend_tp: bool, gear_switching_in_solo_zones: bool, hitting_client, ignore_pet_level_up: bool, play_dance_game: bool):
         follower_clients = await self.get_follower_clients()
         questing_clients = await self.get_questing_clients()
@@ -1607,7 +1446,6 @@ class Quester():
             if await is_potion_needed(self.client) and await self.client.stats.current_mana() > 1 and await self.client.stats.current_hitpoints() > 1:
                 await collect_wisps(self.client)
 
-        if await is_free(self.client):
             await auto_potions(self.client, True, buy=True)
 
             quest_xyz = await self.client.quest_position.position()
@@ -1688,72 +1526,3 @@ class Quester():
         while self.client.questing_status:
             await asyncio.sleep(1)
             await self.auto_quest_solo(ignore_pet_level_up=ignore_pet_level_up, play_dance_game=play_dance_game)
-
-    async def check_entities(self, entities: list[DynamicClientObject], relevant_str: str, pet_mode: bool = False):
-        quest_objective = await get_quest_name(self.client)
-        for entity in entities:
-            entity_pos = await entity.location()
-
-            if not pet_mode:
-                await self.client.teleport(entity_pos)
-            else:
-                await self.client.pet_teleport(entity_pos)
-
-            await asyncio.sleep(0.25)
-
-            if await get_quest_name(self.client) != quest_objective:
-                quest_pos = await self.client.quest_position.position()
-
-                distance = calc_Distance(quest_pos, XYZ(0.0, 0.0, 0.0))
-                if distance < 1:
-                    break
-
-            elif await is_visible_by_path(self.client, npc_range_path):
-                if await is_popup_title_relevant(self.client, relevant_str):
-                    await asyncio.gather(*[p.send_key(Keycode.X, 0.1) for p in self.clients])
-                    await asyncio.sleep(0.25)
-
-    async def parse_quest_objective(self) -> str:
-        objective_str = await get_quest_name(self.client)
-        objective_list = objective_str.split(' ')
-        if objective_list:
-            objective_list = [s.lower() for s in objective_list.copy()]
-            collect_keywords = ['collect', 'get', 'gather', 'find', 'obtain', 'use', 'open', 'locate', 'destroy']
-            if len(objective_list) >= 2:
-                for i, collect_str in enumerate(collect_keywords):
-                    if collect_str in objective_list:
-                        if len(objective_list) >= i + 2:
-                            return objective_list[i + 1]
-
-            return objective_list[0]
-
-    async def relevant_named_entities(self, entities: list[DynamicClientObject], relevant_str: str) -> list[
-        DynamicClientObject]:
-        for entity in entities.copy():
-            try:
-                object_template = await entity.object_template()
-                display_name_code = await object_template.display_name()
-                try:
-                    display_name: str = await self.client.cache_handler.get_langcode_name(display_name_code)
-                except ValueError:
-                    display_name = await object_template.object_name()
-
-                if 'Basic' not in display_name:
-                    match_ratio = SequenceMatcher(None, display_name.lower(), relevant_str.lower()).ratio()
-
-                    if match_ratio > 0.7:
-                        pass
-                    else:
-                        entities.remove(entity)
-
-                else:
-                    entities.remove(entity)
-
-            except MemoryReadError:
-                await asyncio.sleep(0.05)
-            except AttributeError:
-                await asyncio.sleep(0.05)
-            except ValueError:
-                pass
-
-        return entities
