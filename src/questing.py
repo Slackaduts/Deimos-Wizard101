@@ -4,6 +4,7 @@ import math
 
 from loguru import logger
 
+import re
 from src.auto_pet import auto_pet
 from src.teleport_math import *
 from wizwalker import XYZ, Keycode, MemoryReadError, Client, Rectangle, HookAlreadyActivated, HookNotActive
@@ -13,7 +14,6 @@ from wizwalker.extensions.scripting import teleport_to_friend_from_list
 from src.sprinty_client import SprintyClient
 from src.utils import *
 from src.paths import *
-from difflib import SequenceMatcher
 from fuzzywuzzy import fuzz
 
 
@@ -25,8 +25,25 @@ class Quester():
         self.current_leader_client = client
         self.current_leader_pid = leader_pid
         self.d_location = None
-    
-    async def read_popup_(self, p: Client) -> str:
+
+    async def read_quest_txt(self, client: Client) -> str:
+        try:
+            quest_name = await get_window_from_path(client.root_window, quest_name_path)
+            quest = await quest_name.maybe_text()
+        except:
+            quest = ""
+        return quest
+
+    async def read_spiral_door_title(self, client: Client) -> str:
+        try:
+            title_text_path = await get_window_from_path(client.root_window, spiral_door_title_path)
+            title = await title_text_path.maybe_text()
+        except:
+            title = ""
+            
+        return title
+
+    async def read_popup(self, p: Client) -> str:
         try:
             popup_text_path = await get_window_from_path(p.root_window, popup_msgtext_path)
             txtmsg = await popup_text_path.maybe_text()
@@ -34,7 +51,7 @@ class Quester():
             txtmsg = ""
         return txtmsg
 
-    async def read_dialogue_text_(self, p: Client) -> str:
+    async def read_dialogue_text(self, p: Client) -> str:
         try:
             dialogue_text = await get_window_from_path(p.root_window, dialog_text_path)
             txtmsg = await dialogue_text.maybe_text()
@@ -42,12 +59,8 @@ class Quester():
             txtmsg = ''
         return txtmsg
 
-    async def detected_interact_from_popup_(self, p: Client) -> bool:
-        try:
-            popup_text_path = await get_window_from_path(p.root_window, popup_msgtext_path)
-            txtmsg = await popup_text_path.maybe_text()
-        except:
-            txtmsg = ""
+    async def detected_interact_from_popup(self, p: Client) -> bool:
+        txtmsg = await self.read_popup(p)
 
         msg = txtmsg.lower()
         if 'to enter' in msg or 'to interact' in msg or 'to activate' in msg or 'to teleport' in msg:
@@ -55,116 +68,32 @@ class Quester():
         else:
             return False
 
-    async def find_safe_entities_from(self, fixed_position1, fixed_position2, safe_distance: float = 700,
-                                      is_mob: bool = False) -> bool:
-        cli = SprintyClient(self.client)
-        mob_positions = []
-        can_Teleport = bool
-        try:
-            if is_mob:
-                for mob in await cli.get_mobs():
-                    mob_positions.append(await mob.location())
-                fixed_position2 = mob_positions
-            if fixed_position2:
-                pass
-            else:
-                return True
-        except ValueError:
-            await asyncio.sleep(0.12)
+    async def is_position_safe(self, position: XYZ, safe_distance: float = 1000) -> bool:
+        sp = SprintyClient(self.client)
 
-        for p in fixed_position2:
-            try:
-                dist = math.dist(p, fixed_position1)
-            except:
-                print(traceback.format_exc())
-        try:
-            if dist < safe_distance:
+        for mob in await sp.get_mobs():
+            mob_pos = await mob.location()
+            if math.dist(mob_pos, position) < safe_distance:
                 return False
-            else:
-                can_Teleport = True
-        except TypeError:
-            pass
-        return can_Teleport
+        
+        return True
 
-    async def Nav_Hull(self) -> list[XYZ]:
+    async def get_zone_chunks(self) -> list[XYZ]:
         wad = await self.load_wad(await self.client.zone_name())
         nav_data = await wad.get_file("zone.nav")
-        vertices = []
         vertices, _ = parse_nav_data(nav_data)
-        XY = []
-        x_values = []
-        y_values = []
-        master_list = []
-        for v in vertices:
-            x_values.append(v.x)
-            y_values.append(v.y)
 
-        XY = list(zip(x_values, y_values))
-        # https://github.com/senhorsolar/concavehull
-        # glist = [(0, 0)]
-        # glist = concavehull(XY, chi_factor=0.1)
-        # print(XY)
-
-        for a in XY:
-            for l in vertices:
-                if a[0] == l.x:
-                    if a[1] == l.y:
-                        master_list.append(l)
-        full = calc_chunks(master_list, entity_distance=1500)
+        full = calc_chunks(vertices, entity_distance=1500)
         return full
 
-    async def parse_quest_stuff(self, quest_name_path) -> tuple[str, str]:
-        quest_name = await get_window_from_path(self.client.root_window, quest_name_path)
-        unsplitted = await quest_name.maybe_text()
-        try:
-            quest_helper = unsplitted.split("\n</center>")
-            unsplitted = quest_helper[1]
-            return False
-        except IndexError:
-            pass
-
-        splitters = [
-            "<center>Collect ",
-            "<center>Open ",
-            "<center>Use ",
-            "<center>Find ",
-            "<center>Gather ",
-            "<center>Destroy ",
-            "<center>Smash ",
-            "<center>Repair ",
-            "<center>Free "
-        ]
-        split1_qst = []
-        for s in splitters:
-            split1_qst = unsplitted.split(s)
-            if len(split1_qst) > 0:
-                break
-
-        try:
-            split2_qst = split1_qst[1].split(" in")  # Parsing the quest name
-        except IndexError:
-            split2_qst = split1_qst[0].split("  in")
-        questnameparsed = split2_qst[0]
-
-        # example of a collect quest the only stuff that change are
-        # "Cog", "Triton Avenue" and "(0 of 3)" the rest is static
-        # <center>Collect Cog in Triton Avenue (0 of 3)</center>
-
-        if "(" in unsplitted:
-            split1_amt = unsplitted.split(" (")
-            split2_amt = split1_amt[1].replace(")</center>", "")
-
-            amount_to_get_parsed = split2_amt.split("of ")[1]  # Parsing the amount of stuff to pick up
-            amount_gotten_parsed = split2_amt.split(" of")[0]  # Parsing the amount of stuff that has been picked up
-        # some collect quests do not have numbers (ex: 0 / 6) - for these only one item must be picked up
-        else:
-            split2_amt = unsplitted.replace("</center>", "")
-
-            amount_to_get_parsed = 1
-            amount_gotten_parsed = 0
-
-        b = f"{amount_gotten_parsed} / {amount_to_get_parsed}"
-        return questnameparsed, b
+    async def get_collect_quest_object_name(self) -> str:
+        # '<center>Collect Cog in Triton Avenue (0 of 3)</center>'
+        # -> 'Cog'
+        unsplitted = await self.read_quest_txt(self.client)
+        res = re.findall(r"\w+\s+(.*)\s+in.*", unsplitted)
+        if len(res) == 0:
+            return ''
+        return res[0]
 
     async def load_wad(self, path: str):
         return Wad.from_game_data(path.replace("/", "-"))
@@ -476,23 +405,6 @@ class Quester():
                 await c.send_key(Keycode.ENTER, 0.1)
 
         await asyncio.gather(*[c.wait_for_zone_change() for c in self.clients])
-        
-    async def read_spiral_door_title(self, client: Client) -> str:
-        try:
-            title_text_path = await get_window_from_path(client.root_window, spiral_door_title_path)
-            title = await title_text_path.maybe_text()
-        except:
-            title = ""
-            
-        return title
-    
-    async def read_quest_txt(self, client: Client) -> str:
-        try:
-            quest_name = await get_window_from_path(client.root_window, quest_name_path)
-            quest = await quest_name.maybe_text()
-        except:
-            quest = ""
-        return quest
 
     def parse_quest_zone(self, str: str) -> str:
         # # <center>Collect Cog in Triton Avenue (0 of 3)</center>
@@ -786,11 +698,11 @@ class Quester():
             await c.mouse_handler.deactivate_mouseless()
 
     async def auto_collect_rewrite(self, client: Client):        
-        quest_item_list, _ = await self.parse_quest_stuff(quest_name_path)  # gets quest name from path and parses it for collect quest item name
+        quest_item_list = await self.get_collect_quest_object_name()
 
         entities_to_skip = ['Basic Positional', 'WispHealth', 'WispMana', 'KT_WispHealth', 'KT_WispMana', 'WispGold', 'DuelCircle', 'Player Object', 'SkeletonKeySigilArt', 'Basic Ambient', 'TeleportPad']
 
-        chunk_cords = await self.Nav_Hull()  # list of cords that load in chunk
+        chunk_cords = await self.get_zone_chunks()  # list of cords that load in chunk
         for points in chunk_cords:  # loops through the points
             points = XYZ(points.x, points.y, points.z - 550)  # sets cord to underground to avoid pull / detection
             await client.teleport(points, move_after=False, wait_on_inuse=True)  # teleports under the area
@@ -802,7 +714,7 @@ class Quester():
                     object_template = await e.object_template()  # gets entity template
                     display_name_code = await object_template.display_name()  # gets display name code
                     display_name = await self.client.cache_handler.get_langcode_name(display_name_code)  # uses display name code to get display name text
-                    match = fuzz.ratio(display_name.lower(), str(quest_item_list).lower())  # fuzzywuzzy check if display name matches quest item.
+                    match = fuzz.ratio(display_name.lower(), quest_item_list.lower())  # fuzzywuzzy check if display name matches quest item.
                     print(display_name + ' : ' + str(match))
 
                     if match > 80:  # if strings match greater than 80 it means that it's most likely the item
@@ -833,8 +745,8 @@ class Quester():
                         edit_name2 = ''.join([i for i in edited_name if not i.isdigit()])
                         edit_name3 = str(edit_name2).replace("_", "")
 
-                        match = fuzz.ratio(edit_name3.lower(), str(quest_item_list).lower())
-                        if int(match) > 50:
+                        match = fuzz.ratio(edit_name3.lower(), quest_item_list.lower())
+                        if match > 50:
                             while not await is_free(self.client) or self.client.entity_detect_combat_status:
                                 await asyncio.sleep(.1)
 
@@ -846,7 +758,7 @@ class Quester():
     async def collect_entity(self, e: DynamicClientObject) -> bool:
         xyz = await e.location()  # gets entities xyz
         for _ in range(2):  # try's to collect item twice if not safe
-            can_Teleport = await self.find_safe_entities_from(xyz, None, safe_distance=2600, is_mob=True)  # checks if safe to collect
+            can_Teleport = await self.is_position_safe(xyz)  # checks if safe to collect
             if can_Teleport:
                 safe_location = await self.client.body.position()
                 try:
@@ -1138,7 +1050,7 @@ class Quester():
                                     await asyncio.sleep(.1)
 
                                 # leader_current_zone = await self.current_leader_client.zone_name()
-                                detected_dungeon = await self.detected_interact_from_popup_(proxy_leader_client)
+                                detected_dungeon = await self.detected_interact_from_popup(proxy_leader_client)
 
                                 # changed zones or we are in front of an interactible
                                 if await proxy_leader_client.zone_name() != zone_before_teleport or detected_dungeon:
@@ -1196,7 +1108,7 @@ class Quester():
                         # await self.handle_interactibles(current_leader_client)
 
                         # Handles interactables
-                        sigil_msg_check = await self.read_popup_(self.current_leader_client)
+                        sigil_msg_check = await self.read_popup(self.current_leader_client)
                         if "to enter" in sigil_msg_check.lower():
                             logger.debug('Entering dungeon')
                             await self.enter_dungeon()
@@ -1234,7 +1146,7 @@ class Quester():
                                 after_talking_paths = (exit_zafaria_class_picture_button, exit_pet_leveled_up_button_path, avalon_badge_exit_button_path)
                                 await asyncio.gather(*[exit_menus(c, after_talking_paths) for c in self.clients])
                                 await asyncio.sleep(1.5)
-                                dialogue_text = await self.read_dialogue_text_(self.current_leader_client)
+                                dialogue_text = await self.read_dialogue_text(self.current_leader_client)
 
                                 # we are still in dialogue of some fashion
                                 if dialogue_text != '':
@@ -1243,13 +1155,13 @@ class Quester():
                                     while in_dialogue:
                                         while dialogue_text != '':
                                             await asyncio.sleep(1.0)
-                                            dialogue_text = await self.read_dialogue_text_(self.current_leader_client)
+                                            dialogue_text = await self.read_dialogue_text(self.current_leader_client)
 
                                         logger.info('Sleeping for 10 seconds as a precaution to prevent leaving main quest behind.')
                                         await asyncio.sleep(10.0)
 
                                         # check dialogue again after a delay incase we only momentarily lost dialogue, but are really still talking to the NPC
-                                        dialogue_text = await self.read_dialogue_text_(self.current_leader_client)
+                                        dialogue_text = await self.read_dialogue_text(self.current_leader_client)
                                         if dialogue_text == '':
                                             in_dialogue = False
 
@@ -1301,6 +1213,7 @@ class Quester():
                         truncated_quest_obj = (await self.get_truncated_quest_objectives(self.current_leader_client)).lower()
                         # Key - truncated quest name
                         # Values - 0: time between entity respawns, 1-... : xyz locations of separate entities belonging to the quest
+                        # TODO: Get rid of this once scripting system allows for quest libraries
                         incompatible_hardcoded_quests = {
                             'find submarine parts in the floating land': [40, XYZ(x=-17412.53515625, y=10505.794921875, z=-429.19927978515625), XYZ(x=-17088.447265625, y=12284.244140625, z=-410.1100769042969), XYZ(x=-21681.78125, y=11547.5966796875, z=-429.19927978515625)]
                             , 'collect sea cucumbers in pitch black lake': [40, XYZ(x=-8995.333984375, y=-830.6781616210938, z=-97.31965637207031), XYZ(x=-9911.9404296875, y=823.7628173828125, z=-97.31971740722656), XYZ(x=-11497.998046875, y=-1030.2618408203125, z=-97.32334899902344), XYZ(x=-12099.0517578125, y=-4674.13623046875, z=-96.95536804199219), XYZ(x=-14215.37109375, y=-4371.93798828125, z=-97.32661437988281), XYZ(x=-14287.5556640625, y=-2835.4814453125, z=-97.3197021484375)]
@@ -1308,9 +1221,6 @@ class Quester():
                             , 'break mining equipment in tyrian gorge': [25, XYZ(x=-2529.12890625, y=-3015.832763671875, z=-906.33837890625), XYZ(x=-3181.15234375, y=-6233.39306640625, z=-924.6146240234375), XYZ(x=1495.8695068359375, y=-7369.19580078125, z=-905.3265380859375), XYZ(x=-204.098876953125, y=-8468.421875, z=236.10702514648438), XYZ(x=2508.4169921875, y=-4712.10302734375, z=-1232.338134765625)]
                             , 'steal barrel of kermes fire in tyrian gorge': [35, XYZ(x=1352.575927734375, y=-4787.16552734375, z=-1098.1168212890625), XYZ(x=-1936.0185546875, y=-3954.15380859375, z=-1077.83837890625), XYZ(x=-1820.606201171875, y=-6331.4541015625, z=-1077.849853515625), XYZ(x=517.3740844726562, y=-7042.94287109375, z=-1077.84130859375), XYZ(x=-4628.16650390625, y=-5603.2578125, z=-906.51318359375), XYZ(x=-3216.014892578125, y=-5965.7412109375, z=-932.0715942382812), XYZ(x=-1106.3753662109375, y=-3800.721923828125, z=-905.3256225585938), XYZ(x=-451.9595031738281, y=-4547.75537109375, z=-905.325927734375)]
                         }
-
-                        forbidden_quests = []  # ['Break Mining Equipment in Tyrian Gorge',
-                                            # 'Steal Barrel of Kermes Fire in Tyrian Gorge']
 
                         if any(map(truncated_quest_obj.__contains__, incompatible_hardcoded_quests.keys())):
                             logger.debug('Hardcoded collect')
@@ -1367,31 +1277,11 @@ class Quester():
                             if await is_free(self.current_leader_client) and not self.current_leader_client.entity_detect_combat_status:
                                 await self.current_leader_client.teleport(safe_location)
 
-
-
                             entity_data = incompatible_hardcoded_quests.get(truncated_quest_obj[:-1])
                             current_quest = truncated_quest_obj
                             while current_quest == truncated_quest_obj:
                                 await asyncio.sleep(1.0)
                                 current_quest = (await self.get_truncated_quest_objectives(self.current_leader_client)).lower()
-
-                            # wait until it is completed manually
-                            while any(map(truncated_quest_obj.__contains__, forbidden_quests)):
-                                await asyncio.sleep(2)
-                                truncated_quest_obj = await get_quest_name(self.current_leader_client)
-
-                            logger.debug('Quest completed manually - continuing Auto Quest.')
-                        # if on a bad collect quest, tell the user to complete manually
-                        # some zones / quests are impossible to complete or for several reasons should be avoided
-                        elif any(map(quest_objective.__contains__, forbidden_quests)):
-                            logger.debug('Cannot complete this quest - Please complete it manually to continue.')
-
-                            # wait until it is completed manually
-                            while any(map(quest_objective.__contains__, forbidden_quests)):
-                                await asyncio.sleep(2)
-                                quest_objective = await get_quest_name(self.current_leader_client)
-
-                            logger.debug('Quest completed manually - continuing Auto Quest.')
                         else:
 
                             leader_obj = await self.get_truncated_quest_objectives(self.current_leader_client)
@@ -1478,7 +1368,7 @@ class Quester():
                 current_pos = await self.client.body.position()
                 if await is_visible_by_path(self.client, npc_range_path) and calc_Distance(quest_xyz, current_pos) < 750.0:
                     # Handles interactables
-                    sigil_msg_check = await self.read_popup_(self.client)
+                    sigil_msg_check = await self.read_popup(self.client)
                     if "to enter" in sigil_msg_check.lower():
                         # Handles entering dungeons
                         await asyncio.gather(*[p.send_key(Keycode.X, 0.1) for p in self.clients])
