@@ -89,23 +89,39 @@ class Quester():
     async def get_collect_quest_object_name(self) -> str:
         # '<center>Collect Cog in Triton Avenue (0 of 3)</center>'
         # -> 'Cog'
-        unsplitted = await self.read_quest_txt(self.client)
-        res = re.findall(r"\w+\s+(.*)\s+in.*", unsplitted)
+        s = await self.read_quest_txt(self.client)
+        res = re.findall(r"\w+\s+(.*)\s+in.*", s)
         if len(res) == 0:
             return ''
-        return res[0]
+        return res[0].strip()
+
+    # TODO: Does this need a client?
+    async def get_quest_zone_name(self, c: Client) -> str:
+        # <center>Collect Cog in Triton Avenue (0 of 3)</center>
+        # -> 'Triton Avenue'
+        s = await self.read_quest_txt(c)
+        res = re.findall(r"\s+in\s+([^\(]*)", s)
+        if len(res) == 0:
+            return ''
+        return res[0].strip()
+
+    async def get_truncated_quest_objectives(self, p: Client) -> str:
+        quest_objective = await get_quest_name(p)
+        if '(' in quest_objective:
+            quest_objective = quest_objective.split('(', 1)
+            quest_objective = quest_objective[0]
+
+        return quest_objective
 
     async def load_wad(self, path: str):
         return Wad.from_game_data(path.replace("/", "-"))
 
     async def followers_in_correct_zone(self) -> bool:
         zone = await self.current_leader_client.zone_name()
-        is_correct_zone = True
         for c in self.clients:
             if await c.zone_name() != zone:
-                is_correct_zone = False
-
-        return is_correct_zone
+                return False
+        return True
 
     async def determine_solo_zone(self) -> bool:
         sprinter = SprintyClient(self.current_leader_client)
@@ -116,50 +132,9 @@ class Quester():
             entity_name = await entity.object_name()
             if entity_name == 'Player Object':
                 player_count += 1
-
-                if player_count == 2:
-                    break
-
-        if player_count == 1:
-            return True
-        else:
-            return False
-
-    async def get_truncated_quest_objectives(self, p: Client) -> str:
-        quest_objective = await get_quest_name(p)
-        if '(' in quest_objective:
-            quest_objective = quest_objective.split('(', 1)
-            quest_objective = quest_objective[0]
-
-        return quest_objective
-
-    # get a list of clients that are questing alongside the leader (not boosting)
-    async def get_questing_clients(self) -> list[Client]:
-        questing_clients = [self.current_leader_client]
-        quest_objective_leader = await self.get_truncated_quest_objectives(self.current_leader_client)
-
-        for c in self.clients:
-            quest_objective_follower = await self.get_truncated_quest_objectives(c)
-
-            if quest_objective_follower == quest_objective_leader and c.process_id != self.current_leader_client.process_id:
-                questing_clients.append(c)
-
-        return questing_clients
-
-    # get a dict of client quests for clients that are on the same quest as the leader
-    async def get_client_quests(self, questing_clients: list[Client]) -> dict[Client, str]:
-        quest_objective_leader = await self.get_truncated_quest_objectives(self.current_leader_client)
-
-        client_quests = dict()
-        client_quests[self.current_leader_client] = quest_objective_leader
-
-        for c in questing_clients:
-            quest_objective_follower = await self.get_truncated_quest_objectives(c)
-
-            if quest_objective_follower == quest_objective_leader and c.process_id != self.current_leader_client.process_id:
-                client_quests[c] = quest_objective_follower
-
-        return client_quests
+                if player_count > 1:
+                    return False
+        return True
 
     async def get_follower_clients(self) -> list[Client]:
         follower_clients = []
@@ -168,6 +143,28 @@ class Quester():
                 follower_clients.append(c)
 
         return follower_clients
+
+    # get a list of clients that are questing alongside the leader, including the leader (not boosting)
+    async def get_questing_clients(self) -> list[Client]:
+        questing_clients = [self.current_leader_client]
+        quest_objective_leader = await self.get_truncated_quest_objectives(self.current_leader_client)
+
+        for c in await self.get_follower_clients():
+            quest_objective_follower = await self.get_truncated_quest_objectives(c)
+            if quest_objective_follower == quest_objective_leader:
+                questing_clients.append(c)
+
+        return questing_clients
+
+    # get a dict of client quests for clients that are on the same quest as the leader, including the leader
+    async def get_client_quests(self) -> dict[Client, str]:
+        client_quests = {}
+
+        for c in await self.get_questing_clients():
+            quest_objective = await self.get_truncated_quest_objectives(c)
+            client_quests[c] = quest_objective
+
+        return client_quests
 
     async def zone_recorrect_hub(self):
         if await self.followers_in_correct_zone():
@@ -198,7 +195,7 @@ class Quester():
                         await c.send_key(Keycode.F, 0.1)
 
                         try:
-                            await c.mouse_handler.activate_mouseless()
+                            await attempt_activate_mouseless(c)
                         except HookAlreadyActivated:
                             print(traceback.print_exc())
                             pass
@@ -227,30 +224,19 @@ class Quester():
 
                             was_loading = True
 
-                            try:
-                                await c.mouse_handler.deactivate_mouseless()
-                            except HookNotActive:
-                                print(traceback.print_exc())
-                                pass
-
-
+                            await attempt_deactivate_mouseless(c)
 
                         else:
-                            await c.mouse_handler.deactivate_mouseless()
+                            await attempt_deactivate_mouseless(c)
 
                             await asyncio.sleep(6.0)
                             if await is_visible_by_path(c, friend_is_busy_and_dungeon_reset_path):
-                                await c.mouse_handler.activate_mouseless()
+                                await attempt_activate_mouseless(c)
                                 while await is_visible_by_path(c, friend_is_busy_and_dungeon_reset_path):
                                     leader_in_solo_zone = True
                                     await click_window_by_path(c, friend_is_busy_and_dungeon_reset_path)
 
-                                try:
-                                    await c.mouse_handler.deactivate_mouseless()
-                                except:
-                                    print(traceback.print_exc())
-                                    logger.error('Hook not active')
-                                    pass
+                                await attempt_deactivate_mouseless(c)
 
                                 solo_zone = await self.current_leader_client.zone_name()
 
@@ -330,7 +316,7 @@ class Quester():
 
         return maybe_solo_zone
 
-    async def heal_and_handle_potions(self, questing_friend_tp: bool):
+    async def heal_and_handle_potions(self):
         await asyncio.gather(*[self.collect_wisps(p) for p in self.clients])
         await asyncio.gather(*[self.guarantee_use_potion(p) for p in self.clients])
 
@@ -406,22 +392,8 @@ class Quester():
 
         await asyncio.gather(*[c.wait_for_zone_change() for c in self.clients])
 
-    def parse_quest_zone(self, str: str) -> str:
-        # # <center>Collect Cog in Triton Avenue (0 of 3)</center>
-        center = str.split("<center>") # ['', 'Collect Cog in Triton Avenue (0 of 3)</center>']  
-        center2 = center[1].split("</center>") #['Collect Cog in Triton Avenue (0 of 3)', '']
-        In = center2[0].split(" in ") #['Collect Cog', 'Triton Avenue (0 of 3)']
-        zone_name = In[1] #'Triton Avenue (0 of 3)' or 'Triton Avenue'
-        try:
-            zone_name_final = zone_name.split(" (")[0] #['Triton Avenue' ,'0 of 3)']
-            return zone_name_final # Triton Avenue
-        except:
-            pass
-
-        return zone_name 
-
     async def find_quest_zone_area_name(self, client: Client, door_locations: list) -> Optional[str]:
-        location = self.parse_quest_zone(await self.read_quest_txt(client))
+        location = await self.get_quest_zone_name(client)
 
         location = location.lower()
         parts_of_string = location.split(" ")
@@ -432,7 +404,7 @@ class Quester():
                     return d_location
                 
     async def new_world_doors(self, client: Client) -> bool:
-        if  "Streamportal" in await self.read_spiral_door_title(client):
+        if "Streamportal" in await self.read_spiral_door_title(client):
             location = await self.find_quest_zone_area_name(client, streamportal_locations)
             await new_portals_cycle(client, location)
             return True
@@ -610,21 +582,15 @@ class Quester():
         entities = await sprinter.get_base_entity_list()
 
         player_count = 0
-        list_of_present_clients = []
         for entity in entities:
-            entity_name = await entity.object_name()
-            if entity_name == 'Player Object':
-                for c in self.clients:
-                    if c.process_id not in list_of_present_clients:
-                        distance = calc_Distance(await c.body.position(), await entity.location())
-                        # this is almost certainly one of our clients
-                        if distance < 20:
-                            player_count += 1
-                            list_of_present_clients.append(c.process_id)
-                            break
-
-                if player_count == len(self.clients):
+            entity_gid = await entity.global_id_full()
+            for c in self.clients:
+                client_gid = await c.client_object.global_id_full()
+                if client_gid == entity_gid:
+                    player_count += 1
                     break
+            if player_count == len(self.clients):
+                break
 
         return player_count
 
@@ -646,7 +612,7 @@ class Quester():
                     self.current_leader_pid = self.client.process_id
                     follower_clients = await self.get_follower_clients()
 
-                client_quests = await self.get_client_quests(questing_clients)
+                client_quests = await self.get_client_quests()
 
             elif len(client_quests) < original_length:
                 # pass leader to next client in dict
@@ -655,13 +621,13 @@ class Quester():
                 self.current_leader_pid = self.current_leader_client.process_id
                 follower_clients = await self.get_follower_clients()
         else:
-            client_quests = await self.get_client_quests(questing_clients)
+            client_quests = await self.get_client_quests()
 
         return follower_clients, client_quests
 
     async def correct_dungeon_desync(self, follower_clients):
         for c in self.clients:
-            await c.mouse_handler.activate_mouseless()
+            await attempt_activate_mouseless(c)
 
         # attempt to correct the desync by simply teleporting all clients to the leader
         await asyncio.gather(*[teleport_to_friend_from_list(c, name=self.current_leader_client.wizard_name) for c in follower_clients])
@@ -695,7 +661,7 @@ class Quester():
                     await asyncio.sleep(.1)
 
         for c in self.clients:
-            await c.mouse_handler.deactivate_mouseless()
+            await attempt_deactivate_mouseless(c)
 
     async def auto_collect_rewrite(self, client: Client):        
         quest_item_list = await self.get_collect_quest_object_name()
@@ -836,7 +802,7 @@ class Quester():
 
                 if all_high_energy:
                     # buy potions if necessary, otherwise auto pet will fail
-                    await self.heal_and_handle_potions(questing_friend_tp=False)
+                    await self.heal_and_handle_potions()
 
                     logger.debug('All questing clients have high energy, training pets on all clients.')
                     await asyncio.gather(*[auto_pet(c, ignore_pet_level_up, play_dance_game, questing=True) for c in self.clients])
@@ -872,7 +838,7 @@ class Quester():
             maybe_solo_zone = await self.determine_solo_zone()
 
         # leader and follower clients can dynamically change during auto questing to account for clients being left behind
-        client_quests = await self.get_client_quests(questing_clients)
+        client_quests = await self.get_client_quests()
 
         if len(client_quests) > 0:
             s = ''
@@ -898,7 +864,7 @@ class Quester():
             await asyncio.sleep(.4)
 
             # Collect wisps, use potions, or get potions if necessary
-            await self.heal_and_handle_potions(questing_friend_tp)
+            await self.heal_and_handle_potions()
 
             # don't recall on secondary clients unless we've already successfully recalled on the primary
             dungeon_recalled = await self.dungeon_recall(self.current_leader_client)
@@ -1321,12 +1287,12 @@ class Quester():
 
     async def handle_questing_zone_change(self):
         if await is_visible_by_path(self.client, exit_dungeon_path):
-            await self.client.mouse_handler.activate_mouseless()
+            await attempt_activate_mouseless(self.client)
             await asyncio.sleep(1.0)
             await click_window_by_path(self.client, exit_dungeon_path)
             await self.client.wait_for_zone_change()
             await asyncio.sleep(1.0)
-            await self.client.mouse_handler.deactivate_mouseless()
+            await attempt_deactivate_mouseless(self.client)
         else:
             while await self.client.is_loading():
                 await asyncio.sleep(.1)
