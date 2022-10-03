@@ -100,6 +100,9 @@ async def logging_loop(client: Client):
         if chat_text:
             temp_drops = filter_drops(chat_text.split('\n'))
             new_drops = find_new_stuff(client.latest_drops, '\n'.join(temp_drops))
-            if new_drops:
+            if not client.latest_drops:
                 client.latest_drops = '\n'.join(temp_drops)
-                [logger.debug(f'{client.title} - New Drop: {drop}') for drop in new_drops]
+
+            elif new_drops:
+                client.latest_drops = '\n'.join(temp_drops)
+                [logger.debug(f'{client.title} - New Drop: {drop}') for drop in new_drops.split('\n')[1:]]
