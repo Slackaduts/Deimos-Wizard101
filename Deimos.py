@@ -28,8 +28,7 @@ from src.drop_logger import logging_loop
 from src.combat import Fighter
 from src.stat_viewer import total_stats
 from src.teleport_math import navmap_tp, calc_Distance
-# from src.questing import Quester
-from src.questing_new import Quester
+from src.questing import Quester
 from src.sigil import Sigil
 from src.utils import is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world, collect_wisps_with_limit, try_task_coro
 from src.paths import advance_dialog_path, decline_quest_path
