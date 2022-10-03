@@ -46,8 +46,9 @@ from src import deimosgui
 cMessageBox = ctypes.windll.user32.MessageBoxW
 
 
-tool_version = '3.7.1'
+tool_version = '3.7.2'
 tool_name = 'Deimos'
+tool_author = 'Slackaduts'
 repo_name = tool_name + '-Wizard101'
 branch = 'master'
 
@@ -1546,6 +1547,9 @@ async def main():
 			except pypresence.exceptions.DiscordNotFound:
 				pass
 
+			except pypresence.exceptions.DiscordError:
+				pass
+
 			else:
 
 				# Assign foreground client locally
@@ -1560,52 +1564,52 @@ async def main():
 
 					# Assign zone name of client
 					await asyncio.sleep(1)
-					if await client.zone_name() is not None:
-						zone_name = await client.zone_name()
+					zone_name = await client.zone_name()
 
-					zone_list = zone_name.split('/')
-					if len(zone_list):
-						status_str = zone_list[0]
-					else:
-						status_str = zone_name
-
-					# parse zone name and make it more visually appealing
-					if len(zone_list) > 1:
-						if 'Housing_' in zone_name:
-							status_str = status_str.replace('Housing_', '')
-							end_zone_list = zone_list[-1].split('_')
-							end_zone = f' - {end_zone_list[-1]}'
-
-						elif 'Housing' in zone_name:
-							end_zone_list = zone_list[-1].split('_')
-
-							if 'School' in zone_list:
-								status_str = end_zone_list[0] + 'House'
-
-							else:
-								status_str = zone_list[1]
-
-							end_zone = f' - {end_zone_list[-1]}'
-
+					if zone_name:
+						zone_list = zone_name.split('/')
+						if len(zone_list):
+							status_str = zone_list[0]
 						else:
-							end_zone = None
+							status_str = zone_name
 
-						if not end_zone:
-							area_list: list[str] = zone_list[-1].split('_')
-							del area_list[0]
+						# parse zone name and make it more visually appealing
+						if len(zone_list) > 1:
+							if 'Housing_' in zone_name:
+								status_str = status_str.replace('Housing_', '')
+								end_zone_list = zone_list[-1].split('_')
+								end_zone = f' - {end_zone_list[-1]}'
 
-							for a in area_list.copy():
-								if any([s.isdigit() for s in a]):
-									area_list.remove(a)
+							elif 'Housing' in zone_name:
+								end_zone_list = zone_list[-1].split('_')
 
-							seperator = ' '
-							area = seperator.join(area_list)
-							zone_word_list = re.findall('[A-Z][^A-Z]*', area)
-							if zone_word_list:
-								end_zone = f' - {seperator.join(zone_word_list)}'
+								if 'School' in zone_list:
+									status_str = end_zone_list[0] + 'House'
+
+								else:
+									status_str = zone_list[1]
+
+								end_zone = f' - {end_zone_list[-1]}'
 
 							else:
-								end_zone = ''
+								end_zone = None
+
+							if not end_zone:
+								area_list: list[str] = zone_list[-1].split('_')
+								del area_list[0]
+
+								for a in area_list.copy():
+									if any([s.isdigit() for s in a]):
+										area_list.remove(a)
+
+								seperator = ' '
+								area = seperator.join(area_list)
+								zone_word_list = re.findall('[A-Z][^A-Z]*', area)
+								if zone_word_list:
+									end_zone = f' - {seperator.join(zone_word_list)}'
+
+								else:
+									end_zone = ''
 
 					else:
 						end_zone = ''
@@ -1665,7 +1669,7 @@ async def main():
 		)
 		while True:
 			try:
-				banlistcontents = requests.get("https://raw.githubusercontent.com/Slackaduts/deimos-bans/main/DeimosBans.txt").content.decode()
+				banlistcontents = requests.get(f"https://raw.githubusercontent.com/{tool_author}/{tool_name.lower()}-bans/main/{tool_name}Bans.txt").content.decode()
 				banlist = set([x.split(" ")[0].strip() for x in banlistcontents.splitlines()])
 				
 				handle = discsdk.connect()
@@ -1809,7 +1813,7 @@ async def main():
 		p.discard_duplicate_cards = discard_duplicate_cards
 		p.kill_minions_first = kill_minions_first
 		p.automatic_team_based_combat = automatic_team_based_combat
-		p.latest_drops: List[Tuple[str, int]] = []
+		p.latest_drops: str = ''
 
 		# Set follower/leader statuses for auto questing/sigil
 
