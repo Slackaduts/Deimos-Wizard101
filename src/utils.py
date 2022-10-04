@@ -2,6 +2,7 @@ import asyncio
 import ctypes
 import time
 import traceback
+import requests
 
 import wizwalker.errors
 from wizwalker import Client, Keycode, XYZ, user32
@@ -1279,3 +1280,15 @@ def index_with_str(input_str, desired_str: str) -> int:
 			return i
 
 	return None
+
+
+def read_webpage(url):
+	# return a list of lines from a hosted file
+	try:
+		response = requests.get(url, allow_redirects=True)
+		page_text = response.text
+		line_list = page_text.splitlines()
+	except:
+		return []
+	else:
+		return line_list

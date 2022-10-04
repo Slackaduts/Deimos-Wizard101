@@ -30,7 +30,7 @@ from src.stat_viewer import total_stats
 from src.teleport_math import navmap_tp, calc_Distance
 from src.questing import Quester
 from src.sigil import Sigil
-from src.utils import is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world, collect_wisps_with_limit, try_task_coro
+from src.utils import is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world, collect_wisps_with_limit, try_task_coro, read_webpage
 from src.paths import advance_dialog_path, decline_quest_path
 import PySimpleGUI as gui
 import pyperclip
@@ -41,6 +41,7 @@ from wizwalker.extensions.wizsprinter.wiz_navigator import toZoneDisplayName, to
 from typing import List, Tuple
 
 from src import deimosgui
+from src.tokenizer import tokenize
 
 cMessageBox = ctypes.windll.user32.MessageBoxW
 
@@ -192,7 +193,7 @@ def read_config(config_name : str):
 
 while True:
 	if not os.path.exists(f'{tool_name}-config.ini'):
-		download_file(f'https://raw.githubusercontent.com/Slackaduts/{repo_name}/{branch}/{tool_name}-config.ini', f'{tool_name}-config.ini')
+		download_file(f'https://raw.githubusercontent.com/{tool_author}/{repo_name}/{branch}/{tool_name}-config.ini', f'{tool_name}-config.ini')
 	time.sleep(0.1)
 	# try:
 	read_config(f'{tool_name}-config.ini')
@@ -240,18 +241,6 @@ def file_len(filepath):
 	return len(f.readlines())
 
 
-def read_webpage(url):
-	# return a list of lines from a hosted file
-	try:
-		response = requests.get(url, allow_redirects=True)
-		page_text = response.text
-		line_list = page_text.splitlines()
-	except:
-		return []
-	else:
-		return line_list
-
-
 def generate_timestamp():
 	# generates a timestamp and makes the symbols filename-friendly
 	time = str(datetime.datetime.now())
@@ -262,14 +251,14 @@ def generate_timestamp():
 
 
 def config_update():
-	config_url = f'https://raw.githubusercontent.com/Slackaduts/{repo_name}/{branch}/{tool_name}-config.ini'
+	config_url = f'https://raw.githubusercontent.com/{tool_author}/{repo_name}/{branch}/{tool_name}-config.ini'
 
 	if not os.path.exists(f'{tool_name}-config.ini'):
 		download_file(url=config_url, file_name=f'{tool_name}-config.ini')
 		time.sleep(0.1)
 
 	if not os.path.exists(f'README.txt'):
-		download_file(f'https://raw.githubusercontent.com/Slackaduts/{repo_name}/{branch}/README.txt', 'README.txt')
+		download_file(f'https://raw.githubusercontent.com/{tool_author}/{repo_name}/{branch}/README.txt', 'README.txt')
 
 	download_file(url=config_url, file_name=f'{tool_name}-Testconfig.ini', delete_previous=True, debug=False)
 	time.sleep(0.1)
@@ -309,7 +298,7 @@ def config_update():
 
 
 def run_updater():
-	download_file(url=f"https://raw.githubusercontent.com/Slackaduts/{repo_name}/{branch}/{tool_name}Updater.exe", file_name=f'{tool_name}Updater.exe', delete_previous=True)
+	download_file(url=f"https://raw.githubusercontent.com/{tool_author}/{repo_name}/{branch}/{tool_name}Updater.exe", file_name=f'{tool_name}Updater.exe', delete_previous=True)
 	time.sleep(0.1)
 	subprocess.Popen(f'{tool_name}Updater.exe')
 	sys.exit()
@@ -319,7 +308,7 @@ def get_latest_version():
 	update_server = None
 
 	try:
-		update_server = read_webpage(f"https://raw.githubusercontent.com/Slackaduts/{repo_name}/{branch}/LatestVersion.txt")
+		update_server = read_webpage(f"https://raw.githubusercontent.com/{tool_author}/{repo_name}/{branch}/LatestVersion.txt")
 	except:
 		time.sleep(0.1)
 
@@ -1494,9 +1483,23 @@ async def main():
 
 								async def run_bot():
 									logger.debug('Started Bot')
+
 									split_commands = command_data.split('\n')
+									web_command_strs = ['webpage', 'pull', 'embed']
+									new_commands = []
+
+									for command_str in split_commands:
+										command_tokens = tokenize(command_str)
+
+										if command_tokens[0].lower() in web_command_strs:
+											web_commands = read_webpage(command_tokens[1])
+											new_commands.extend(web_commands)
+
+										else:
+											new_commands.append(command_str)
+
 									while True:
-										for command_str in split_commands:
+										for command_str in new_commands:
 											await parse_command(walker.clients, command_str)
 
 										await asyncio.sleep(1)

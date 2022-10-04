@@ -9,7 +9,7 @@ from wizwalker.memory.memory_objects.camera_controller import CameraController
 
 from src.sprinty_client import SprintyClient
 from src.gui_inputs import is_numeric, param_input
-from src.utils import index_with_str, get_window_from_path, teleport_to_friend_from_list, auto_potions_force_buy, use_potion, is_free, logout_and_in, click_window_by_path, attempt_activate_mouseless, attempt_deactivate_mouseless, wait_for_visible_by_path, refill_potions, refill_potions_if_needed, wait_for_zone_change
+from src.utils import read_webpage, index_with_str, get_window_from_path, teleport_to_friend_from_list, auto_potions_force_buy, use_potion, is_free, logout_and_in, click_window_by_path, attempt_activate_mouseless, attempt_deactivate_mouseless, wait_for_visible_by_path, refill_potions, refill_potions_if_needed, wait_for_zone_change
 from src.camera_utils import glide_to, point_to_xyz, rotating_glide_to, orbit
 from src.tokenizer import tokenize
 from src.collision_math import plot_cube
@@ -340,11 +340,24 @@ async def parse_command(clients: List[Client], command_str: str):
 async def execute_flythrough(client: Client, flythrough_data: str, line_seperator: str = '\n'):
     flythrough_actions = flythrough_data.split(line_seperator)
 
+    web_command_strs = ['webpage', 'pull', 'embed']
+    new_commands = []
+
+    for command_str in flythrough_actions:
+        command_tokens = tokenize(command_str)
+
+        if command_tokens[0].lower() in web_command_strs:
+            web_commands = read_webpage(command_tokens[1])
+            new_commands.extend(web_commands)
+
+        else:
+            new_commands.append(command_str)
+
     if not await client.game_client.is_freecam():
         await client.camera_freecam()
 
     camera = await client.game_client.free_camera_controller()
-    for action in flythrough_actions:
+    for action in new_commands:
         await parse_camera_command(camera, action)
 
 
