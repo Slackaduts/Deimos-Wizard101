@@ -13,6 +13,7 @@ This tool gets updated when I have free time from college, and my personal proje
 
 You can also close Deimos by closing out the GUI, just never close out the CMD window.
 
+
 What hotkeys exist:
   -X Press to all clients (X key by default)
   -Sync XYZ of all clients (syncs client positions with selected client, F8 by default)
