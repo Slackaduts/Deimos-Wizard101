@@ -30,7 +30,7 @@ from src.stat_viewer import total_stats
 from src.teleport_math import navmap_tp, calc_Distance
 from src.questing import Quester
 from src.sigil import Sigil
-from src.utils import is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world, collect_wisps_with_limit, try_task_coro, read_webpage
+from src.utils import index_with_str, is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world, collect_wisps_with_limit, try_task_coro, read_webpage
 from src.paths import advance_dialog_path, decline_quest_path
 import PySimpleGUI as gui
 import pyperclip
@@ -195,16 +195,9 @@ while True:
 	if not os.path.exists(f'{tool_name}-config.ini'):
 		download_file(f'https://raw.githubusercontent.com/{tool_author}/{repo_name}/{branch}/{tool_name}-config.ini', f'{tool_name}-config.ini')
 	time.sleep(0.1)
-	# try:
+
 	read_config(f'{tool_name}-config.ini')
 	break
-	# except:
-	# 	logger.critical('Error found in the config. Redownloading the config to prevent further issues.')
-	# 	# sg.Popup(f'{tool_name} Error', 'Error found in the config. Redownloading the config to prevent further issues.', non_blocking=True)
-	# 	os.remove(f'{tool_name}-config.ini')
-	# 	time.sleep(0.1)
-	# else:
-	# 	break
 
 
 speed_status = False
@@ -235,13 +228,13 @@ pet_task: asyncio.Task = None
 bot_task: asyncio.Task = None 
 flythrough_task: asyncio.Task = None
 
-def file_len(filepath):
+def file_len(filepath) -> List[str]:
 	# return the number of lines in a file
 	f = open(filepath, "r")
 	return len(f.readlines())
 
 
-def generate_timestamp():
+def generate_timestamp() -> str:
 	# generates a timestamp and makes the symbols filename-friendly
 	time = str(datetime.datetime.now())
 	time_list = time.split('.')
@@ -304,7 +297,7 @@ def run_updater():
 	sys.exit()
 
 
-def get_latest_version():
+def get_latest_version() -> str:
 	update_server = None
 
 	try:
@@ -1876,15 +1869,43 @@ def bool_to_string(input: bool):
 		return 'Disabled'
 
 
+def handle_tool_updating():
+	version = get_latest_version()
+	update_server = None
+
+	try:
+		update_server = read_webpage(f"https://raw.githubusercontent.com/{tool_author}/{repo_name}/{branch}/LatestVersion.txt")
+	except:
+		time.sleep(0.1)
+
+	if update_server is not None and update_server[1].lower() == 'false':
+		raise KeyboardInterrupt
+
+	if update_server is not None:
+		version_specific_data = update_server[2:]
+		version_status_check = ' '.join(version_specific_data)
+
+		if tool_version in version_status_check:
+			version_status_index = index_with_str(version_specific_data, tool_version)
+			version_status = version_specific_data[version_status_index].split(' ')[1]
+
+			if version_status.lower() == 'false':
+				raise KeyboardInterrupt
+
+			elif version_status.lower() == 'force':
+				auto_update()
+
+		if version and auto_updating:
+			if is_version_greater(version, tool_version):
+				auto_update()
+
+			if not is_version_greater(tool_version, version):
+				config_update()
+
+
 if __name__ == "__main__":
 	# Validate configs and update the tool
-	version = get_latest_version()
-	if version and auto_updating:
-		if is_version_greater(version, tool_version):
-			auto_update()
-
-		if not is_version_greater(tool_version, version):
-			config_update()
+	handle_tool_updating()
 
 	current_log = logger.add(f"logs/{tool_name} - {generate_timestamp()}.log", encoding='utf-8', enqueue=True, backtrace=True)
 
