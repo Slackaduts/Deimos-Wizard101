@@ -1124,27 +1124,28 @@ async def main():
 					await asyncio.sleep(350)
 					client_xyz_2 = await client.body.position()
 					distance_moved = calc_Distance(client_xyz, client_xyz_2)
-					if distance_moved < 5.0 and not await client.in_battle() and not client.feeding_pet_status:
+					if distance_moved < 5.0 and not await client.in_battle() and not client.feeding_pet_status and not client.entity_detect_combat_status:
 
 						logger.debug(f"Client {client.title} - AFK client detected, moving slightly.")
 						await client.send_key(key=Keycode.A)
 						await asyncio.sleep(0.1)
 						await client.send_key(key=Keycode.D)
 
-					# During questing, one or more clients may be waiting outside while the others are completing a solo zone quest - we do not want to restart in these cases
-					client_in_solo_zone = False
-					for p in walker.clients:
-						if p.in_solo_zone:
-							client_in_solo_zone = True
+						# During questing, one or more clients may be waiting outside while the others are completing a solo zone quest - we do not want to restart in these cases
+						client_in_solo_zone = False
+						for p in walker.clients:
+							if p.in_solo_zone:
+								client_in_solo_zone = True
 
-					if questing_task is not None and not questing_task.cancelled() and not client_in_solo_zone:
-							logger.debug(f'Questing appears to have halted - restarting.')
-							questing_task.cancel()
-							questing_task = None
-							await asyncio.sleep(1.0)
+						# restart questing
+						if questing_task is not None and not questing_task.cancelled() and not client_in_solo_zone:
+								logger.debug(f'Questing appears to have halted - restarting.')
+								questing_task.cancel()
+								questing_task = None
+								await asyncio.sleep(1.0)
 
-							if questing_task is None:
-								questing_task = asyncio.create_task(try_task_coro(questing_loop, walker.clients, True))
+								if questing_task is None:
+									questing_task = asyncio.create_task(try_task_coro(questing_loop, walker.clients, True))
 
 		await asyncio.gather(*[async_anti_afk(p) for p in walker.clients])
 

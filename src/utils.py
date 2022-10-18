@@ -373,33 +373,36 @@ async def spiral_door(client: Client, open_window: bool = True, cycles: int = 0,
 
 	await click_window_by_path(client, world_path, True)
 	await asyncio.sleep(1)
+	current_zone = await client.zone_name()
 	await click_window_by_path(client, spiral_door_teleport_path, True)
-	await wait_for_zone_change(client)
+	await wait_for_zone_change(client, current_zone=current_zone)
 
 
 async def navigate_to_ravenwood(client: Client):
 	# navigates to commons from anywhere in the game
+	current_zone = await client.zone_name()
 
 	await client.send_key(Keycode.HOME, 0.1)
 	await client.send_key(Keycode.HOME, 0.1)
 
-	await wait_for_zone_change(client)
+	await wait_for_zone_change(client, current_zone=current_zone)
 	use_spiral_door = False
 	bartleby_navigation = True
-	match await client.zone_name():
+	current_zone = await client.zone_name()
+	match current_zone:
 		# Handling for dorm room
 		case "WizardCity/Interiors/WC_Housing_Dorm_Interior":
 			await client.goto(70.15016174316406, 9.419374465942383)
 			while not await client.is_loading():
 				await client.send_key(Keycode.S, 0.1)
-			await wait_for_zone_change(client, True)
+			await wait_for_zone_change(client, current_zone=current_zone)
 			bartleby_navigation = False
 
 		# Handling for arcanum apartment
 		case "Housing_AR_Dormroom/Interior":
 			while not await client.is_loading():
 				await client.send_key(Keycode.S, 0.1)
-			await wait_for_zone_change(client, True)
+			await wait_for_zone_change(client, current_zone=current_zone)
 			await asyncio.sleep(0.5)
 			await client.teleport(XYZ(x=-19.1153507232666, y=-6312.8994140625, z=-2.00579833984375))
 			await client.send_key(Keycode.D, 0.1)
@@ -436,9 +439,10 @@ async def navigate_to_commons_from_ravenwood(client: Client):
 	# walk to ravenwood exit
 	await client.goto(-19.549846649169922, -297.7527160644531)
 	await client.goto(-5.701, -1536.491)
+	current_zone = await client.zone_name()
 	while not await client.is_loading():
 		await client.send_key(Keycode.W, 0.1)
-	await wait_for_zone_change(client, True)
+	await wait_for_zone_change(client, current_zone=current_zone)
 
 
 async def navigate_to_potions(client: Client):
@@ -675,7 +679,7 @@ async def click_window_until_closed(client: Client, path):
 
 
 async def refill_potions_if_needed(p: Client):
-	if await p.stats.potion_charge() < 1.0 and await p.stats.reference_level() >= 5:
+	if await p.stats.potion_charge() < 1.0 and await p.stats.reference_level() >= 6:
 		for i in range(3):
 			await p.send_key(Keycode.PAGE_DOWN)
 
@@ -689,12 +693,12 @@ async def refill_potions_if_needed(p: Client):
 
 
 async def refill_potions(client: Client, mark: bool = False, recall: bool = True, original_zone=None):
-	if await client.stats.reference_level() >= 5:
+	if await client.stats.reference_level() >= 6:
 		# mark if needed
 		if mark:
 			if await client.zone_name() != 'WizardCity/WC_Hub':
 				original_mana = await client.stats.current_mana()
-				while await client.stats.current_mana() == original_mana:
+				while await client.stats.current_mana() >= original_mana:
 					logger.debug(f'Client {client.title} - Marking Location')
 					await client.send_key(Keycode.PAGE_DOWN, 0.1)
 					await asyncio.sleep(.75)

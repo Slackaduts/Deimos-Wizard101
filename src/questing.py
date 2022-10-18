@@ -1,4 +1,5 @@
 import asyncio
+import time
 import traceback
 import math
 
@@ -49,14 +50,6 @@ class Quester():
             txtmsg = await popup_text_path.maybe_text()
         except:
             txtmsg = ""
-        return txtmsg
-
-    async def read_dialogue_text(self, p: Client) -> str:
-        try:
-            dialogue_text = await get_window_from_path(p.root_window, dialog_text_path)
-            txtmsg = await dialogue_text.maybe_text()
-        except:
-            txtmsg = ''
         return txtmsg
 
     async def detected_interact_from_popup(self, p: Client) -> bool:
@@ -323,7 +316,7 @@ class Quester():
         any_client_needs_potions = False
         for p in self.clients:
             # If we have less than 1 potion left, send all clients to get potions (even if some don't need it).  Only do this once per questing loop
-            if await p.stats.potion_charge() < 1.0 and await p.stats.reference_level() >= 5:
+            if await p.stats.potion_charge() < 1.0 and await p.stats.reference_level() >= 6:
                 any_client_needs_potions = True
 
         if any_client_needs_potions:
@@ -355,18 +348,24 @@ class Quester():
                     await asyncio.sleep(.6)
 
     async def gather_clients_from_potion_buy(self, p: Client):
-        try:
-            await p.send_key(Keycode.PAGE_UP)
-            logger.debug('Waiting for zone change on all clients.')
-            await safe_wait_for_zone_change(p, name='WizardCity/WC_Hub', handle_hooks_if_needed=True)
-        # something went wrong when placing the mark or recalling / our teleport mark was in a closed off area / instance
-        # send all to the commons and let auto quest handle the rest
-        except (LoadingScreenNotFound, FriendBusyOrInstanceClosed):
-            for c in self.clients:
-                while await c.zone_name() != 'WizardCity/WC_Hub':
-                    await navigate_to_ravenwood(c)
-                    await navigate_to_commons_from_ravenwood(c)
-                    await asyncio.sleep(.5)
+        while True:
+            try:
+                await p.send_key(Keycode.PAGE_UP)
+                logger.debug('Waiting for zone change on all clients.')
+                await safe_wait_for_zone_change(p, name='WizardCity/WC_Hub', handle_hooks_if_needed=True)
+                break
+            except LoadingScreenNotFound:
+                pass
+            # something went wrong when placing the mark or recalling / our teleport mark was in a closed off area / instance
+            # send all to the commons and let auto quest handle the rest
+            except FriendBusyOrInstanceClosed:
+                for c in self.clients:
+                    while await c.zone_name() != 'WizardCity/WC_Hub':
+                        await navigate_to_ravenwood(c)
+                        await navigate_to_commons_from_ravenwood(c)
+                        await asyncio.sleep(.5)
+
+                break
 
     # if followers in different zone, try X presses (for X zone changes that require delayed presses between clients)
     async def X_press_zone_recorrect(self):
@@ -380,17 +379,17 @@ class Quester():
             while await c.is_loading():
                 await asyncio.sleep(0.1)
 
-    async def enter_dungeon(self):
+    # async def enter_dungeon(self):
         # Handles entering dungeons
-        await asyncio.gather(*[p.send_key(Keycode.X, 0.1) for p in self.clients])
+        # await asyncio.gather(*[p.send_key(Keycode.X, 0.1) for p in self.clients])
 
-        await asyncio.sleep(1.5)
+        # await asyncio.sleep(1.5)
 
-        for c in self.clients:
-            if await is_visible_by_path(c, dungeon_warning_path):
-                await c.send_key(Keycode.ENTER, 0.1)
+        # for c in self.clients:
+        #     if await is_visible_by_path(c, dungeon_warning_path):
+        #         await c.send_key(Keycode.ENTER, 0.1)
 
-        await asyncio.gather(*[c.wait_for_zone_change() for c in self.clients])
+        # await asyncio.gather(*[c.wait_for_zone_change() for c in self.clients])
 
     async def find_quest_zone_area_name(self, client: Client, door_locations: list) -> Optional[str]:
         location = await self.get_quest_zone_name(client)
@@ -637,7 +636,7 @@ class Quester():
         # this may fail - some zones cannot be teleported to even if they have public sigils - detect whether this zone is locked off to teleports
         teleport_banned_zone = False
         for c in self.clients:
-            if await is_visible_by_path(c, friend_is_busy_and_dungeon_reset_path):
+            while await is_visible_by_path(c, friend_is_busy_and_dungeon_reset_path):
                 await click_window_by_path(c, friend_is_busy_and_dungeon_reset_path)
                 teleport_banned_zone = True
 
@@ -813,23 +812,17 @@ class Quester():
 
         if not await self.followers_in_correct_zone() or maybe_solo_zone:
             if not questing_friend_tp:
-                # if still in the wrong zone, try sprinter navigation
-                if not await self.followers_in_correct_zone() or maybe_solo_zone:
-                    await toZone(self.clients, await self.current_leader_client.zone_name())
-
                 # if we still aren't in correct zone, send all to hub and retry
                 await self.zone_recorrect_hub()
             else:
                 # if still in the wrong zone, try friend teleport
-                try:
-                    maybe_solo_zone = await self.zone_recorrect_friend_tp(maybe_solo_zone, gear_switching_in_solo_zones)
-                except:
-                    print(traceback.print_exc())
+                maybe_solo_zone = await self.zone_recorrect_friend_tp(maybe_solo_zone, gear_switching_in_solo_zones)
 
                 await asyncio.sleep(2.0)
 
     async def handle_dungeon_entry(self, questing_friend_tp: bool, follower_clients: list[Client]):
-        await self.enter_dungeon()
+        # await self.enter_dungeon()
+        await asyncio.gather(*[c.wait_for_zone_change() for c in self.clients])
 
         await asyncio.sleep(1.0)
 
@@ -845,40 +838,31 @@ class Quester():
                 logger.debug('One or more clients was separated from the group - teleporting all to leader')
                 await self.correct_dungeon_desync(follower_clients)
 
-    async def handle_npc_talking_quests(self):
-        # wait a second for initial dialogue to appear
-        await asyncio.sleep(1.0)
-
-        # let auto-dialogue do its thing
-        while not await is_free(self.current_leader_client) or self.current_leader_client.entity_detect_combat_status:
+    async def handle_npc_talking_quests(self, talking_client: Client, present_clients: list[Client]):
+        # wait for initial dialogue to appear
+        while await is_free_leader_questing(talking_client):
             await asyncio.sleep(.1)
 
-        # wait 2.5 seconds to account for normal delay after turning in a regular quest
-        # in testing, it took a whole 1.5 seconds to switch from turning in a quest to getting the new quest
-        await asyncio.sleep(1.0)
-        after_talking_paths = (exit_zafaria_class_picture_button, exit_pet_leveled_up_button_path, avalon_badge_exit_button_path)
-        await asyncio.gather(*[exit_menus(c, after_talking_paths) for c in self.clients])
-        await asyncio.sleep(1.5)
-        dialogue_text = await self.read_dialogue_text(self.current_leader_client)
+        start_time = time.time()
+        while time.time() < start_time + 5.0:
+            # we most likely entered another dialogue - wait for it to end, then reset the timer
+            if not await is_free_leader_questing(talking_client):
+                logger.info('Detected dialogue - waiting for it to end.')
+                while not await is_free_leader_questing(talking_client):
+                    await asyncio.sleep(.1)
 
-        # we are still in dialogue of some fashion
-        if dialogue_text != '':
-            logger.info('Detected forced-animation dialogue.  Waiting for dialogue to end.')
-            in_dialogue = True
-            while in_dialogue:
-                while dialogue_text != '':
-                    await asyncio.sleep(1.0)
-                    dialogue_text = await self.read_dialogue_text(self.current_leader_client)
+                after_talking_paths = (exit_zafaria_class_picture_button, exit_pet_leveled_up_button_path, avalon_badge_exit_button_path)
+                await asyncio.gather(*[exit_menus(c, after_talking_paths) for c in present_clients])
+                await asyncio.sleep(.4)
 
-                logger.info('Sleeping for 10 seconds as a precaution to prevent leaving main quest behind.')
-                await asyncio.sleep(10.0)
+                # loop until we can make it 5 seconds without finding another dialogue
+                start_time = time.time()
 
-                # check dialogue again after a delay incase we only momentarily lost dialogue, but are really still talking to the NPC
-                dialogue_text = await self.read_dialogue_text(self.current_leader_client)
-                if dialogue_text == '':
-                    in_dialogue = False
+            await asyncio.sleep(.1)
 
     async def teleport_to_quest(self, hitting_client: str, follower_clients: list[Client]):
+        await asyncio.gather(*[self.leader_wait_for_free(p) for p in self.clients])
+
         if await is_free_leader_questing(self.current_leader_client):
             leader_client_objective_xyz = await self.current_leader_client.quest_position.position()
             leader_objective = await self.get_truncated_quest_objectives(self.current_leader_client)
@@ -975,15 +959,17 @@ class Quester():
                 await asyncio.gather(*[navmap_tp_leader_quest(p, leader_client_objective_xyz, leader_client=self.current_leader_client) for p in self.clients])
 
     async def handle_normal_quests(self, follower_clients: list[Client], questing_friend_tp: bool):
+        # Handles chest reroll menu, will always cancel
+        await asyncio.gather(*[safe_click_window(c, cancel_chest_roll_path) for c in self.clients])
+        # confirm exit dungeon early button
+        await asyncio.gather(*[safe_click_window(c, exit_dungeon_path) for c in self.clients])
+
+        await asyncio.gather(*[self.leader_wait_for_free(p) for p in self.clients])
+
         if await is_free_leader_questing(self.current_leader_client):
             for c in self.clients:
                 while await c.is_loading():
                     await asyncio.sleep(0.1)
-
-            # Handles chest reroll menu, will always cancel
-            await asyncio.gather(*[safe_click_window(c, cancel_chest_roll_path) for c in self.clients])
-            # confirm exit dungeon early button
-            await asyncio.gather(*[safe_click_window(c, exit_dungeon_path) for c in self.clients])
 
             current_pos = await self.current_leader_client.body.position()
 
@@ -994,7 +980,16 @@ class Quester():
                 # Handles interactables
                 sigil_msg_check = await self.read_popup(self.current_leader_client)
                 if "to enter" in sigil_msg_check.lower():
-                    logger.debug('Entering dungeon')
+                    while 'to enter' in sigil_msg_check.lower():
+                        logger.debug('Entering dungeon')
+                        await asyncio.gather(*[p.send_key(Keycode.X, 0.1) for p in self.clients])
+                        await asyncio.sleep(1.0)
+                        for c in self.clients:
+                            if await is_visible_by_path(c, dungeon_warning_path):
+                                await c.send_key(Keycode.ENTER, 0.1)
+
+                        sigil_msg_check = await self.read_popup(self.current_leader_client)
+
                     await self.handle_dungeon_entry(questing_friend_tp, follower_clients)
                 else:
                     logger.debug('Sending X press to all clients')
@@ -1002,7 +997,7 @@ class Quester():
 
                     if 'to talk' in sigil_msg_check.lower():
                         logger.debug('Talking to NPC')
-                        await self.handle_npc_talking_quests()
+                        await self.handle_npc_talking_quests(self.current_leader_client, self.clients)
 
                     # original_zone = await self.current_leader_client.zone_name()
 
@@ -1041,9 +1036,6 @@ class Quester():
                     while not await is_visible_by_path(c, missing_area_retry_path):
                         await asyncio.sleep(0.1)
                     await click_window_by_path(c, missing_area_retry_path, True)
-        # except:
-        #     # some level of error output may be required in navmap_tp, at the moment it is not producing output without traceback
-        #     print(traceback.print_exc())
 
         await asyncio.sleep(0.7)
 
@@ -1196,7 +1188,7 @@ class Quester():
                 await asyncio.gather(*[auto_pet(c, ignore_pet_level_up, play_dance_game, questing=True) for c in self.clients])
 
     async def leader_wait_for_free(self, p: Client):
-        while p.entity_detect_combat_status:
+        while not await is_free_leader_questing(p):
             await asyncio.sleep(.1)
 
     # TODO: Slay the beast
@@ -1278,11 +1270,7 @@ class Quester():
                     # attempt to fix cases where we loop through several times without completing a quest
                     await self.handle_repeated_normal_quest_failures(last_leader_pid, last_leader_zone, iterations_since_last_quest_change)
 
-                    try:
-                        await self.teleport_to_quest(hitting_client, follower_clients)
-                    except:
-                        print(traceback.print_exc())
-                        await asyncio.sleep(10000000)
+                    await self.teleport_to_quest(hitting_client, follower_clients)
 
                     await self.handle_normal_quests(follower_clients, questing_friend_tp)
                 else:
@@ -1359,14 +1347,10 @@ class Quester():
 
             distance = calc_Distance(quest_xyz, XYZ(0.0, 0.0, 0.0))
             if distance > 1:
-                try:
-                    while self.client.entity_detect_combat_status:
-                        await asyncio.sleep(.1)
+                while self.client.entity_detect_combat_status:
+                    await asyncio.sleep(.1)
 
-                    await navmap_tp(self.client, quest_xyz)
-                except:
-                    # some level of error output may be required in navmap_tp, at the moment it is not producing output without traceback
-                    print(traceback.print_exc())
+                await navmap_tp(self.client, quest_xyz)
 
                 # confirm exit dungeon early button or wait for client to exit loading
                 await self.handle_questing_zone_change()
@@ -1392,6 +1376,11 @@ class Quester():
                         for c in self.clients:
                             while await c.is_loading():
                                 await asyncio.sleep(0.1)
+                    elif 'to talk' in sigil_msg_check.lower():
+                        logger.debug('Talking to NPC')
+                        await self.client.send_key(Keycode.X, 0.1)
+                        await self.handle_npc_talking_quests(self.client, [self.client])
+
                     else:
                         await self.client.send_key(Keycode.X, 0.1)
 
@@ -1431,5 +1420,15 @@ class Quester():
 
 
 async def is_free_leader_questing(client: Client):
-    # Returns True if not in combat, loading screen, or in dialogue.
-    return not any([await client.is_loading(), await client.in_battle(), await is_visible_by_path(client, advance_dialog_path), client.entity_detect_combat_status])
+    # Returns True if not in combat, loading screen, dialogue, or forced animation dialogue.
+    dialogue_text = await read_dialogue_text(client)
+    return not any([await client.is_loading(), await client.in_battle(), await is_visible_by_path(client, advance_dialog_path), client.entity_detect_combat_status, (dialogue_text != '')])
+
+
+async def read_dialogue_text(p: Client) -> str:
+    try:
+        dialogue_text = await get_window_from_path(p.root_window, dialog_text_path)
+        txtmsg = await dialogue_text.maybe_text()
+    except:
+        txtmsg = ''
+    return txtmsg
