@@ -444,8 +444,50 @@ school_name_to_id = {'Ice': 72777, 'Sun': 78483, 'Life': 2330892, 'Fire': 234317
 school_id_to_name = {v: k for k, v in school_name_to_id.items()}
 
 opposite_school_ids = {72777: 2343174, 2330892: 78318724, 2343174: 72777, 2448141: 83375795, 78318724: 2330892, 83375795: 2448141}
+# fusing In_battle with in_fighting logic and setting it into wizwalker
+async def new_in_battle(self) -> bool:
+	"""
+	If the client is in battle or not
+	"""
+	from wizwalker import MemoryReadError, ReadingEnumFailed
+	async def get_window_from_path(root_window: Window, name_path: list[str]) -> Window:
+		# FULL CREDIT TO SIROLAF FOR THIS FUNCTION
+		async def _recurse_follow_path(window, path):
+			if len(path) == 0:
+				return window
+			for child in await window.children():
+				if await child.name() == path[0]:
+					found_window = await _recurse_follow_path(child, path[1:])
+					if not found_window is False:
+						return found_window
 
+			return False
+		return await _recurse_follow_path(root_window, name_path)
 
+	async def is_visible_by_path(path: list[str]):
+		# FULL CREDIT TO SIROLAF FOR THIS FUNCTION
+		# checks visibility of a window from the path
+		root = self.root_window
+		windows = await get_window_from_path(root, path)
+		if windows == False:
+			return False
+		elif await windows.is_visible():
+			return True
+		else:
+			return False
+
+	try:
+		duel_phase = await self.duel.duel_phase()
+	except (ReadingEnumFailed, MemoryReadError):
+		print("not in battle")
+		return False
+	else:
+		spellbook_path = ['WorldView', 'windowHUD', 'btnSpellbook']
+		check = await is_visible_by_path(spellbook_path)
+		return (not check and (duel_phase is not DuelPhase.ended))
+
+        
+Client.in_battle = new_in_battle
 
 class Fighter(CombatHandler):
 	def __init__(self, client: Client, clients: list[Client]):
@@ -549,7 +591,7 @@ class Fighter(CombatHandler):
 		"""
 		# can't use wait_for_value bc of the special in_combat condition
 		# so we don't get stuck waiting if combat ends
-		while await self.is_fighting() and self.client.combat_status:
+		while await self.client.in_battle() and self.client.combat_status:
 			new_round_number = await self.round_number()
 			if new_round_number > current_round:
 				return
@@ -561,7 +603,7 @@ class Fighter(CombatHandler):
 		"""
 		Wait until in combat
 		"""
-		await utils.wait_for_value(self.is_fighting, True, sleep_time)
+		await utils.wait_for_value(self.client.in_battle, True, sleep_time)
 		await self.handle_combat()
 		await self.client.send_key(Keycode.D, 0.1)
 
@@ -599,7 +641,7 @@ class Fighter(CombatHandler):
 		self.selected_ally = None
 		self.selected_ally_id = None
 
-		while await self.is_fighting() and self.client.combat_status:
+		while await self.client.in_battle() and self.client.combat_status:
 			await self.wait_for_planning_phase()
 			self.real_round = await self.round_number()
 			# TODO: handle this taking longer than planning timer time
@@ -1399,10 +1441,10 @@ class Fighter(CombatHandler):
 						selected_spell_logic = self.spell_logic[selected_spell]
 						# Ally Selection, if not done via playstyle mods already
 						if not selected_ally:
-							selected_ally = await self.get_selected_ally(selected_spell)
+							selected_ally = await self.get_selected_ally(selected_spell) # does spell work for any of the users school + who has the highest damage
 
-							if selected_ally is not None:
-								await self.effect_enchant_ID(selected_ally)
+							if selected_ally is not None: 
+								await self.effect_enchant_ID(selected_ally) # gets spells 
 
 								if await self.is_spell_in_hanging_effect(selected_spell) == False: # and self.client.discard_duplicate_cards: # or self.client.discard_duplicate_cards:
 									spell_selected = True
@@ -1431,8 +1473,7 @@ class Fighter(CombatHandler):
 
 									if selected_ally is not None:
 										self.selected_ally_id = await selected_ally.owner_id()
-
-								break
+										break
 							# keep track of spell incase we cannot find a valid alternative
 							# for non-team based combat, do not consider allies as an option
 							elif not self.client.automatic_team_based_combat and not self.client.discard_duplicate_cards and backup_spell is None:
@@ -1523,22 +1564,41 @@ class Fighter(CombatHandler):
 			else:
 				break
 
-	async def get_selected_ally(self, spell):
-		spiritblade = [2330892, 78318724, 2448141, 1027491821]  # list of schools [life, death, myth, balance]
-		elementalblade = [83375795, 2343174, 72777, 102749182]  # list of schools [storm, fire, ice, balance]
+	async def get_selected_ally(self, spell: CombatCard):
+
 		non_balance_uni_blade_names = ['Dark Pact']
 		selected_graphical_spell = await spell.get_graphical_spell()
 		selected_spell_school = await selected_graphical_spell.magic_school_id()
-		allies_to_compare = [a for a in self.allies if await a.is_player() == True if await self.member_participants[a].primary_magic_school_id() == selected_spell_school or self.card_names[spell] == "Spirit Blade" and await self.member_participants[a].primary_magic_school_id() in spiritblade or self.card_names[spell] == "Elemental Blade" and await self.member_participants[a].primary_magic_school_id() in elementalblade or selected_spell_school == 1027491821 or self.card_names[spell] in non_balance_uni_blade_names]
+		async def get_allies_to_compare(spell: CombatCard):
+			spiritblade = [2330892, 78318724, 2448141, 1027491821]  # list of schools [life, death, myth, balance]
+			elementalblade = [83375795, 2343174, 72777, 1027491821 ]  # list of schools [storm, fire, ice, balance]
+			compare = []
+			for ally in self.allies:
+				if await ally.is_player():
+					if await self.member_participants[ally].primary_magic_school_id() == selected_spell_school:
+						compare.append(ally)
+					elif self.card_names[spell] == "Spirit Blade" and await self.member_participants[ally].primary_magic_school_id() in spiritblade:
+						compare.append(ally)
+					elif self.card_names[spell] == "Elemental Blade" and await self.member_participants[ally].primary_magic_school_id() in elementalblade:
+						compare.append(ally)
+					elif selected_spell_school == 1027491821 and not self.card_names[spell] == "Elemental Blade" or self.card_names[spell] == "Spirit Blade":
+						compare.append(ally)
+					elif self.card_names[spell] in non_balance_uni_blade_names:
+						compare.append(ally)
+			return compare
+		allies_to_compare = await get_allies_to_compare(spell)
+	
 		if allies_to_compare:
 			max_ally_damages = {}
 			for a in allies_to_compare:
 				max_ally_damages[a] = max(self.member_damages[a])
 			# return the ally with the max damage, school matched
 			selected_ally = max(max_ally_damages, key=lambda a: max_ally_damages[a])
+			allies_to_compare_names = [await a.name() for a in allies_to_compare]
+			#print(f"{await selected_ally.name()} , {await spell.display_name()}, {allies_to_compare_names}")
 			return selected_ally
-
-		return None
+		else:
+			return None
 
 #big thanks to major for doing most of the work, & click for helping
 	#TODO not overread
