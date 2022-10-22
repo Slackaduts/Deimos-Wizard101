@@ -91,8 +91,16 @@ class Quester():
     # TODO: Does this need a client?
     async def get_quest_zone_name(self, c: Client) -> str:
         # <center>Collect Cog in Triton Avenue (0 of 3)</center>
+        # Collect Cog in Triton Avenue (0 of 3)
         # -> 'Triton Avenue'
-        s = await self.read_quest_txt(c)
+
+        query = await self.read_quest_txt(c)
+
+        stopwords = ['<center>','</center>']
+        querywords = query.split()
+        resultwords  = [word for word in querywords if word.lower() not in stopwords]
+        s = ' '.join(resultwords)
+
         res = re.findall(r"\s+in\s+([^\(]*)", s)
         if len(res) == 0:
             return ''
@@ -393,7 +401,6 @@ class Quester():
 
     async def find_quest_zone_area_name(self, client: Client, door_locations: list) -> Optional[str]:
         location = await self.get_quest_zone_name(client)
-
         location = location.lower()
         parts_of_string = location.split(" ")
         for piece in parts_of_string:
