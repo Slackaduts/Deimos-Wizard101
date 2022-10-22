@@ -18,7 +18,7 @@ from typing import List, Optional, Coroutine
 
 # from src.teleport_math import calc_Distance
 
-streamportal_locations = ["aeriel", "zanadu", "outer athanor", "inner anthanor", "sepidious", "mandalla", "chaos jungle", "reverie", "nimbus", "port aero", "husk"]
+streamportal_locations = ["aeriel", "zanadu", "outer athanor", "inner athanor", "sepidious", "mandalla", "chaos jungle", "reverie", "nimbus", "port aero", "husk"]
 nanavato_locations = ["karamelle city", "sweetzburg", "nibbleheim", "gutenstadt", "black licorice forest", "candy corn farm", "gobblerton"]
         
 async def attempt_activate_mouseless(client: Client, sleep_time: float = 0.1):
@@ -453,64 +453,62 @@ async def navigate_to_potions(client: Client):
 
 
 async def buy_potions(client: Client, recall: bool = True, original_zone=None):
-	try:
-		await client.mouse_handler.activate_mouseless()
-		await asyncio.sleep(1.0)
-		max_potions = await client.stats.potion_max()
-		# buy potions and close the potions menu, and recall if needed
-		for i in range(2):
-			original_potion_count = await client.stats.potion_charge()
-			current_potion_count = original_potion_count
+    try:
+        await asyncio.sleep(1.0)
+        max_potions = await client.stats.potion_max()
+        # buy potions and close the potions menu, and recall if needed
+        for i in range(2):
+            original_potion_count = await client.stats.potion_charge()
+            current_potion_count = original_potion_count
 
-			# buy potions until our potion count has either increased (we may not have enough gold for all potions) or we are at max potions
-			while current_potion_count == original_potion_count and current_potion_count < max_potions:
-				while not await is_visible_by_path(client, potion_shop_base_path):
-					await client.send_key(Keycode.X, 0.1)
-				await asyncio.sleep(0.5)
+            # buy potions until our potion count has either increased (we may not have enough gold for all potions) or we are at max potions
+            while current_potion_count == original_potion_count and current_potion_count < max_potions:
+                while not await is_visible_by_path(client, potion_shop_base_path):
+                    await client.send_key(Keycode.X, 0.1)
+                await asyncio.sleep(0.5)
 
-				await click_window_by_path(client, potion_fill_all_path)
-				await asyncio.sleep(0.25)
+                await click_window_by_path(client, potion_fill_all_path, True)
+                await asyncio.sleep(0.25)
 
-				await click_window_by_path(client, potion_buy_path)
-				await asyncio.sleep(0.25)
+                await click_window_by_path(client, potion_buy_path, True)
+                await asyncio.sleep(0.25)
 
-				while await is_visible_by_path(client, potion_shop_base_path):
-					await click_window_by_path(client, potion_exit_path)
-					await asyncio.sleep(0.125)
+                while await is_visible_by_path(client, potion_shop_base_path):
+                    await click_window_by_path(client, potion_exit_path, True)
+                    await asyncio.sleep(0.125)
 
-				current_potion_count = await client.stats.potion_charge()
-				await asyncio.sleep(.5)
+                current_potion_count = await client.stats.potion_charge()
+                await asyncio.sleep(.5)
 
-			if i == 0:
-				if await client.stats.potion_charge() >= 1.0:
-					original_potion_count = await client.stats.potion_charge()
+            if i == 0:
+                if await client.stats.potion_charge() >= 1.0:
+                    original_potion_count = await client.stats.potion_charge()
 
-					while await client.stats.potion_charge() == original_potion_count:
-						logger.debug(f'Client {client.title} - Using potion')
-						await click_window_by_path(client, potion_usage_path)
-						await asyncio.sleep(3.0)
+                    while await client.stats.potion_charge() == original_potion_count:
+                        logger.debug(f'Client {client.title} - Using potion')
+                        await click_window_by_path(client, potion_usage_path, True)
+                        await asyncio.sleep(3.0)
 
-		await client.mouse_handler.deactivate_mouseless()
-	except:
-		print(traceback.print_exc())
-		raise KeyboardInterrupt
+    except:
+        print(traceback.print_exc())
+        raise KeyboardInterrupt
 
-	# Put an extra check here in case Starrfox becomes a time traveller or someone is using cheat engine at 100x speed, causing this logic to somehow fail
-	if recall:
-		current_zone = await client.zone_name()
+# Put an extra check here in case Starrfox becomes a time traveller or someone is using cheat engine at 100x speed, causing this logic to somehow fail
+    if recall:
+        current_zone = await client.zone_name()
 
-		# only recall if we're actually going to a new zone
-		if original_zone != current_zone:
-			while True:
-				await client.send_key(Keycode.PAGE_UP, 0.1)
-				await client.send_key(Keycode.PAGE_UP, 0.1)
+        # only recall if we're actually going to a new zone
+        if original_zone != current_zone:
+            while True:
+                await client.send_key(Keycode.PAGE_UP, 0.1)
+                await client.send_key(Keycode.PAGE_UP, 0.1)
 
-				try:
-					await safe_wait_for_zone_change(client, name=current_zone, handle_hooks_if_needed=True)
-					break
-				# if we timed out, loop and try again
-				except LoadingScreenNotFound:
-					pass
+                try:
+                    await safe_wait_for_zone_change(client, name=current_zone, handle_hooks_if_needed=True)
+                    break
+                # if we timed out, loop and try again
+                except LoadingScreenNotFound:
+                    pass
 
 
 
