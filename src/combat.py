@@ -9,7 +9,7 @@ from wizwalker.memory.memory_objects.enums import DuelPhase, SpellEffects, Effec
 from loguru import logger
 import asyncio
 import math
-from src.utils import is_visible_by_path, get_window_from_path, attempt_activate_mouseless
+from src.utils import is_visible_by_path, get_window_from_path
 from src.paths import willcast_path
 
 
@@ -603,54 +603,42 @@ class Fighter(CombatHandler):
 			await self.wait_for_planning_phase()
 			self.real_round = await self.round_number()
 			# TODO: handle this taking longer than planning timer time
-			if not self.client.mouseless_status:
-				try:
-					await self.client.mouse_handler.activate_mouseless()
-				except:
-					pass
-				self.client.mouseless_status = True
-
-			# start = time.perf_counter()
-			await self.assign_stats()
-			self.card_exclusions = await self.get_valid_cards(None)
-			for c in self.cards:
-				c: CombatCard
-				type = await c.type_name()
-				g_spell = await c.get_graphical_spell()
-				effects = await g_spell.spell_effects()
-				# print(await c.display_name())
-				# print(await c.spell_id())
-				# for e in effects:
-				# 	name = await e.effect_type()
-				# 	print(name)
-				# print(type)
-				# print('-------------------------------------')
-			self.fizzled = await self.fizzle_detection()
-			if self.cards:
-				await self.assign_card_names()
-				await self.assign_pip_values()
-				await self.discard_unsupported()
-				await self.assign_spell_logic()
-				await self.effect_enchant_ID(self.client_member)
-				await self.enchant_all()
-				if self.client.discard_duplicate_cards:
-					await self.discard_useless()
-				else:
-					self.combat_resolver = await self.client.duel.combat_resolver()
-				await self.get_tc()
-				await self.handle_round()
-			else: 
-				logger.debug(f"Client {self.client.title} - Passing")
-				await self.pass_button()
-				self.passed = True
+			async with self.client.mouse_handler:
+				# start = time.perf_counter()
+				await self.assign_stats()
+				self.card_exclusions = await self.get_valid_cards(None)
+				for c in self.cards:
+					c: CombatCard
+					type = await c.type_name()
+					g_spell = await c.get_graphical_spell()
+					effects = await g_spell.spell_effects()
+					# print(await c.display_name())
+					# print(await c.spell_id())
+					# for e in effects:
+					# 	name = await e.effect_type()
+					# 	print(name)
+					# print(type)
+					# print('-------------------------------------')
+				self.fizzled = await self.fizzle_detection()
+				if self.cards:
+					await self.assign_card_names()
+					await self.assign_pip_values()
+					await self.discard_unsupported()
+					await self.assign_spell_logic()
+					await self.effect_enchant_ID(self.client_member)
+					await self.enchant_all()
+					if self.client.discard_duplicate_cards:
+						await self.discard_useless()
+					else:
+						self.combat_resolver = await self.client.duel.combat_resolver()
+					await self.get_tc()
+					await self.handle_round()
+				else: 
+					logger.debug(f"Client {self.client.title} - Passing")
+					await self.pass_button()
+					self.passed = True
 			# end = time.perf_counter()
 			# logger.debug(f'Turn logic took {end - start} seconds')
-			if self.client.mouseless_status:
-				try:
-					await self.client.mouse_handler.deactivate_mouseless()
-				except:
-					pass
-				self.client.mouseless_status = False
 			await self.wait_for_next_round(self.real_round)
 
 
@@ -1507,8 +1495,8 @@ class Fighter(CombatHandler):
 				self.passed = False
 			else:
 				logger.debug(f"Client {self.client.title} - Passing")
-				await attempt_activate_mouseless(self.client)
-				await self.pass_button()
+				async with self.client.mouse_handler:
+					await self.pass_button()
 				self.passed = True
 
 			# detect failed cast, only if the client is soloing and is not in pvp as to avoid issues

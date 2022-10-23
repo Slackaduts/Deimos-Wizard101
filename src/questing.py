@@ -194,50 +194,37 @@ class Quester():
                     if await is_free(c) and not c.entity_detect_combat_status:
                         # teleport to leader
                         await c.send_key(Keycode.F, 0.1)
-
-                        try:
-                            await attempt_activate_mouseless(c)
-                        except HookAlreadyActivated:
-                            print(traceback.print_exc())
-                            pass
-
-                        await asyncio.sleep(.4)
-
-                        await teleport_to_friend_from_list(c, name=self.current_leader_client.wizard_name)  # icon_list=1, icon_index=self.current_leader_client.questing_friend_teleport_icon)
-
+                        ##############################################
+                        async with c.mouse_handler:
+                            await teleport_to_friend_from_list(c, name=self.current_leader_client.wizard_name)  # icon_list=1, icon_index=self.current_leader_client.questing_friend_teleport_icon)
                         if c_zone != leader_zone:
-                            try:
-                                await safe_wait_for_zone_change(c, handle_hooks_if_needed=False)
-                            except FriendBusyOrInstanceClosed:
-                                leader_in_solo_zone = True
-                                solo_zone = await self.current_leader_client.zone_name()
+                            async with c.mouse_handler:
+                                try:
+                                    await safe_wait_for_zone_change(c, handle_hooks_if_needed=False)
+                                except FriendBusyOrInstanceClosed:
+                                    leader_in_solo_zone = True
+                                    solo_zone = await self.current_leader_client.zone_name()
 
-                                # if leader is in solo zone, others may be too - meaning the user is likely trying to quest multiple clients at the same time.  Keep track of these questing clients
-                                for p in self.clients:
-                                    if await p.zone_name() == await self.current_leader_client.zone_name():
-                                        clients_in_solo_zone.append(p)
+                                    # if leader is in solo zone, others may be too - meaning the user is likely trying to quest multiple clients at the same time.  Keep track of these questing clients
+                                    for p in self.clients:
+                                        if await p.zone_name() == await self.current_leader_client.zone_name():
+                                            clients_in_solo_zone.append(p)
 
-                                break
-                            except LoadingScreenNotFound:
-                                print(traceback.print_exc())
-                                while True:
-                                    await asyncio.sleep(1.0)
+                                    break
+                                except LoadingScreenNotFound:
+                                    print(traceback.print_exc())
+                                    while True:
+                                        await asyncio.sleep(1.0)
 
-                            was_loading = True
-
-                            await attempt_deactivate_mouseless(c)
+                                was_loading = True
 
                         else:
-                            await attempt_deactivate_mouseless(c)
-
                             await asyncio.sleep(6.0)
                             if await is_visible_by_path(c, friend_is_busy_and_dungeon_reset_path):
-                                await attempt_activate_mouseless(c)
-                                while await is_visible_by_path(c, friend_is_busy_and_dungeon_reset_path):
-                                    leader_in_solo_zone = True
-                                    await click_window_by_path(c, friend_is_busy_and_dungeon_reset_path)
-
-                                await attempt_deactivate_mouseless(c)
+                                async with c.mouse_handler:
+                                    while await is_visible_by_path(c, friend_is_busy_and_dungeon_reset_path):
+                                        leader_in_solo_zone = True
+                                        await click_window_by_path(c, friend_is_busy_and_dungeon_reset_path)
 
                                 solo_zone = await self.current_leader_client.zone_name()
 
@@ -289,7 +276,7 @@ class Quester():
 
                     if gear_switching_in_solo_zones:
                         logger.debug('Switching to second equipment set on all clients.')
-                        await asyncio.gather(*[change_equipment_set(c, 1, handle_mouseless=True) for c in clients_in_solo_zone])
+                        await asyncio.gather(*[change_equipment_set(c, 1,) for c in clients_in_solo_zone])
 
                     # loop until we have confirmed that we are no longer in a solo zone
                     while len(clients_in_solo_zone) > 0 and solo_zone is not None:
@@ -311,7 +298,7 @@ class Quester():
 
                     if gear_switching_in_solo_zones:
                         logger.debug('Switching back to first equipment set on all clients.')
-                        await asyncio.gather(*[change_equipment_set(c, 0, handle_mouseless=True) for c in initial_clients_in_solo_zone])
+                        await asyncio.gather(*[change_equipment_set(c, 0,) for c in initial_clients_in_solo_zone])
                 else:
                     maybe_solo_zone = await self.determine_solo_zone()
 
@@ -470,32 +457,29 @@ class Quester():
             while not await is_visible_by_path(c, check_spellbook_open_path):
                 await c.send_key(Keycode.ESC, 0.1)
 
-            await attempt_activate_mouseless(c)
+            async with c.mouse_handler:
+                for i in range(3):
+                    await c.mouse_handler.click_window_with_name('RealmsButton')
+                    await asyncio.sleep(.1)
 
-            for i in range(3):
-                await c.mouse_handler.click_window_with_name('RealmsButton')
-                await asyncio.sleep(.1)
+                for i in range(3):
+                    await c.mouse_handler.click_window_with_name('btnRealm' + str(6))
+                    await asyncio.sleep(.1)
 
-            for i in range(3):
-                await c.mouse_handler.click_window_with_name('btnRealm' + str(6))
-                await asyncio.sleep(.1)
+                for i in range(3):
+                    if not await c.is_loading():
+                        try:
+                            await c.mouse_handler.click_window_with_name('btnGoToRealm')
+                        except ValueError:
+                            await asyncio.sleep(.1)
+                        await asyncio.sleep(.5)
 
-            for i in range(3):
-                if not await c.is_loading():
-                    try:
-                        await c.mouse_handler.click_window_with_name('btnGoToRealm')
-                    except ValueError:
-                        await asyncio.sleep(.1)
-                    await asyncio.sleep(.5)
+                await asyncio.sleep(2.0)
+                while await c.is_loading():
+                    await asyncio.sleep(.1)
 
-            await asyncio.sleep(2.0)
-            while await c.is_loading():
-                await asyncio.sleep(.1)
-
-            if await is_visible_by_path(c, close_spellbook_path):
-                await click_window_by_path(c, close_spellbook_path)
-
-            await attempt_deactivate_mouseless(c)
+                if await is_visible_by_path(c, close_spellbook_path):
+                    await click_window_by_path(c, close_spellbook_path)
 
         for requester in self.clients:
             requester_original_position = await requester.body.position()
@@ -516,66 +500,60 @@ class Quester():
 
                         # Click a few times initially and pray it works, as wiz sometimes lies about the add friend window being visible when it isn't
 
-                        await attempt_activate_mouseless(requester)
-                        rect: Rectangle = requester.window_rectangle
-                        width = (rect.x2 - rect.x1)
-                        height = (rect.y2 - rect.y1)
-                        # Width and Height are always off by a set number - unsure if this interferes with clicking
-                        # width = abs(width + 16)
-                        # height = height - 39
-                        width = abs(width)
-                        center_x = width / 2
-                        center_y = height / 2
+                        async with requester.mouse_handler:
+                            rect: Rectangle = requester.window_rectangle
+                            width = (rect.x2 - rect.x1)
+                            height = (rect.y2 - rect.y1)
+                            # Width and Height are always off by a set number - unsure if this interferes with clicking
+                            # width = abs(width + 16)
+                            # height = height - 39
+                            width = abs(width)
+                            center_x = width / 2
+                            center_y = height / 2
 
-                        for i in range(5):
-                            await requester.mouse_handler.click(x=int(center_x), y=int(center_y), sleep_duration=0.3)
-                            await asyncio.sleep(.2)
-
-                        # friend_title = await get_friend_popup_wizard_name(requester)
-
-                        # continually click until the correct friend popup window appears
-                        # this code may never run, as reading the friend popup window is inaccurate
-                        # while friend_title != acceptor.wizard_name:
-                        #     await requester.send_key(Keycode.D, 0.3)
-                        #     await requester.mouse_handler.click(x=int(center_x), y=int(center_y), sleep_duration=0.3)
-                        #     friend_title = await get_friend_popup_wizard_name(requester)
-
-                        # Click add friend
-                        for i in range(2):
-                            if await is_visible_by_path(requester, add_remove_friend_path):
-                                await click_window_by_path(requester, add_remove_friend_path)
-
-                        # Confirm sending the request
-                        for i in range(2):
-                            if await is_visible_by_path(requester, confirm_send_friend_request):
+                            for i in range(5):
+                                await requester.mouse_handler.click(x=int(center_x), y=int(center_y), sleep_duration=0.3)
                                 await asyncio.sleep(.2)
-                                await click_window_by_path(requester, confirm_send_friend_request)
 
-                        # Wait for accept friend popup to appear
-                        for i in range(2):
-                            while not await is_visible_by_path(acceptor, confirm_accept_friend_request):
-                                await asyncio.sleep(.1)
+                            # friend_title = await get_friend_popup_wizard_name(requester)
 
-                        await attempt_activate_mouseless(acceptor)
+                            # continually click until the correct friend popup window appears
+                            # this code may never run, as reading the friend popup window is inaccurate
+                            # while friend_title != acceptor.wizard_name:
+                            #     await requester.send_key(Keycode.D, 0.3)
+                            #     await requester.mouse_handler.click(x=int(center_x), y=int(center_y), sleep_duration=0.3)
+                            #     friend_title = await get_friend_popup_wizard_name(requester)
 
-                        # Accept friend request
-                        for i in range(2):
-                            if await is_visible_by_path(acceptor, confirm_accept_friend_request):
-                                await asyncio.sleep(.4)
-                                await click_window_by_path(acceptor, confirm_accept_friend_request)
+                            # Click add friend
+                            for i in range(2):
+                                if await is_visible_by_path(requester, add_remove_friend_path):
+                                    await click_window_by_path(requester, add_remove_friend_path)
 
-                        await attempt_deactivate_mouseless(acceptor)
+                            # Confirm sending the request
+                            for i in range(2):
+                                if await is_visible_by_path(requester, confirm_send_friend_request):
+                                    await asyncio.sleep(.2)
+                                    await click_window_by_path(requester, confirm_send_friend_request)
 
-                        # Close friend window on requestor
-                        # This fails consistently, even when the friends list is actually open.  Detecting whether the friends list is open is also horrifically inconsistent so just brute force it
-                        for i in range(5):
-                            try:
-                                await click_window_by_path(requester, close_real_friend_list_button_path)
-                                await asyncio.sleep(.1)
-                            except ValueError:
-                                await asyncio.sleep(.1)
+                            # Wait for accept friend popup to appear
+                            for i in range(2):
+                                while not await is_visible_by_path(acceptor, confirm_accept_friend_request):
+                                    await asyncio.sleep(.1)
 
-                        await attempt_deactivate_mouseless(requester)
+                            async with acceptor.mouse_handler:
+                                # Accept friend request
+                                for i in range(2):
+                                    if await is_visible_by_path(acceptor, confirm_accept_friend_request):
+                                        await asyncio.sleep(.4)
+                                        await click_window_by_path(acceptor, confirm_accept_friend_request)
+                            # Close friend window on requestor
+                            # This fails consistently, even when the friends list is actually open.  Detecting whether the friends list is open is also horrifically inconsistent so just brute force it
+                                for i in range(5):
+                                    try:
+                                        await click_window_by_path(requester, close_real_friend_list_button_path)
+                                        await asyncio.sleep(.1)
+                                    except ValueError:
+                                        await asyncio.sleep(.1)
 
                         await acceptor.teleport(original_acceptor_location)
                         await acceptor.send_key(Keycode.W, 0.1)
@@ -632,20 +610,22 @@ class Quester():
         return follower_clients, client_quests
 
     async def correct_dungeon_desync(self, follower_clients):
-        for c in self.clients:
-            await attempt_activate_mouseless(c)
-
         # attempt to correct the desync by simply teleporting all clients to the leader
-        await asyncio.gather(*[teleport_to_friend_from_list(c, name=self.current_leader_client.wizard_name) for c in follower_clients])
+        async def teleport_to_friend_from_list_wizard_leader_name_mouse_handler(client):
+            async with client.mouse_handler:
+                await teleport_to_friend_from_list(client, name=self.current_leader_client.wizard_name)
+
+        await asyncio.gather(*[teleport_to_friend_from_list_wizard_leader_name_mouse_handler(c) for c in follower_clients])
 
         await asyncio.sleep(1.5)
 
         # this may fail - some zones cannot be teleported to even if they have public sigils - detect whether this zone is locked off to teleports
         teleport_banned_zone = False
         for c in self.clients:
-            while await is_visible_by_path(c, friend_is_busy_and_dungeon_reset_path):
-                await click_window_by_path(c, friend_is_busy_and_dungeon_reset_path)
-                teleport_banned_zone = True
+                while await is_visible_by_path(c, friend_is_busy_and_dungeon_reset_path):
+                    async with c.mouse_handler:
+                        await click_window_by_path(c, friend_is_busy_and_dungeon_reset_path)
+                    teleport_banned_zone = True
 
         await asyncio.sleep(.5)
 
@@ -654,7 +634,7 @@ class Quester():
         if teleport_banned_zone:
             logger.debug('Friend teleport correction for dungeon desync failed - sending all clients to hub and retrying teleport')
             await self.zone_recorrect_hub()
-            await asyncio.gather(*[teleport_to_friend_from_list(c, name=self.current_leader_client.wizard_name) for c in follower_clients])
+            await asyncio.gather(*[teleport_to_friend_from_list_wizard_leader_name_mouse_handler(c) for c in follower_clients])
 
             await asyncio.sleep(5.0)
             for c in self.clients:
@@ -666,8 +646,6 @@ class Quester():
                 while await c.is_loading():
                     await asyncio.sleep(.1)
 
-        for c in self.clients:
-            await attempt_deactivate_mouseless(c)
 
     async def auto_collect_rewrite(self, client: Client):
         quest_item_list = await self.get_collect_quest_object_name()
@@ -1327,12 +1305,11 @@ class Quester():
 
     async def handle_questing_zone_change(self):
         if await is_visible_by_path(self.client, exit_dungeon_path):
-            await attempt_activate_mouseless(self.client)
-            await asyncio.sleep(1.0)
-            await click_window_by_path(self.client, exit_dungeon_path)
-            await self.client.wait_for_zone_change()
-            await asyncio.sleep(1.0)
-            await attempt_deactivate_mouseless(self.client)
+            async with self.client.mouse_handler:
+                await asyncio.sleep(1.0)
+                await click_window_by_path(self.client, exit_dungeon_path)
+                await self.client.wait_for_zone_change()
+                await asyncio.sleep(1.0)
         else:
             while await self.client.is_loading():
                 await asyncio.sleep(.1)

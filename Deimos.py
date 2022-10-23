@@ -431,23 +431,13 @@ async def friend_teleport_sync(clients : list[wizwalker.Client], debug: bool):
 	if debug:
 		logger.debug(f'{friend_teleport_key} key pressed, friend teleporting all clients to p1.')
 	child_clients = clients[1:]
-	try:
-		await asyncio.gather(*[p.mouse_handler.activate_mouseless() for p in child_clients])
-		for p in child_clients:
-			p.mouseless_status = True
-	except:
-		await asyncio.sleep(0)
-	await asyncio.sleep(0.25)
-	try:
-		[await teleport_to_friend_from_list(client=p, icon_list=1, icon_index=50) for p in child_clients]
-	except:
-		await asyncio.sleep(0)
-	try:
-		await asyncio.gather(*[p.mouse_handler.deactivate_mouseless() for p in child_clients])
-		for p in child_clients:
-			p.mouseless_status = True
-	except:
-		await asyncio.sleep(0)
+	for p in child_clients:
+		async with p.mouse_handler:
+			try:
+				await teleport_to_friend_from_list(client=p, icon_list=1, icon_index=50)
+			except:
+				asyncio.sleep(0)
+
 
 
 async def kill_tool(debug: bool):
@@ -490,12 +480,6 @@ async def main():
 				await camera.write_zoom_resolution(150.0)
 
 			await p.body.write_scale(1.0)
-
-			try:
-				await p.mouse_handler.deactivate_mouseless()
-				p.mouseless_status = False
-			except:
-				await asyncio.sleep(0)
 
 		await listener.clear()
 		for p in walker.clients:
@@ -1793,7 +1777,6 @@ async def main():
 		p.auto_pet_status = False
 		p.feeding_pet_status = False
 		p.use_team_up = use_team_up
-		p.mouseless_status = False
 		p.dance_hook_status = False
 		p.entity_detect_combat_status = False
 		p.invincible_combat_timer = False

@@ -10,7 +10,7 @@ from wizwalker.memory import HookHandler, SimpleHook
 from src.dance_game_hook import attempt_activate_dance_hook, attempt_deactivate_dance_hook
 from src.paths import *
 from src.teleport_math import navmap_tp_leader_quest
-from src.utils import navigate_to_ravenwood, click_window_by_path, is_visible_by_path, navigate_to_commons_from_ravenwood, post_keys, get_window_from_path, safe_wait_for_zone_change, LoadingScreenNotFound, FriendBusyOrInstanceClosed, get_popup_title, attempt_activate_mouseless, attempt_deactivate_mouseless
+from src.utils import navigate_to_ravenwood, click_window_by_path, is_visible_by_path, navigate_to_commons_from_ravenwood, post_keys, get_window_from_path, safe_wait_for_zone_change, LoadingScreenNotFound, FriendBusyOrInstanceClosed, get_popup_title
 
 _dance_moves_transtable = str.maketrans("abcd", "WDSA")
 
@@ -34,7 +34,6 @@ async def navigate_to_dance_game(cl: Client):
 async def nomnom(client: Client, ignore_pet_level_up: bool, only_play_dance_game: bool):
     finished_feeding = False
     dance_hook_activated = False
-    mouseless_active = False
 
     while not finished_feeding:
         popup_title = await get_popup_title(client)
@@ -52,10 +51,6 @@ async def nomnom(client: Client, ignore_pet_level_up: bool, only_play_dance_game
             await asyncio.sleep(.125)
 
         client.feeding_pet_status = True
-
-        if not mouseless_active:
-            mouseless_active = True
-            await attempt_activate_mouseless(client)
         # click until feeder opens
         # while await client.is_in_npc_range():
         #     await client.send_key(Keycode.X, 0.1)
@@ -92,7 +87,8 @@ async def nomnom(client: Client, ignore_pet_level_up: bool, only_play_dance_game
                 # click skip game button until window changes
                 while await is_visible_by_path(client, pet_feed_window_visible_path):
                     if await is_visible_by_path(client, skip_pet_game_button_path):
-                        await click_window_by_path(client, skip_pet_game_button_path)
+                        async with client.mouse_handler:
+                            await click_window_by_path(client, skip_pet_game_button_path)
                         await asyncio.sleep(.2)
 
                 # wait for reward window to show up
@@ -101,17 +97,20 @@ async def nomnom(client: Client, ignore_pet_level_up: bool, only_play_dance_game
 
                 # click 'Next' button
                 if await is_visible_by_path(client, skipped_pet_game_continue_and_feed_button_path):
-                    await click_window_by_path(client, skipped_pet_game_continue_and_feed_button_path)
+                    async with client.mouse_handler:
+                        await click_window_by_path(client, skipped_pet_game_continue_and_feed_button_path)
                     await asyncio.sleep(1.5)
 
                 # click first snack
                 if await is_visible_by_path(client, skipped_first_pet_snack_path):
-                    await click_window_by_path(client, skipped_first_pet_snack_path)
+                    async with client.mouse_handler:
+                        await click_window_by_path(client, skipped_first_pet_snack_path)
                     await asyncio.sleep(.6)
 
                     # Click 'Feed Pet'
                     if await is_visible_by_path(client, skipped_pet_game_continue_and_feed_button_path):
-                        await click_window_by_path(client, skipped_pet_game_continue_and_feed_button_path)
+                        async with client.mouse_handler:
+                            await click_window_by_path(client, skipped_pet_game_continue_and_feed_button_path)
                         await asyncio.sleep(1.0)
 
                         # Handle what happens when the pet levels up
@@ -119,24 +118,18 @@ async def nomnom(client: Client, ignore_pet_level_up: bool, only_play_dance_game
                         # otherwise, leave it up and force user to close it themselves
                         if await is_visible_by_path(client, skipped_pet_leveled_up_window_path):
                             if not ignore_pet_level_up:
-                                if mouseless_active:
-                                    mouseless_active = False
-                                    await attempt_deactivate_mouseless(client)
                                 logger.info('Auto Pet - Client ' + client.title + '\'s pet leveled uclient.  Please close the window to continue, or exit Deimos if you wish to stop questing.')
                                 logger.info('These pauses can be disabled in the config file by setting ignore_pet_level_up = True')
 
                                 # wait for the user to realize their pet leveled up and wait for them to manually close the window
                                 while await is_visible_by_path(client, skipped_pet_leveled_up_window_path):
                                     await asyncio.sleep(1.0)
-
-                                if not mouseless_active:
-                                    mouseless_active = True
-                                    await attempt_activate_mouseless(client)
                             else:
                                 # while pet leveled up window is open, continually click exit button
                                 while await is_visible_by_path(client, skipped_pet_leveled_up_window_path):
                                     if await is_visible_by_path(client, exit_skipped_pet_leveled_up_path):
-                                        await click_window_by_path(client, exit_skipped_pet_leveled_up_path)
+                                        async with client.mouse_handler:
+                                            await click_window_by_path(client, exit_skipped_pet_leveled_up_path)
                                         await asyncio.sleep(.2)
 
                         # wait for final screen
@@ -145,7 +138,8 @@ async def nomnom(client: Client, ignore_pet_level_up: bool, only_play_dance_game
 
                         # click 'Finish' button to exit all the way out
                         while await is_visible_by_path(client, skipped_finish_pet_button):
-                            await click_window_by_path(client, skipped_finish_pet_button)
+                            async with client.mouse_handler:
+                                await click_window_by_path(client, skipped_finish_pet_button)
                             await asyncio.sleep(.2)
 
                         # wait for reward screen to close
@@ -163,22 +157,19 @@ async def nomnom(client: Client, ignore_pet_level_up: bool, only_play_dance_game
                 while await is_visible_by_path(client, pet_feed_window_visible_path):
                     # click wizard city game
                     if await is_visible_by_path(client, wizard_city_dance_game_path):
-                        await click_window_by_path(client, wizard_city_dance_game_path)
+                        async with client.mouse_handler:
+                            await click_window_by_path(client, wizard_city_dance_game_path)
                         await asyncio.sleep(.2)
 
                     # click play
                     if await is_visible_by_path(client, play_dance_game_button_path):
-                        await click_window_by_path(client, play_dance_game_button_path)
+                        async with client.mouse_handler:
+                            await click_window_by_path(client, play_dance_game_button_path)
                         await asyncio.sleep(.1)
 
                 # automatic success method
                 # play the dance game and win it
                 await dancedance(client)
-
-                # automatic failure method
-                # while not await is_visible_by_path(client, won_pet_game_rewards_window_path):
-                #     await client.send_key(Keycode.D)
-                #     await asyncio.sleep(.2)
 
                 # if we leveled up from the small amount of XP the pet game gave us, account for it
                 if await is_visible_by_path(client, won_pet_leveled_up_window_path):
@@ -186,12 +177,14 @@ async def nomnom(client: Client, ignore_pet_level_up: bool, only_play_dance_game
                 # else:
                 # click 'Next'
                 if await is_visible_by_path(client, won_pet_game_continue_and_feed_button_path):
-                    await click_window_by_path(client, won_pet_game_continue_and_feed_button_path)
+                    async with client.mouse_handler:
+                        await click_window_by_path(client, won_pet_game_continue_and_feed_button_path)
                     await asyncio.sleep(1.5)
 
                 # click first snack
                 if await is_visible_by_path(client, won_first_pet_snack_path):
-                    await click_window_by_path(client, won_first_pet_snack_path)
+                    async with client.mouse_handler:
+                        await click_window_by_path(client, won_first_pet_snack_path)
                     await asyncio.sleep(.6)
 
                     # Click 'Feed Pet'
@@ -207,7 +200,8 @@ async def nomnom(client: Client, ignore_pet_level_up: bool, only_play_dance_game
 
                         # click 'Finish'
                         while await is_visible_by_path(client, won_finish_pet_button):
-                            await click_window_by_path(client, won_finish_pet_button)
+                            async with client.mouse_handler:
+                                await click_window_by_path(client, won_finish_pet_button)
                             await asyncio.sleep(.2)
 
                         # wait for reward screen to close
@@ -225,11 +219,9 @@ async def nomnom(client: Client, ignore_pet_level_up: bool, only_play_dance_game
     # feed window may still be open, close it
     while await is_visible_by_path(client, pet_feed_window_visible_path):
         if await is_visible_by_path(client, pet_feed_window_cancel_button_path):
-            await click_window_by_path(client, pet_feed_window_cancel_button_path)
+            async with client.mouse_handler:
+                await click_window_by_path(client, pet_feed_window_cancel_button_path)
             await asyncio.sleep(.2)
-
-    if mouseless_active:
-        await attempt_deactivate_mouseless(client)
 
     if dance_hook_activated:
         logger.debug('Client ' + client.title + ': Deactivating dance game hook.')
@@ -265,24 +257,23 @@ async def dancedance(client: Client):
 
 
 async def won_game_leveled_up(client: Client, auto_pet_ignore_pet_level_up):
-    await click_window_by_path(client, won_pet_game_continue_and_feed_button_path)
+    async with client.mouse_handler:
+        await click_window_by_path(client, won_pet_game_continue_and_feed_button_path)
     await asyncio.sleep(1.0)
     if await is_visible_by_path(client, won_pet_leveled_up_window_path):
         if not auto_pet_ignore_pet_level_up:
-            await client.mouse_handler.deactivate_mouseless()
             logger.info('Auto Pet - Client ' + client.title + '\'s pet leveled up.  Please close the window to continue, or exit Deimos if you wish to stop questing.')
             logger.info('These pauses can be disabled in the config file by setting auto_pet_ignore_pet_level_up = True')
 
             # wait for the user to realize their pet leveled up and wait for them to manually close the window
             while await is_visible_by_path(client, won_pet_leveled_up_window_path):
                 await asyncio.sleep(1.0)
-
-            await client.mouse_handler.activate_mouseless()
         else:
             # while pet leveled up window is open, continually click exit button
             while await is_visible_by_path(client, won_pet_leveled_up_window_path):
                 if await is_visible_by_path(client, exit_won_pet_leveled_up_path):
-                    await click_window_by_path(client, exit_won_pet_leveled_up_path)
+                    async with client.mouse_handler:
+                        await click_window_by_path(client, exit_won_pet_leveled_up_path)
                     await asyncio.sleep(.2)
 
 
