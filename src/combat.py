@@ -1369,7 +1369,6 @@ class Fighter(CombatHandler):
 			backup_selected_ally_id = None
 			backup_selected_ally = None
 			for t in strategy:
-				print(f"{await self.client.client_object.display_name()} strat {t}")
 				for c in castable_cards:
 					if c in self.spell_logic:
 						c_spell_logic = self.spell_logic[c]
