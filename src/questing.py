@@ -158,10 +158,10 @@ class Quester():
         return questing_clients
 
     # get a dict of client quests for clients that are on the same quest as the leader, including the leader
-    async def get_client_quests(self) -> dict[Client, str]:
+    async def get_client_quests(self, questing_clients: list[Client]) -> dict[Client, str]:
         client_quests = {}
 
-        for c in await self.get_questing_clients():
+        for c in questing_clients:
             quest_objective = await self.get_truncated_quest_objectives(c)
             client_quests[c] = quest_objective
 
@@ -579,35 +579,35 @@ class Quester():
         return player_count
 
     async def determine_new_leader_and_followers(self, client_quests: dict, questing_clients: list[Client],
-                                                 follower_clients: list[Client]) -> tuple[list[Client], dict[Client, str]]:
-        original_length = len(client_quests)
-        if len(client_quests) > 0:
-            for c in questing_clients:
-                if c in client_quests:
-                    if await self.get_truncated_quest_objectives(c) != client_quests.get(c):
-                        client_quests.pop(c)
+                                                    follower_clients: list[Client]) -> tuple[list[Client], dict[Client, str]]:
+            original_length = len(client_quests)
+            if len(client_quests) > 0:
+                for c in questing_clients:
+                    if c in client_quests:
+                        if await self.get_truncated_quest_objectives(c) != client_quests.get(c):
+                            client_quests.pop(c)
 
-            # if all clients have moved on from their previous quest
-            if len(client_quests) == 0:
-                # pass leader back to original leader client
-                if self.current_leader_client.title != self.client.title:
-                    logger.debug('Clients caught up - resetting leader to client ' + self.client.title)
-                    self.current_leader_client = self.client
-                    self.current_leader_pid = self.client.process_id
+                # if all clients have moved on from their previous quest
+                if len(client_quests) == 0:
+                    # pass leader back to original leader client
+                    if self.current_leader_client.title != self.client.title:
+                        logger.debug('Clients caught up - resetting leader to client ' + self.client.title)
+                        self.current_leader_client = self.client
+                        self.current_leader_pid = self.client.process_id
+                        follower_clients = await self.get_follower_clients()
+
+                    client_quests = await self.get_client_quests(questing_clients=questing_clients)
+
+                elif len(client_quests) < original_length:
+                    # pass leader to next client in dict
+                    logger.debug('client(s) fell behind - new leader ' + list(client_quests)[0].title + ' assigned')
+                    self.current_leader_client = list(client_quests)[0]
+                    self.current_leader_pid = self.current_leader_client.process_id
                     follower_clients = await self.get_follower_clients()
+            else:
+                client_quests = await self.get_client_quests(questing_clients=questing_clients)
 
-                client_quests = await self.get_client_quests()
-
-            elif len(client_quests) < original_length:
-                # pass leader to next client in dict
-                logger.debug('client(s) fell behind - new leader ' + list(client_quests)[0].title + ' assigned')
-                self.current_leader_client = list(client_quests)[0]
-                self.current_leader_pid = self.current_leader_client.process_id
-                follower_clients = await self.get_follower_clients()
-        else:
-            client_quests = await self.get_client_quests()
-
-        return follower_clients, client_quests
+            return follower_clients, client_quests
 
     async def correct_dungeon_desync(self, follower_clients):
         # attempt to correct the desync by simply teleporting all clients to the leader
@@ -664,7 +664,8 @@ class Quester():
                     object_template = await e.object_template()  # gets entity template
                     display_name_code = await object_template.display_name()  # gets display name code
                     display_name = await self.client.cache_handler.get_langcode_name(display_name_code)  # uses display name code to get display name text
-                    match = fuzz.ratio(display_name.lower(), quest_item_list.lower())  # fuzzywuzzy check if display name matches quest item.
+                    
+                    match = fuzz.token_sort_ratio(display_name.lower(), quest_item_list.lower())  # fuzzywuzzy check if display name matches quest item.
                     print(display_name + ' : ' + str(match))
 
                     if match > 80:  # if strings match greater than 80 it means that it's most likely the item
@@ -1203,7 +1204,7 @@ class Quester():
         maybe_solo_zone = await self.determine_solo_zone()
 
         # leader and follower clients can dynamically change during auto questing to account for clients being left behind
-        client_quests = await self.get_client_quests()
+        client_quests = await self.get_client_quests(questing_clients=questing_clients)
 
         # just for providing info to the user in the log statement
         if len(client_quests) > 0:
