@@ -24,7 +24,8 @@ GOLEM_ENCHANT = frozenset(['Golem: Taunt'])
 # Auras
 HIT_AURAS = frozenset(['Virulence', 'Frenzy', 'Berserk', 'Flawless', 'Infallible', 'Amplify', 'Magnify', 'Vengeance', 'Chastisement', 'Devotion', 'Furnace', 'Galvanic Field', 'Punishment', 'Reliquary', 'Sleet Storm', 'Reinforce', 'Eruption', 'Acrimony', 'Outpouring', 'Apologue', 'Rage', 'Intensify', 'Icewind', 'Recompense', 'Upheaval', 'Quicken'])
 DEFENSE_AURAS = frozenset(['Fortify', 'Brace', 'Bulwark', 'Conviction'])
-HEAL_AURAS = frozenset(['Cycle of Life', 'Mend', 'Renew', 'Empowerment', 'Adapt'])
+HEAL_AURAS = frozenset(['Cycle of Life', 'Mend', 'Renew'])
+PIP_AURAS = frozenset(['Empowerment', 'Adapt'])
 
 # Shields
 SELECT_SHIELDS = frozenset(['Bracing Frost', 'Bracing Wind',  'Bracing Breeze', 'Borrowed Time', 'Ancient Wraps', 'Aegis of Artemis', 'Frozen Armor', 'Tower Shield', 'Death Shield', 'Life Shield', 'Myth Shield', 'Fire Shield', 'Ice Shield', 'Storm Shield', 'Dream Shield', 'Legend Shield', 'Elemental Shield', 'Spirit Shield', 'Shadow Shield', 'Glacial Shield', 'Volcanic Shield', 'Ether Shield', 'Thermic Shield'])
@@ -181,6 +182,7 @@ pvp_no_enchant_logic_list = [
 
 # Assigns a casting logic to a spell's origin set
 casting_logic_dict = {
+    PIP_AURAS: 'AOE Pip Aura',
 	SELECT_RESHUFFLE: 'Ally Select Reshuffle',
 	HIT_ENCHANTS: 'Hit Enchant',
 	HEAL_ENCHANTS: 'Heal Enchant',
@@ -309,8 +311,8 @@ DAMAGE_TYPE_SCHOOLS = [
 ]
 
 # define the master hitting strategy
-master_strategy = ['AOE Golem Minion', 'Ally Select Blade', 'Enemy Select Trap', 'AOE Minion', 'AOE Global', 'AOE Blade', 'AOE Trap', 'AOE Hit Aura','AOE Golem Minion', 'Ally Select Blade', 'Enemy Select Trap', 'AOE Minion', 'AOE Global', 'AOE Blade', 'AOE Trap', 'AOE Hit Aura', 'AOE Offensive Shadow Creature', 'AOE DOT', 'AOE Hit', 'Enemy Select DOT', 'Enemy Select Hit', 'Enemy Select Hit Divide', 'AOE Polymorph']
-mob_strategy = ['AOE DOT', 'AOE Hit', 'Enemy Select DOT', 'Enemy Select Hit', 'Enemy Select Hit Divide', 'AOE Hit Aura', 'AOE Trap', 'AOE Global', 'AOE Blade','AOE Golem Minion' ,'AOE Minion', 'AOE Offensive Shadow Creature', 'AOE Polymorph']
+master_strategy = ['AOE Pip Aura', 'AOE Golem Minion', 'Ally Select Blade', 'Enemy Select Trap', 'AOE Minion', 'AOE Global', 'AOE Blade', 'AOE Trap', 'AOE Hit Aura','AOE Golem Minion', 'Ally Select Blade', 'Enemy Select Trap', 'AOE Minion', 'AOE Global', 'AOE Blade', 'AOE Trap', 'AOE Hit Aura', 'AOE Offensive Shadow Creature', 'AOE DOT', 'AOE Hit', 'Enemy Select DOT', 'Enemy Select Hit', 'Enemy Select Hit Divide', 'AOE Polymorph']
+mob_strategy = ['AOE DOT', 'AOE Hit', 'Enemy Select DOT', 'Enemy Select Hit', 'Enemy Select Hit Divide', 'AOE Pip Aura', 'AOE Hit Aura', 'AOE Trap', 'AOE Global', 'AOE Blade','AOE Golem Minion' ,'AOE Minion', 'AOE Offensive Shadow Creature', 'AOE Polymorph']
 pvp_strategy = ['Ally Select Stun Block', 'AOE Global', 'AOE Defense Aura', 'AOE Offensive Shadow Creature', 'AOE DOT', 'AOE Hit', 'Enemy Select DOT', 'Enemy Select Hit', 'Enemy Select Hit Divide']
 
 # Basic types
@@ -322,7 +324,7 @@ prism_types = ['AOE Prism', 'Enemy Select Prism']
 minion_types = ['AOE Minion', 'AOE Golem Minion']
 minion_utility_types = ['Ally Select Minion Utility', 'Ally Select Pacify', 'AOE Pacify', 'AOE Taunt']
 global_types = ['AOE Global']
-buff_types = ['Ally Select Blade', 'Enemy Select Trap', 'AOE Minion', 'AOE Global', 'AOE Blade', 'AOE Trap', 'AOE Hit Aura', 'AOE Offensive Shadow Creature']
+buff_types = ['AOE Pip Aura', 'Ally Select Blade', 'Enemy Select Trap', 'AOE Minion', 'AOE Global', 'AOE Blade', 'AOE Trap', 'AOE Hit Aura', 'AOE Offensive Shadow Creature']
 
 # Utilities for negative types
 weakness_counter_types = ['Ally Select Weakness Counter Utility', 'AOE Weakness Counter Utility', 'Enemy Select Wand Hit']
@@ -444,50 +446,6 @@ school_name_to_id = {'Ice': 72777, 'Sun': 78483, 'Life': 2330892, 'Fire': 234317
 school_id_to_name = {v: k for k, v in school_name_to_id.items()}
 
 opposite_school_ids = {72777: 2343174, 2330892: 78318724, 2343174: 72777, 2448141: 83375795, 78318724: 2330892, 83375795: 2448141}
-# fusing In_battle with in_fighting logic and setting it into wizwalker
-async def new_in_battle(self) -> bool:
-	"""
-	If the client is in battle or not
-	"""
-	from wizwalker import MemoryReadError, ReadingEnumFailed
-	async def get_window_from_path(root_window: Window, name_path: list[str]) -> Window:
-		# FULL CREDIT TO SIROLAF FOR THIS FUNCTION
-		async def _recurse_follow_path(window, path):
-			if len(path) == 0:
-				return window
-			for child in await window.children():
-				if await child.name() == path[0]:
-					found_window = await _recurse_follow_path(child, path[1:])
-					if not found_window is False:
-						return found_window
-
-			return False
-		return await _recurse_follow_path(root_window, name_path)
-
-	async def is_visible_by_path(path: list[str]):
-		# FULL CREDIT TO SIROLAF FOR THIS FUNCTION
-		# checks visibility of a window from the path
-		root = self.root_window
-		windows = await get_window_from_path(root, path)
-		if windows == False:
-			return False
-		elif await windows.is_visible():
-			return True
-		else:
-			return False
-
-	try:
-		duel_phase = await self.duel.duel_phase()
-	except (ReadingEnumFailed, MemoryReadError):
-		print("not in battle")
-		return False
-	else:
-		spellbook_path = ['WorldView', 'windowHUD', 'btnSpellbook']
-		check = await is_visible_by_path(spellbook_path)
-		return (not check and (duel_phase is not DuelPhase.ended))
-
-        
-Client.in_battle = new_in_battle
 
 class Fighter(CombatHandler):
 	def __init__(self, client: Client, clients: list[Client]):
@@ -1411,6 +1369,7 @@ class Fighter(CombatHandler):
 			backup_selected_ally_id = None
 			backup_selected_ally = None
 			for t in strategy:
+				print(f"{await self.client.client_object.display_name()} strat {t}")
 				for c in castable_cards:
 					if c in self.spell_logic:
 						c_spell_logic = self.spell_logic[c]
