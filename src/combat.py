@@ -12,7 +12,6 @@ import math
 from src.utils import is_visible_by_path, get_window_from_path
 from src.paths import willcast_path
 
-
 # Enchants
 HIT_ENCHANTS = frozenset(['Strong', 'Giant', 'Monstrous', 'Gargantuan', 'Colossal', 'Epic', 'Keen Eyes', 'Accurate', 'Sniper', 'Unstoppable', 'Extraordinary', 'Solar Surge', 'Extract Undead', 'Extract Gobbler', 'Extract Mander', 'Extract Spider', 'Extract Colossus', 'Extract Cyclops', 'Extract Golems', 'Extract Draconians', 'Extract Treant', 'Extract Imp', 'Extract Pig', 'Extract Elephant', 'Extract Wyrm', 'Extract Wyrm', 'Extract Dinos', 'Extract Parrot', 'Extract Insects', "Extract Polar Bear"])
 HEAL_ENCHANTS = frozenset(['Primordial', 'Radical'])
@@ -1527,8 +1526,9 @@ class Fighter(CombatHandler):
 						compare.append(ally)
 					elif self.card_names[spell] == "Elemental Blade" and await self.member_participants[ally].primary_magic_school_id() in elementalblade:
 						compare.append(ally)
-					elif selected_spell_school == 1027491821 and not self.card_names[spell] == "Elemental Blade" or self.card_names[spell] == "Spirit Blade":
-						compare.append(ally)
+					elif selected_spell_school == 1027491821:
+						if not self.card_names[spell] == "Elemental Blade" and not self.card_names[spell] == "Spirit Blade":
+							compare.append(ally)
 					elif self.card_names[spell] in non_balance_uni_blade_names:
 						compare.append(ally)
 			return compare
