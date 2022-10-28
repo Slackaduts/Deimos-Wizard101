@@ -468,72 +468,6 @@ class Fighter(CombatHandler):
 
 
 	@logger.catch()
-	async def new_cast(
-			self,
-			target: Union["CombatCard", "wizwalker.combat.CombatMember", None],
-			*,
-			sleep_time: Optional[float] = 1.0,
-			debug_paint: bool = True,
-		):
-			"""
-			Cast this Card on another Card; a Member or with no target
-			Args:
-				target: Card, Member, or None if there is no target
-				sleep_time: How long to sleep after enchants and between multicasts or None for no sleep
-				debug_paint: If the card should be highlighted before clicking
-			"""
-			if isinstance(target, CombatCard):
-				cards_len_before = len(await self.combat_handler.get_cards())
-
-				await self.combat_handler.client.mouse_handler.click_window(
-					self._spell_window
-				)
-
-				await asyncio.sleep(sleep_time)
-
-				await self.combat_handler.client.mouse_handler.set_mouse_position_to_window(
-					target._spell_window
-				)
-
-				await asyncio.sleep(sleep_time)
-
-				if debug_paint:
-					await target._spell_window.debug_paint()
-
-				await self.combat_handler.client.mouse_handler.click_window(
-					target._spell_window
-				)
-
-				# wait until card number goes down
-				while len(await self.combat_handler.get_cards()) > cards_len_before:
-					await asyncio.sleep(0.1)
-
-				# wiz can't keep up with how fast we can cast
-				if sleep_time is not None:
-					await asyncio.sleep(sleep_time)
-
-			elif target is None:
-				await self.combat_handler.client.mouse_handler.click_window(
-					self._spell_window
-				)
-				# we don't need to sleep because nothing will be casted after
-
-			else:
-				await self.combat_handler.client.mouse_handler.click_window(
-					self._spell_window
-				)
-
-				# see above
-				if sleep_time is not None:
-					await asyncio.sleep(sleep_time)
-
-				await self.combat_handler.client.mouse_handler.click_window(
-					await target.get_name_text_window())
-
-	CombatCard.cast = new_cast
-
-
-	@logger.catch()
 	async def is_fighting(self):
 		'''New accurate check for if we're in combat, using spellbook visibility'''
 		spellbook_path = ['WorldView', 'windowHUD', 'btnSpellbook']
@@ -1442,6 +1376,8 @@ class Fighter(CombatHandler):
 		#cards = [ele for ele in self.cards if ele not in self.removed_spells]
 
 		self.bypass_strategy_to_kill, self.can_kill = await self.damage_calc_handle_round(self.cards)
+		if self.bypass_strategy_to_kill:
+			print(f" debug bypass Client {self.client.title} - Casting {self.card_names[self.bypass_strategy_to_kill]}")
 		# print(self.can_kill)
 		self.prev_card_count = len(await self.get_cards()) + (await self.get_card_counts())[0] # gets card amount after enchants and discards
 		# update previously used spell types, and those that aren't purely done by conditionals
@@ -1472,6 +1408,7 @@ class Fighter(CombatHandler):
 		# Casting logic
 		while True:
 			if self.selected_spell:
+				print(f" debug Client {self.client.title} - Casting {self.card_names[self.selected_spell]}")
 				selected_spell_logic = self.spell_logic[self.selected_spell]
 				if 'AOE' in selected_spell_logic:
 					logger.debug(f"Client {self.client.title} - Casting {self.card_names[self.selected_spell]}")
