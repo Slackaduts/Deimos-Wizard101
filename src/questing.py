@@ -985,34 +985,9 @@ class Quester():
                         await self.handle_npc_talking_quests(self.current_leader_client, self.clients)
                         
                     elif 'magic raft' in msg or 'to ride' in msg or 'to teleport' in msg:
-                        async def stagger_send_key(clients: list[Client]):
-                            #to use
-                            #to ride
-                            stagger_count = 0
-                            for client in clients:
-                                sigil_msg_check = await self.read_popup(client)
-                                if sigil_msg_check:
-                                    msg = sigil_msg_check.lower()
-                                    #not 'to talk' in msg and not 'to open' in msg and not 'to collect' in msg and not 'to free' in msg and not 'to place' in msg
-                                    if 'magic raft' in msg or 'to ride' in msg or 'to teleport' in msg:
-                                        stagger_count +=1
-                            if not stagger_count == len(clients):
-                                await asyncio.gather(*[p.send_key(Keycode.X, 0.1) for p in self.clients])
-                                return
-                            else:
-                                logger.debug('Staggering X key sends')
-                                for client in clients:
-                                    zone_name = await client.zone_name()
-                                    while zone_name == await client.zone_name():
-                                        sigil_msg_check = await self.read_popup(client)
-                                        if sigil_msg_check:
-                                            msg = sigil_msg_check.lower()
-                                            if 'magic raft' in msg or 'to ride' in msg or 'to teleport' in msg:
-                                                await client.send_key(Keycode.X, 0.1)
-                                        while await client.is_loading():
-                                            await asyncio.sleep(0.1)
-                                            
-                        await stagger_send_key(self.clients)
+                        await self.current_leader_client.send_key(Keycode.X, 0.1)
+                        await asyncio.sleep(1.0)
+                        await asyncio.gather(*[p.send_key(Keycode.X, 0.1) for p in self.clients])
                     else:
                         await asyncio.gather(*[p.send_key(Keycode.X, 0.1) for p in self.clients])
 
