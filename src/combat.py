@@ -467,7 +467,7 @@ class Fighter(CombatHandler):
 				return []
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def is_fighting(self):
 		'''New accurate check for if we're in combat, using spellbook visibility'''
 		spellbook_path = ['WorldView', 'windowHUD', 'btnSpellbook']
@@ -475,7 +475,7 @@ class Fighter(CombatHandler):
 		return (not check and await self.client.in_battle())
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def wait_for_next_round(self, current_round: int, sleep_time: float = 0.5):
 		"""
 		Wait for the round number to change
@@ -489,13 +489,22 @@ class Fighter(CombatHandler):
 			await asyncio.sleep(sleep_time)
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def wait_for_combat(self, sleep_time: float = 0.5):
 		"""
 		Wait until in combat
 		"""
 		await utils.wait_for_value(self.client.in_battle, True, sleep_time)
-		await self.handle_combat()
+		self.error = False
+		while self.client.in_battle:
+			try:
+				await self.handle_combat()
+				self.error = False
+			except Exception as e:
+				print(f"{self.client.title} something went wrong: {e}")
+				self.error = True
+			else:
+				break
 		await self.client.send_key(Keycode.D, 0.1)
 
 
@@ -510,7 +519,7 @@ class Fighter(CombatHandler):
 		raise ValueError
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def handle_combat(self):
 		"""Handles an entire combat interaction"""
 		self.tc = True
@@ -575,7 +584,7 @@ class Fighter(CombatHandler):
 			await self.wait_for_next_round(self.real_round)
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def get_valid_cards(self, exclusions):
 		await asyncio.sleep(0.45)
 		self.cards = await self.get_cards()
@@ -596,7 +605,7 @@ class Fighter(CombatHandler):
 		return exclusions
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def enchant_logic_stacking(self, spell, enchant, selected) -> bool:
 		"""Checks if enchanted version of the card is already in play"""
 		graphical_spell = await spell.wait_for_graphical_spell()
@@ -611,7 +620,7 @@ class Fighter(CombatHandler):
 		return True # will return true if hypothetical enchanted version hasn't been casted
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def is_spell_in_hanging_effect(self, spell):
 		graphical_spell = await spell.wait_for_graphical_spell()
 		card_atr = (await graphical_spell.template_id(), await graphical_spell.enchantment())
@@ -621,7 +630,7 @@ class Fighter(CombatHandler):
 		return False
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def discard_spell_in_hanging_effect(self, spell):
 		graphical_spell = await spell.wait_for_graphical_spell()
 		card_atr = (await graphical_spell.template_id(), await graphical_spell.enchantment())
@@ -630,10 +639,14 @@ class Fighter(CombatHandler):
 			if i[0] == card_atr[0] and i[1] == card_atr[1]:
 				logger.debug(f"Client {self.client.title} - Discarding {self.card_names[spell]}")
 				await spell.discard(sleep_time = 0.25)
-				break
+				_ = await self.get_valid_cards(self.card_exclusions)
+				await self.assign_card_names()
+				await self.assign_spell_logic()
+				await self.assign_pip_values()
+				return
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def effect_enchant_ID(self, selected):
 		"""Reads casted & in hand enchanted cards for enchanting logic"""
 		#TODO selected ally/enemy for enchanting stacking logic
@@ -657,7 +670,7 @@ class Fighter(CombatHandler):
 			self.current_hand_IDs.append(card_atr)
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def get_card_counts(self) -> Tuple[int, int]: #Olaf's reads UI of card counts
 		"""Reads UI for card count and returns values"""
 		window = None
@@ -671,18 +684,21 @@ class Fighter(CombatHandler):
 		return int(res1), int(res2)
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def fizzle_detection(self) -> bool:
 		"""Compares prev card count to current card count to detect fizzling"""
 		self.cur_card_count = len(await self.get_cards()) + (await self.get_card_counts())[0] # checks the current amount of cards in hand at start of round 
 		if self.real_round > 1 : #checks if round is greater than 1 because you can't fizzle on round 1
-			if self.cur_card_count >= self.prev_card_count and not self.passed: # checks if the current card count equals previous card count without passing, if it's true it means you fizzled.
-				logger.debug(f"Client {self.client.title} - Fizzled")
-				return True
+			if not self.error:
+				if self.cur_card_count >= self.prev_card_count and not self.passed: # checks if the current card count equals previous card count without passing or erroring, if it's true it means you fizzled.
+					logger.debug(f"Client {self.client.title} - Fizzled")
+					return True
+			else:
+				self.error = False
 		return False
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def assign_card_names(self):
 		"""Assigns the name for each card in a dict to avoid over reading"""
 		self.card_names = {}
@@ -694,7 +710,7 @@ class Fighter(CombatHandler):
 				# 	await self.assign_card_names()
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def discard_unsupported(self):
 		"""Discards all spells not in the master spell list"""
 		discarded = True
@@ -711,7 +727,7 @@ class Fighter(CombatHandler):
 					break
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def assign_spell_logic(self):
 		"""Assigns spell logic string and enchanting logic strings to all spells """
 		self.spell_logic = {}
@@ -724,7 +740,7 @@ class Fighter(CombatHandler):
 						self.enchant_logic[c] = enchant_logic_dict[s]
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def assign_pip_values(self):
 		'''Assigns a calculated pip value to every spell in the hand. Shadow pips are worth 4 regular pips.'''
 		self.pip_values = {}
@@ -737,7 +753,7 @@ class Fighter(CombatHandler):
 			self.pip_values[s] = card_rank
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def enchant_all(self):
 		"""Enchants all compatible cards with any compatible enchants"""
 		enchanted = True
@@ -785,7 +801,7 @@ class Fighter(CombatHandler):
 					break
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def discard_duplicate_types(self, iterations: int = 1):
 		"""Discards duplicate spell types in hand"""
 		#TODO make a version that discards based on spell name
@@ -811,7 +827,6 @@ class Fighter(CombatHandler):
 							await self.assign_card_names()
 							await self.assign_spell_logic()
 							await self.assign_pip_values()
-							await self.enchant_all()
 							discarded = True
 							break
 
@@ -819,7 +834,7 @@ class Fighter(CombatHandler):
 	async def is_control_grayed(self, win: Window): # if button is not gray it will return false
 		return await win.read_value_from_offset(688, "bool")
 
-	@logger.catch()
+	#@logger.catch()
 	async def get_tc(self):
 		if self.tc:
 			'''Draws TC equivalent to half the available free spaces in the hand. Example: 3/7 cards in hand = drawing twice'''
@@ -846,11 +861,11 @@ class Fighter(CombatHandler):
 				if name == x:
 					return i
 
-	@logger.catch()
+	#@logger.catch()
 	async def discard_useless(self, strategy: list[str] = None):
 		'''Discards spells that would be detrimental to cast. Example: Will discard minions in hand if a minion is already up'''
 		discarded = True
-		minions = [a for a in self.allies if await a.is_minion()]
+		minions = self.mobs
 		self.combat_resolver = await self.client.duel.combat_resolver()
 		while discarded:
 			discarded = False
@@ -883,17 +898,17 @@ class Fighter(CombatHandler):
 				for i in to_discard:
 					logger.debug(f"Client {self.client.title} - Discarding {self.card_names[i]}")
 					await i.discard(sleep_time=0.25)
-				_ = await self.get_valid_cards(self.card_exclusions)
-				await self.assign_card_names()
-				await self.assign_spell_logic()
-				await self.assign_pip_values()
-				await self.enchant_all()
+					_ = await self.get_valid_cards(self.card_exclusions)
+					await self.assign_card_names()
+					await self.assign_spell_logic()
+					await self.assign_pip_values()
+					await self.enchant_all()
 				discarded = True
 
 
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def assign_stats(self):
 		'''Assign client-specific stats and member/participant objects and stats'''
 		self.members = await self.get_members()
@@ -976,7 +991,7 @@ class Fighter(CombatHandler):
 		self.selected_enemy = max(self.mob_healths, key = lambda h: self.mob_healths[h])
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def handle_round(self):
 		"""Uses strategy lists and conditional strategies to decide on the best spell to cast, then casts it."""
 
@@ -1031,7 +1046,7 @@ class Fighter(CombatHandler):
 			selected_ally = self.client_member
 
 		# Healing logic
-		player_members = [a for a in self.allies if await a.is_player() == True]
+		player_members = self.allies
 		health_percentages = {}
 		for a in player_members:
 			health_percentages[a] = float(await a.health()) / float(await a.max_health())
@@ -1041,7 +1056,7 @@ class Fighter(CombatHandler):
 		if health_percentages[highest_priority_ally] < 0.51:
 			selected_ally = highest_priority_ally
 			priority_types += heal_types
-		if len([c for c in self.cards if self.card_names[c] == "Reshuffle"]) > len([c for c in self.cards if not self.card_names[c] == "Reshuffle" and not await c.is_treasure_card()]) and len([self.cards]) < 6:
+		if len([c for c in self.cards if self.card_names[c] == "Reshuffle"]) >= len([c for c in self.cards if not self.card_names[c] == "Reshuffle" and not await c.is_treasure_card()]) and len([self.cards]) < 6:
 			selected_ally = self.client_member
 			priority_types += reshuffle_types
 
