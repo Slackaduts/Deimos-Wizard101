@@ -635,8 +635,8 @@ async def main():
 			if await foreground_client.game_client.is_freecam():
 				camera = await foreground_client.game_client.free_camera_controller()
 				camera_pos = await camera.position()
-				await foreground_client.teleport(camera_pos, wait_on_inuse=True, purge_on_after_unuser_fixer=True)
 				await toggle_freecam_hotkey(False)
+				await foreground_client.teleport(camera_pos, wait_on_inuse=True, purge_on_after_unuser_fixer=True)
 
 
 	async def toggle_questing_hotkey():
@@ -1524,14 +1524,10 @@ async def main():
 				rpc = AioPresence(1000159655357587566)
 				await rpc.connect()
 
-			except pypresence.exceptions.DiscordNotFound:
-				pass
-
-			except pypresence.exceptions.DiscordError:
+			except pypresence.exceptions.PyPresenceException:
 				pass
 
 			else:
-
 				# Assign foreground client locally
 				client: Client = walker.clients[0]
 				zone_name: str = None
