@@ -1469,7 +1469,7 @@ async def main():
 									for command_str in split_commands:
 										command_tokens = tokenize(command_str)
 
-										if command_tokens[0].lower() in web_command_strs:
+										if command_tokens and command_tokens[0].lower() in web_command_strs:
 											web_commands = read_webpage(command_tokens[1])
 											new_commands.extend(web_commands)
 
