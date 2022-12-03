@@ -3,6 +3,7 @@ loguru==0.5.3
 pyperclip==1.8.2
 PySimpleGUI==4.60.1
 requests==2.27.1
-git+https://github.com/wizwalker/wizwalker@development#egg=wizwalker
+git+https://github.com/wizwalker/wizwalker@development
 wizsprinter==0.6.9
 pypresence==4.2.1
+pywin32==304

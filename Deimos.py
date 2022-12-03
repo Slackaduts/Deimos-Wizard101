@@ -28,10 +28,9 @@ from src.drop_logger import logging_loop
 from src.combat import Fighter
 from src.stat_viewer import total_stats
 from src.teleport_math import navmap_tp, calc_Distance
-# from src.questing import Quester
-from src.questing_new import Quester
+from src.questing import Quester
 from src.sigil import Sigil
-from src.utils import is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world, collect_wisps_with_limit, try_task_coro
+from src.utils import index_with_str, is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world, collect_wisps_with_limit, try_task_coro, read_webpage
 from src.paths import advance_dialog_path, decline_quest_path
 import PySimpleGUI as gui
 import pyperclip
@@ -42,12 +41,14 @@ from wizwalker.extensions.wizsprinter.wiz_navigator import toZoneDisplayName, to
 from typing import List, Tuple
 
 from src import deimosgui
+from src.tokenizer import tokenize
 
 cMessageBox = ctypes.windll.user32.MessageBoxW
 
 
-tool_version = '3.7.1'
+tool_version = '3.7.2'
 tool_name = 'Deimos'
+tool_author = 'Slackaduts'
 repo_name = tool_name + '-Wizard101'
 branch = 'master'
 
@@ -192,18 +193,11 @@ def read_config(config_name : str):
 
 while True:
 	if not os.path.exists(f'{tool_name}-config.ini'):
-		download_file(f'https://raw.githubusercontent.com/Slackaduts/{repo_name}/{branch}/{tool_name}-config.ini', f'{tool_name}-config.ini')
+		download_file(f'https://raw.githubusercontent.com/{tool_author}/{repo_name}/{branch}/{tool_name}-config.ini', f'{tool_name}-config.ini')
 	time.sleep(0.1)
-	# try:
+
 	read_config(f'{tool_name}-config.ini')
 	break
-	# except:
-	# 	logger.critical('Error found in the config. Redownloading the config to prevent further issues.')
-	# 	# sg.Popup(f'{tool_name} Error', 'Error found in the config. Redownloading the config to prevent further issues.', non_blocking=True)
-	# 	os.remove(f'{tool_name}-config.ini')
-	# 	time.sleep(0.1)
-	# else:
-	# 	break
 
 
 speed_status = False
@@ -234,25 +228,13 @@ pet_task: asyncio.Task = None
 bot_task: asyncio.Task = None 
 flythrough_task: asyncio.Task = None
 
-def file_len(filepath):
+def file_len(filepath) -> List[str]:
 	# return the number of lines in a file
 	f = open(filepath, "r")
 	return len(f.readlines())
 
 
-def read_webpage(url):
-	# return a list of lines from a hosted file
-	try:
-		response = requests.get(url, allow_redirects=True)
-		page_text = response.text
-		line_list = page_text.splitlines()
-	except:
-		return []
-	else:
-		return line_list
-
-
-def generate_timestamp():
+def generate_timestamp() -> str:
 	# generates a timestamp and makes the symbols filename-friendly
 	time = str(datetime.datetime.now())
 	time_list = time.split('.')
@@ -262,14 +244,14 @@ def generate_timestamp():
 
 
 def config_update():
-	config_url = f'https://raw.githubusercontent.com/Slackaduts/{repo_name}/{branch}/{tool_name}-config.ini'
+	config_url = f'https://raw.githubusercontent.com/{tool_author}/{repo_name}/{branch}/{tool_name}-config.ini'
 
 	if not os.path.exists(f'{tool_name}-config.ini'):
 		download_file(url=config_url, file_name=f'{tool_name}-config.ini')
 		time.sleep(0.1)
 
 	if not os.path.exists(f'README.txt'):
-		download_file(f'https://raw.githubusercontent.com/Slackaduts/{repo_name}/{branch}/README.txt', 'README.txt')
+		download_file(f'https://raw.githubusercontent.com/{tool_author}/{repo_name}/{branch}/README.txt', 'README.txt')
 
 	download_file(url=config_url, file_name=f'{tool_name}-Testconfig.ini', delete_previous=True, debug=False)
 	time.sleep(0.1)
@@ -309,17 +291,17 @@ def config_update():
 
 
 def run_updater():
-	download_file(url=f"https://raw.githubusercontent.com/Slackaduts/{repo_name}/{branch}/{tool_name}Updater.exe", file_name=f'{tool_name}Updater.exe', delete_previous=True)
+	download_file(url=f"https://raw.githubusercontent.com/{tool_author}/{repo_name}/{branch}/{tool_name}Updater.exe", file_name=f'{tool_name}Updater.exe', delete_previous=True)
 	time.sleep(0.1)
 	subprocess.Popen(f'{tool_name}Updater.exe')
 	sys.exit()
 
 
-def get_latest_version():
+def get_latest_version() -> str:
 	update_server = None
 
 	try:
-		update_server = read_webpage(f"https://raw.githubusercontent.com/Slackaduts/{repo_name}/{branch}/LatestVersion.txt")
+		update_server = read_webpage(f"https://raw.githubusercontent.com/{tool_author}/{repo_name}/{branch}/LatestVersion.txt")
 	except:
 		time.sleep(0.1)
 
@@ -372,17 +354,18 @@ async def mass_key_press(foreground_client : Client, background_clients : list[C
 
 async def sync_camera(client: Client, xyz: XYZ = None, yaw: float = None):
 	# Teleports the freecam to a specified position, yaw, etc.
-	if not xyz:
-		xyz = await client.body.position()
+	# if not xyz:
+	# 	xyz = await client.body.position()
 
-	if not yaw:
-		yaw = await client.body.yaw()
+	# if not yaw:
+	# 	yaw = await client.body.yaw()
 
-	xyz.z += 200
+	# xyz.z += 200
 
-	camera = await client.game_client.free_camera_controller()
-	await camera.write_position(xyz)
-	await camera.write_yaw(yaw)
+	# camera = await client.game_client.free_camera_controller()
+	# await camera.write_position(xyz)
+	# await camera.write_yaw(yaw)
+	logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
 
 
 async def xyz_sync(foreground_client : Client, background_clients : list[Client], turn_after : bool = True, debug : bool = False):
@@ -449,23 +432,13 @@ async def friend_teleport_sync(clients : list[wizwalker.Client], debug: bool):
 	if debug:
 		logger.debug(f'{friend_teleport_key} key pressed, friend teleporting all clients to p1.')
 	child_clients = clients[1:]
-	try:
-		await asyncio.gather(*[p.mouse_handler.activate_mouseless() for p in child_clients])
-		for p in child_clients:
-			p.mouseless_status = True
-	except:
-		await asyncio.sleep(0)
-	await asyncio.sleep(0.25)
-	try:
-		[await teleport_to_friend_from_list(client=p, icon_list=1, icon_index=50) for p in child_clients]
-	except:
-		await asyncio.sleep(0)
-	try:
-		await asyncio.gather(*[p.mouse_handler.deactivate_mouseless() for p in child_clients])
-		for p in child_clients:
-			p.mouseless_status = True
-	except:
-		await asyncio.sleep(0)
+	for p in child_clients:
+		async with p.mouse_handler:
+			try:
+				await teleport_to_friend_from_list(client=p, icon_list=1, icon_index=50)
+			except:
+				asyncio.sleep(0)
+
 
 
 async def kill_tool(debug: bool):
@@ -508,12 +481,6 @@ async def main():
 				await camera.write_zoom_resolution(150.0)
 
 			await p.body.write_scale(1.0)
-
-			try:
-				await p.mouse_handler.deactivate_mouseless()
-				p.mouseless_status = False
-			except:
-				await asyncio.sleep(0)
 
 		await listener.clear()
 		for p in walker.clients:
@@ -648,29 +615,31 @@ async def main():
 
 	async def toggle_freecam_hotkey(debug: bool = True):
 		global freecam_status
-		if foreground_client:
-			if await is_free(foreground_client):
-				if await foreground_client.game_client.is_freecam():
-					if debug:
-						logger.debug(f'{toggle_freecam_key} key pressed, disabling freecam.')
-					await foreground_client.camera_elastic()
-					freecam_status = False
-				else:
-					if debug:
-						logger.debug(f'{toggle_freecam_key} key pressed, enabling freecam.')
-					freecam_status = True
-					await sync_camera(foreground_client)
-					await foreground_client.camera_freecam()
+		logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
+		# if foreground_client:
+		# 	if await is_free(foreground_client):
+		# 		if await foreground_client.game_client.is_freecam():
+		# 			if debug:
+		# 				logger.debug(f'{toggle_freecam_key} key pressed, disabling freecam.')
+		# 			await foreground_client.camera_elastic()
+		# 			freecam_status = False
+		# 		else:
+		# 			if debug:
+		# 				logger.debug(f'{toggle_freecam_key} key pressed, enabling freecam.')
+		# 			freecam_status = True
+		# 			await sync_camera(foreground_client)
+		# 			await foreground_client.camera_freecam()
 
 
 	async def tp_to_freecam_hotkey():
-		if foreground_client:
-			logger.debug(f'Shift + {toggle_freecam_key} key pressed, teleporting foreground client to freecam position.')
-			if await foreground_client.game_client.is_freecam():
-				camera = await foreground_client.game_client.free_camera_controller()
-				camera_pos = await camera.position()
-				await foreground_client.teleport(camera_pos, wait_on_inuse=True, purge_on_after_unuser_fixer=True)
-				await toggle_freecam_hotkey(False)
+		logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
+		# if foreground_client:
+		# 	logger.debug(f'Shift + {toggle_freecam_key} key pressed, teleporting foreground client to freecam position.')
+		# 	if await foreground_client.game_client.is_freecam():
+		# 		camera = await foreground_client.game_client.free_camera_controller()
+		# 		camera_pos = await camera.position()
+		# 		await toggle_freecam_hotkey(False)
+		# 		await foreground_client.teleport(camera_pos, wait_on_inuse=True, purge_on_after_unuser_fixer=True)
 
 
 	async def toggle_questing_hotkey():
@@ -1142,27 +1111,28 @@ async def main():
 					await asyncio.sleep(350)
 					client_xyz_2 = await client.body.position()
 					distance_moved = calc_Distance(client_xyz, client_xyz_2)
-					if distance_moved < 5.0 and not await client.in_battle() and not client.feeding_pet_status:
+					if distance_moved < 5.0 and not await client.in_battle() and not client.feeding_pet_status and not client.entity_detect_combat_status:
 
 						logger.debug(f"Client {client.title} - AFK client detected, moving slightly.")
 						await client.send_key(key=Keycode.A)
 						await asyncio.sleep(0.1)
 						await client.send_key(key=Keycode.D)
 
-					# During questing, one or more clients may be waiting outside while the others are completing a solo zone quest - we do not want to restart in these cases
-					client_in_solo_zone = False
-					for p in walker.clients:
-						if p.in_solo_zone:
-							client_in_solo_zone = True
+						# During questing, one or more clients may be waiting outside while the others are completing a solo zone quest - we do not want to restart in these cases
+						client_in_solo_zone = False
+						for p in walker.clients:
+							if p.in_solo_zone:
+								client_in_solo_zone = True
 
-					if questing_task is not None and not questing_task.cancelled() and not client_in_solo_zone:
-							logger.debug(f'Questing appears to have halted - restarting.')
-							questing_task.cancel()
-							questing_task = None
-							await asyncio.sleep(1.0)
+						# restart questing
+						if questing_task is not None and not questing_task.cancelled() and not client_in_solo_zone:
+								logger.debug(f'Questing appears to have halted - restarting.')
+								questing_task.cancel()
+								questing_task = None
+								await asyncio.sleep(1.0)
 
-							if questing_task is None:
-								questing_task = asyncio.create_task(try_task_coro(questing_loop, walker.clients, True))
+								if questing_task is None:
+									questing_task = asyncio.create_task(try_task_coro(questing_loop, walker.clients, True))
 
 		await asyncio.gather(*[async_anti_afk(p) for p in walker.clients])
 
@@ -1228,7 +1198,8 @@ async def main():
 										await toggle_auto_pet_hotkey()
 
 									case 'Freecam':
-										await toggle_freecam_hotkey()
+										logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
+										# await toggle_freecam_hotkey()
 
 									case 'Camera Collision':
 										if foreground_client:
@@ -1318,7 +1289,8 @@ async def main():
 									case 'Mass':
 										await mass_navmap_teleport_hotkey()
 									case 'Freecam':
-										await tp_to_freecam_hotkey()
+										logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
+										# await tp_to_freecam_hotkey()
 									case _:
 										logger.debug(f'Unknown teleport type: {com.data}')
 
@@ -1374,7 +1346,8 @@ async def main():
 							case deimosgui.GUICommandType.AnchorCam:
 								if foreground_client:
 									if freecam_status:
-										await toggle_freecam_hotkey()
+										logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
+										# await toggle_freecam_hotkey()
 
 									camera = await foreground_client.game_client.elastic_camera_controller()
 
@@ -1388,46 +1361,48 @@ async def main():
 										await camera.write_attached_client_object(entity)
 
 							case deimosgui.GUICommandType.SetCamPosition:
-								if foreground_client:
-									if not freecam_status:
-										await toggle_freecam_hotkey()
+								logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
+								# if foreground_client:
+									# if not freecam_status:
+										# await toggle_freecam_hotkey()
 
-									camera: DynamicCameraController = await foreground_client.game_client.selected_camera_controller()
-									camera_pos: XYZ = await camera.position()
-									camera_pitch, camera_roll, camera_yaw = await camera.orientation()
+									# camera: DynamicCameraController = await foreground_client.game_client.selected_camera_controller()
+									# camera_pos: XYZ = await camera.position()
+									# camera_pitch, camera_roll, camera_yaw = await camera.orientation()
 
-									x_input = param_input(com.data['X'], camera_pos.x)
-									y_input = param_input(com.data['Y'], camera_pos.y)
-									z_input = param_input(com.data['Z'], camera_pos.z)
-									yaw_input = param_input(com.data['Yaw'], camera_yaw)
-									roll_input = param_input(com.data['Roll'], camera_roll)
-									pitch_input = param_input(com.data['Pitch'], camera_pitch)
+									# x_input = param_input(com.data['X'], camera_pos.x)
+									# y_input = param_input(com.data['Y'], camera_pos.y)
+									# z_input = param_input(com.data['Z'], camera_pos.z)
+									# yaw_input = param_input(com.data['Yaw'], camera_yaw)
+									# roll_input = param_input(com.data['Roll'], camera_roll)
+									# pitch_input = param_input(com.data['Pitch'], camera_pitch)
 
-									input_pos = XYZ(x_input, y_input, z_input)
-									logger.debug(f'Teleporting Camera to {input_pos}, yaw={yaw_input}, roll={roll_input}, pitch={pitch_input}')
+									# input_pos = XYZ(x_input, y_input, z_input)
+									# logger.debug(f'Teleporting Camera to {input_pos}, yaw={yaw_input}, roll={roll_input}, pitch={pitch_input}')
 
-									await camera.write_position(input_pos)
-									await camera.update_orientation(Orient(pitch_input, roll_input, yaw_input))
+									# await camera.write_position(input_pos)
+									# await camera.update_orientation(Orient(pitch_input, roll_input, yaw_input))
 
 							case deimosgui.GUICommandType.SetCamDistance:
-								if foreground_client:
-									camera = await foreground_client.game_client.elastic_camera_controller()
-									current_zoom = await camera.distance()
-									current_min = await camera.min_distance()
-									current_max = await camera.max_distance()
-									distance_input = param_input(com.data["Distance"], current_zoom)
-									min_input = param_input(com.data["Min"], current_min)
-									max_input = param_input(com.data["Max"], current_max)
-									logger.debug(f'Setting camera distance to {distance_input}, min={min_input}, max={max_input}')
+								logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
+								# if foreground_client:
+								# 	camera = await foreground_client.game_client.elastic_camera_controller()
+								# 	current_zoom = await camera.distance()
+								# 	current_min = await camera.min_distance()
+								# 	current_max = await camera.max_distance()
+								# 	distance_input = param_input(com.data["Distance"], current_zoom)
+								# 	min_input = param_input(com.data["Min"], current_min)
+								# 	max_input = param_input(com.data["Max"], current_max)
+								# 	logger.debug(f'Setting camera distance to {distance_input}, min={min_input}, max={max_input}')
 
-									if com.data["Distance"]:
-										await camera.write_distance_target(distance_input)
-										await camera.write_distance(distance_input)
-									if com.data["Min"]:
-										await camera.write_min_distance(min_input)
-										await camera.write_zoom_resolution(min_input)
-									if com.data["Max"]:
-										await camera.write_max_distance(max_input)
+								# 	if com.data["Distance"]:
+								# 		await camera.write_distance_target(distance_input)
+								# 		await camera.write_distance(distance_input)
+								# 	if com.data["Min"]:
+								# 		await camera.write_min_distance(min_input)
+								# 		await camera.write_zoom_resolution(min_input)
+								# 	if com.data["Max"]:
+								# 		await camera.write_max_distance(max_input)
 
 							case deimosgui.GUICommandType.GoToZone:
 								if foreground_client:
@@ -1475,12 +1450,13 @@ async def main():
 									await asyncio.gather(*[auto_potions_force_buy(client, True) for client in clients])
 
 							case deimosgui.GUICommandType.ExecuteFlythrough:
-								async def _flythrough():
-									await execute_flythrough(foreground_client, com.data)
-									await foreground_client.camera_elastic()
+								logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
+								# async def _flythrough():
+								# 	await execute_flythrough(foreground_client, com.data)
+								# 	await foreground_client.camera_elastic()
 
-								if foreground_client:
-									flythrough_task = asyncio.create_task(_flythrough())
+								# if foreground_client:
+								# 	flythrough_task = asyncio.create_task(_flythrough())
 
 							case deimosgui.GUICommandType.KillFlythrough:
 								if flythrough_task is not None and not flythrough_task.cancelled():
@@ -1494,9 +1470,23 @@ async def main():
 
 								async def run_bot():
 									logger.debug('Started Bot')
+
 									split_commands = command_data.split('\n')
+									web_command_strs = ['webpage', 'pull', 'embed']
+									new_commands = []
+
+									for command_str in split_commands:
+										command_tokens = tokenize(command_str)
+
+										if command_tokens and command_tokens[0].lower() in web_command_strs:
+											web_commands = read_webpage(command_tokens[1])
+											new_commands.extend(web_commands)
+
+										else:
+											new_commands.append(command_str)
+
 									while True:
-										for command_str in split_commands:
+										for command_str in new_commands:
 											await parse_command(walker.clients, command_str)
 
 										await asyncio.sleep(1)
@@ -1543,11 +1533,10 @@ async def main():
 				rpc = AioPresence(1000159655357587566)
 				await rpc.connect()
 
-			except pypresence.exceptions.DiscordNotFound:
+			except pypresence.exceptions.PyPresenceException:
 				pass
 
 			else:
-
 				# Assign foreground client locally
 				client: Client = walker.clients[0]
 				zone_name: str = None
@@ -1560,52 +1549,52 @@ async def main():
 
 					# Assign zone name of client
 					await asyncio.sleep(1)
-					if await client.zone_name() is not None:
-						zone_name = await client.zone_name()
+					zone_name = await client.zone_name()
 
-					zone_list = zone_name.split('/')
-					if len(zone_list):
-						status_str = zone_list[0]
-					else:
-						status_str = zone_name
-
-					# parse zone name and make it more visually appealing
-					if len(zone_list) > 1:
-						if 'Housing_' in zone_name:
-							status_str = status_str.replace('Housing_', '')
-							end_zone_list = zone_list[-1].split('_')
-							end_zone = f' - {end_zone_list[-1]}'
-
-						elif 'Housing' in zone_name:
-							end_zone_list = zone_list[-1].split('_')
-
-							if 'School' in zone_list:
-								status_str = end_zone_list[0] + 'House'
-
-							else:
-								status_str = zone_list[1]
-
-							end_zone = f' - {end_zone_list[-1]}'
-
+					if zone_name:
+						zone_list = zone_name.split('/')
+						if len(zone_list):
+							status_str = zone_list[0]
 						else:
-							end_zone = None
+							status_str = zone_name
 
-						if not end_zone:
-							area_list: list[str] = zone_list[-1].split('_')
-							del area_list[0]
+						# parse zone name and make it more visually appealing
+						if len(zone_list) > 1:
+							if 'Housing_' in zone_name:
+								status_str = status_str.replace('Housing_', '')
+								end_zone_list = zone_list[-1].split('_')
+								end_zone = f' - {end_zone_list[-1]}'
 
-							for a in area_list.copy():
-								if any([s.isdigit() for s in a]):
-									area_list.remove(a)
+							elif 'Housing' in zone_name:
+								end_zone_list = zone_list[-1].split('_')
 
-							seperator = ' '
-							area = seperator.join(area_list)
-							zone_word_list = re.findall('[A-Z][^A-Z]*', area)
-							if zone_word_list:
-								end_zone = f' - {seperator.join(zone_word_list)}'
+								if 'School' in zone_list:
+									status_str = end_zone_list[0] + 'House'
+
+								else:
+									status_str = zone_list[1]
+
+								end_zone = f' - {end_zone_list[-1]}'
 
 							else:
-								end_zone = ''
+								end_zone = None
+
+							if not end_zone:
+								area_list: list[str] = zone_list[-1].split('_')
+								del area_list[0]
+
+								for a in area_list.copy():
+									if any([s.isdigit() for s in a]):
+										area_list.remove(a)
+
+								seperator = ' '
+								area = seperator.join(area_list)
+								zone_word_list = re.findall('[A-Z][^A-Z]*', area)
+								if zone_word_list:
+									end_zone = f' - {seperator.join(zone_word_list)}'
+
+								else:
+									end_zone = ''
 
 					else:
 						end_zone = ''
@@ -1665,7 +1654,7 @@ async def main():
 		)
 		while True:
 			try:
-				banlistcontents = requests.get("https://raw.githubusercontent.com/Slackaduts/deimos-bans/main/DeimosBans.txt").content.decode()
+				banlistcontents = requests.get(f"https://raw.githubusercontent.com/{tool_author}/{tool_name.lower()}-bans/main/{tool_name}Bans.txt").content.decode()
 				banlist = set([x.split(" ")[0].strip() for x in banlistcontents.splitlines()])
 				
 				handle = discsdk.connect()
@@ -1793,7 +1782,6 @@ async def main():
 		p.auto_pet_status = False
 		p.feeding_pet_status = False
 		p.use_team_up = use_team_up
-		p.mouseless_status = False
 		p.dance_hook_status = False
 		p.entity_detect_combat_status = False
 		p.invincible_combat_timer = False
@@ -1809,7 +1797,7 @@ async def main():
 		p.discard_duplicate_cards = discard_duplicate_cards
 		p.kill_minions_first = kill_minions_first
 		p.automatic_team_based_combat = automatic_team_based_combat
-		p.latest_drops: List[Tuple[str, int]] = []
+		p.latest_drops: str = ''
 
 		# Set follower/leader statuses for auto questing/sigil
 
@@ -1870,15 +1858,43 @@ def bool_to_string(input: bool):
 		return 'Disabled'
 
 
+def handle_tool_updating():
+	version = get_latest_version()
+	update_server = None
+
+	try:
+		update_server = read_webpage(f"https://raw.githubusercontent.com/{tool_author}/{repo_name}/{branch}/LatestVersion.txt")
+	except:
+		time.sleep(0.1)
+
+	if update_server is not None and update_server[1].lower() == 'false':
+		raise KeyboardInterrupt
+
+	if update_server is not None:
+		version_specific_data = update_server[2:]
+		version_status_check = ' '.join(version_specific_data)
+
+		if tool_version in version_status_check:
+			version_status_index = index_with_str(version_specific_data, tool_version)
+			version_status = version_specific_data[version_status_index].split(' ')[1]
+
+			if version_status.lower() == 'false':
+				raise KeyboardInterrupt
+
+			elif version_status.lower() == 'force':
+				auto_update()
+
+		if version and auto_updating:
+			if is_version_greater(version, tool_version):
+				auto_update()
+
+			if not is_version_greater(tool_version, version):
+				config_update()
+
+
 if __name__ == "__main__":
 	# Validate configs and update the tool
-	version = get_latest_version()
-	if version and auto_updating:
-		if is_version_greater(version, tool_version):
-			auto_update()
-
-		if not is_version_greater(tool_version, version):
-			config_update()
+	handle_tool_updating()
 
 	current_log = logger.add(f"logs/{tool_name} - {generate_timestamp()}.log", encoding='utf-8', enqueue=True, backtrace=True)
 

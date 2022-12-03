@@ -227,18 +227,11 @@ class SprintyClient():
 
 	async def use_potion(self, handle_hooks: bool = False) -> bool:
 		if await self.has_potion():
-			if handle_hooks:
-				await self.client.mouse_handler.activate_mouseless()
-
-			try:
-				await self.client.mouse_handler.click_window_with_name("btnPotions")
-			except ValueError:
-				if handle_hooks:
-					await self.client.mouse_handler.deactivate_mouseless()
-				return False
-
-			if handle_hooks:
-				await self.client.mouse_handler.deactivate_mouseless()
+			async with self.client.mouse_handler:
+				try:
+					await self.client.mouse_handler.click_window_with_name("btnPotions")
+				except ValueError:
+					return False
 			return True
 		return False
 

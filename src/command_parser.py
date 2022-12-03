@@ -9,9 +9,10 @@ from wizwalker.memory.memory_objects.camera_controller import CameraController
 
 from src.sprinty_client import SprintyClient
 from src.gui_inputs import is_numeric, param_input
-from src.utils import index_with_str, get_window_from_path, teleport_to_friend_from_list, auto_potions_force_buy, use_potion, is_free, logout_and_in, click_window_by_path, attempt_activate_mouseless, attempt_deactivate_mouseless, wait_for_visible_by_path, refill_potions, refill_potions_if_needed, wait_for_zone_change
+from src.utils import read_webpage, index_with_str, get_window_from_path, teleport_to_friend_from_list, auto_potions_force_buy, use_potion, is_free, logout_and_in, click_window_by_path, wait_for_visible_by_path, refill_potions, refill_potions_if_needed, wait_for_zone_change
 from src.camera_utils import glide_to, point_to_xyz, rotating_glide_to, orbit
 from src.tokenizer import tokenize
+from src.collision_math import plot_cube
 import re
 from loguru import logger
 
@@ -285,9 +286,12 @@ async def parse_command(clients: List[Client], command_str: str):
 
                 case 'click':
                     # Clicks at a specified screen XY
-                    await asyncio.gather(*[attempt_activate_mouseless(client) for client in clients])
-                    await asyncio.gather(*[client.mouse_handler.click(int(split_command[2], int(split_command[3]))) for client in clients])
-                    await asyncio.gather(*[attempt_deactivate_mouseless(client) for client in clients])
+                    async def command_parser_click_mouse_handler(client):
+                        async with client.mouse_handler:
+                            await client.mouse_handler.click(int(split_command[2], int(split_command[3])))
+                        
+                    await asyncio.gather(*[command_parser_click_mouse_handler(client) for client in clients])
+
 
                 case 'clickwindow':
                     # Clicks a specific window by path
@@ -302,17 +306,23 @@ async def parse_command(clients: List[Client], command_str: str):
 
                 case 'friendtp' | 'friendteleport':
                     # Teleports specified clients to another via wizard name or icon
-                    await asyncio.gather(*[client.mouse_handler.activate_mouseless() for client in clients])
                     await asyncio.sleep(.25)
 
                     if split_command[2] == 'icon':
                         # uses fish icon
-                        await asyncio.gather(*[teleport_to_friend_from_list(client, icon_list=2, icon_index=0) for client in clients])
+                        async def teleport_to_friend_from_list_fish_icon_mouse_handler(client):
+                            await teleport_to_friend_from_list(client, icon_list=2, icon_index=0)
+                            
+                        await asyncio.gather(*[teleport_to_friend_from_list_fish_icon_mouse_handler(client) for client in clients])
+                        
                     else:
                         # uses provided wizard name
-                        await asyncio.gather(*[teleport_to_friend_from_list(client, name=' '.join(split_command[2:])) for client in clients])
+                        async def teleport_to_friend_from_list_wizard_name_mouse_handler(client):
+                            async with client.mouse_handler:
+                                await teleport_to_friend_from_list(client, name=' '.join(split_command[2:]))
+                            
+                        await asyncio.gather(*[teleport_to_friend_from_list_wizard_name_mouse_handler(client) for client in clients])
 
-                    await asyncio.gather(*[client.mouse_handler.deactivate_mouseless() for client in clients])
 
                 case 'entitytp' | 'entityteleport':
                     # Teleports to a specific entity by vague name
@@ -327,6 +337,9 @@ async def parse_command(clients: List[Client], command_str: str):
                     else:
                         logger.error('Failed to go to zone.  It may be spelled incorrectly, or may not be supported.')
 
+                case 'col':
+                    await plot_cube(clients[0])
+
                 case _:
                     await asyncio.sleep(0.25)
 
@@ -336,11 +349,24 @@ async def parse_command(clients: List[Client], command_str: str):
 async def execute_flythrough(client: Client, flythrough_data: str, line_seperator: str = '\n'):
     flythrough_actions = flythrough_data.split(line_seperator)
 
+    web_command_strs = ['webpage', 'pull', 'embed']
+    new_commands = []
+
+    for command_str in flythrough_actions:
+        command_tokens = tokenize(command_str)
+
+        if command_tokens[0].lower() in web_command_strs:
+            web_commands = read_webpage(command_tokens[1])
+            new_commands.extend(web_commands)
+
+        else:
+            new_commands.append(command_str)
+
     if not await client.game_client.is_freecam():
         await client.camera_freecam()
 
     camera = await client.game_client.free_camera_controller()
-    for action in flythrough_actions:
+    for action in new_commands:
         await parse_camera_command(camera, action)
 
 

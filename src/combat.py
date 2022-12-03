@@ -9,9 +9,8 @@ from wizwalker.memory.memory_objects.enums import DuelPhase, SpellEffects, Effec
 from loguru import logger
 import asyncio
 import math
-from src.utils import is_visible_by_path, get_window_from_path, attempt_activate_mouseless
+from src.utils import is_visible_by_path, get_window_from_path
 from src.paths import willcast_path
-
 
 # Enchants
 HIT_ENCHANTS = frozenset(['Strong', 'Giant', 'Monstrous', 'Gargantuan', 'Colossal', 'Epic', 'Keen Eyes', 'Accurate', 'Sniper', 'Unstoppable', 'Extraordinary', 'Solar Surge', 'Extract Undead', 'Extract Gobbler', 'Extract Mander', 'Extract Spider', 'Extract Colossus', 'Extract Cyclops', 'Extract Golems', 'Extract Draconians', 'Extract Treant', 'Extract Imp', 'Extract Pig', 'Extract Elephant', 'Extract Wyrm', 'Extract Wyrm', 'Extract Dinos', 'Extract Parrot', 'Extract Insects', "Extract Polar Bear"])
@@ -24,7 +23,8 @@ GOLEM_ENCHANT = frozenset(['Golem: Taunt'])
 # Auras
 HIT_AURAS = frozenset(['Virulence', 'Frenzy', 'Berserk', 'Flawless', 'Infallible', 'Amplify', 'Magnify', 'Vengeance', 'Chastisement', 'Devotion', 'Furnace', 'Galvanic Field', 'Punishment', 'Reliquary', 'Sleet Storm', 'Reinforce', 'Eruption', 'Acrimony', 'Outpouring', 'Apologue', 'Rage', 'Intensify', 'Icewind', 'Recompense', 'Upheaval', 'Quicken'])
 DEFENSE_AURAS = frozenset(['Fortify', 'Brace', 'Bulwark', 'Conviction'])
-HEAL_AURAS = frozenset(['Cycle of Life', 'Mend', 'Renew', 'Empowerment', 'Adapt'])
+HEAL_AURAS = frozenset(['Cycle of Life', 'Mend', 'Renew'])
+PIP_AURAS = frozenset(['Empowerment', 'Adapt'])
 
 # Shields
 SELECT_SHIELDS = frozenset(['Bracing Frost', 'Bracing Wind',  'Bracing Breeze', 'Borrowed Time', 'Ancient Wraps', 'Aegis of Artemis', 'Frozen Armor', 'Tower Shield', 'Death Shield', 'Life Shield', 'Myth Shield', 'Fire Shield', 'Ice Shield', 'Storm Shield', 'Dream Shield', 'Legend Shield', 'Elemental Shield', 'Spirit Shield', 'Shadow Shield', 'Glacial Shield', 'Volcanic Shield', 'Ether Shield', 'Thermic Shield'])
@@ -47,8 +47,8 @@ AOE_TRAPS = frozenset(['Bewilder', 'Beastmoon Curse', 'Debilitate', 'Ambush', 'M
 GLOBALS = frozenset(['Age of Reckoning', 'Astraphobia', 'Balance of Power', 'Balefrost', 'Circle of Thorns', 'Combustion', 'Counterforce', 'Darkwind', 'Deadzone', 'Doom and Gloom', 'Elemental Surge', 'Katabatic Wind', 'Namaste', 'Power Play', 'Saga of Heroes', 'Sanctuary', 'Spiritual Attunement', 'Time of Legend', 'Tide of Battle', 'Wyldfire', 'Elemental Surge', 'Dampen Magic'])
 
 # Hits
-SELECT_DOTS = frozenset(['Creeping Death', 'Cindertooth', 'Broiler', 'Bennu Alight', 'Befouling Brew', 'Link', 'Power Link', 'Inferno Salamander', 'Burning Rampage', 'Heck Hound', 'Wrath of Hades', 'Storm Hound', 'Frost Hound', 'Thunderstorm', 'Avenging Fossil', 'Frostbite', 'Spinysaur', 'Lightning Elf', 'Basilisk', 'Poison', 'Skeletal Dragon'])
-SELECT_HITS = frozenset(['Firezilla', 'Earthwalker', 'Blight Hound', 'Gearhead Destroyer', 'Stone Colossus', 'Cyclonic Swarm', 'Doggone Frog', 'Disarming Spirit', 'Deadly Sting', 'Consume Life', 'Cripping Blow', 'Crystal Shard', 'Curse-Eater', 'Cursed Kitty', 'Contamination', 'Chill Bug', 'Conflagaration', 'Clever Imp', 'Chill Wind', 'Chilling Touch', 'Cheapshot', 'Chaotic Currents', 'Butcher Bat', 'Bull Rush', 'Blue Moon Bird', 'Bluster Blast', 'Bombardier Beetle', 'Blizzard Wind', 'Blitz Beast', 'Blood Boil', 'Bitter Chill', 'Bio-Gnomes', 'Blistering Bolt', 'Blazing Construct', 'Basic Bruiser', 'Bargain of Brass', 'Ballistic Bat', 'Backdrafter', 'Avenging Marid', 'Angelic Vigor', 'Death Scarab', 'Immolate', 'Efreet', 'King Artorius', 'Scion of Fire', "S'more Machine", 'Fire from Above', 'Sun Serpent', 'Brimstone Revenant', 'Hephaestus', 'Krampus', 'Nautilus Unleashed', 'Fire Cat', 'Fire Elf', 'Sunbird', 'Phoenix', 'Naphtha Scarab', 'Elemental Golem', 'Spirit Golem', 'Dream Golem', 'Ether Golem', 'Legend Golem', 'Volcanic Golem', 'Thermic Golem', 'Glacial Golem', 'Helephant', 'Frost Beetle', 'Snow Serpent', 'Evil Snowman', 'Ice Wyvern', 'Thieving Dragon', 'Colossus', 'Angry Snowpig', 'Handsome Fomori', 'Winter Moon', 'Woolly Mammoth', 'Lord of Winter', 'Abominable Weaver', 'Scion of Ice', 'Shatterhorn', 'Frostfeather', 'Imp', 'Leprechaun', 'Seraph', 'Sacred Charge', 'Centaur', 'Infestation', "Nature's Wrath", 'Goat Monk', 'Luminous Weaver', 'Gnomes!', 'Hungry Caterpillar', 'Grrnadier', 'Thunder Snake', 'Lightning Bats', 'Storm Shark', 'Kraken', 'Stormzilla', 'Stormwing', 'Triton', 'Catalan', 'Queen Calypso', 'Catch of the Day', 'Hammer of Thor', 'Wild Bolt', 'Insane Bolt', 'Leviathan', 'Storm Owl', 'Scion of Storm', "Rusalka's Wrath", 'Thunderman', 'Blood Bat', 'Troll', 'Cyclops', 'Minotaur', 'Vermin Virtuoso', 'Gobbler', 'Athena Battle Sight', 'Keeper of the Flame', 'Ninja Pigs', 'Splashsquatch', 'Medusa', 'Celestial Calendar', 'Scion of Myth', "Witch's House Call", 'Tatzlewurm Terror', 'Dark Sprite', 'Ghoul', 'Banshee', 'Vampire', 'Skeletal Pirate', 'Crimson Phantom', 'Wraith', 'Monster Mash', 'Headless Horseman', 'Lord of Night', "Dr. Von's Monster", 'Winged Sorrow', 'Scion of Death', 'Snack Attack', 'Scarab', 'Scorpion', 'Locust Swarm', 'Spectral Blast', 'Hydra', 'Loremaster', 'Ninja Piglets', 'Samoorai', 'Savage Paw', 'Spiritual Tribunal', 'Judgement', 'Vengeful Seraph', 'Chimera', 'Supernova', 'Mana Burn', 'Sabertooth', 'Gaze of Fate', 'Scion of Balance', 'Mockenspiel', 'Beary Surprise', 'Camp Bandit', 'Obsidian Colossus', 'Grim Reader', 'Dark & Stormy', "Barbarian's Saga", 'Quartermane', 'The Bantam', 'The Shadoe', 'Mandar', 'Dog Tracy', 'Buck Gordon', 'Duck Savage', 'Hunting Wyrm', 'Shift Piscean', 'Shift Grendel', 'Shift Rattlebones', 'Shift Greenoak', 'Shift Thornpaw', 'Shift Ogre', 'Shift Dread Paladin', 'Shift Sugar Glider', 'Shift Fire Dwarf', 'Van Der Borst', 'Shift Bunferatu', 'Shift Ghulture', 'Frost Minotaur', 'Deadly Minotaur', 'Lively Minotaur', 'Natural Attack', 'Storm Sweep', 'Cat Scratch', 'Colossal Uppercut', 'Colossus Crunch', 'Cursed Flame', 'Ignite', 'Flame Strike', 'Firestorm', 'Storm Strike', 'Maelstrom', 'Taco Toss', 'Stinky Salute', 'Ice Breaker', 'Ritual Blade', 'Mander Blast', 'Death Ninja Pig', 'Ninja Slice', 'Ninja Slam', 'Thunder Spike', 'Stomp', 'Swipe', 'Wrath of Aquila', 'Wrath of Cronus', 'Wrath of Apollo', 'Wrath of Zeus', 'Wrath of Poseidon', 'Wrath of Ares'])
+SELECT_DOTS = frozenset(['Creeping Death', 'Cindertooth', 'Broiler', 'Bennu Alight', 'Befouling Brew', 'Link', 'Power Link', 'Inferno Salamander', 'Burning Rampage', 'Heck Hound', 'Wrath of Hades', 'Storm Hound', 'Frost Hound', 'Thunderstorm', 'Avenging Fossil', 'Frostbite', 'Spinysaur', 'Lightning Elf', 'Basilisk', 'Poison', 'Skeletal Dragon', 'Glimpse of Infinity'])
+SELECT_HITS = frozenset(['Firezilla', 'Earthwalker', 'Blight Hound', 'Gearhead Destroyer', 'Stone Colossus', 'Cyclonic Swarm', 'Doggone Frog', 'Disarming Spirit', 'Deadly Sting', 'Consume Life', 'Cripping Blow', 'Crystal Shard', 'Curse-Eater', 'Cursed Kitty', 'Contamination', 'Chill Bug', 'Conflagaration', 'Clever Imp', 'Chill Wind', 'Chilling Touch', 'Cheapshot', 'Chaotic Currents', 'Butcher Bat', 'Bull Rush', 'Blue Moon Bird', 'Bluster Blast', 'Bombardier Beetle', 'Blizzard Wind', 'Blitz Beast', 'Blood Boil', 'Bitter Chill', 'Bio-Gnomes', 'Blistering Bolt', 'Blazing Construct', 'Basic Bruiser', 'Bargain of Brass', 'Ballistic Bat', 'Backdrafter', 'Avenging Marid', 'Angelic Vigor', 'Death Scarab', 'Immolate', 'Efreet', 'King Artorius', 'Scion of Fire', "S'more Machine", 'Fire from Above', 'Sun Serpent', 'Brimstone Revenant', 'Hephaestus', 'Krampus', 'Nautilus Unleashed', 'Fire Cat', 'Fire Elf', 'Sunbird', 'Phoenix', 'Naphtha Scarab', 'Elemental Golem', 'Spirit Golem', 'Dream Golem', 'Ether Golem', 'Legend Golem', 'Volcanic Golem', 'Thermic Golem', 'Glacial Golem', 'Helephant', 'Frost Beetle', 'Snow Serpent', 'Evil Snowman', 'Ice Wyvern', 'Thieving Dragon', 'Colossus', 'Angry Snowpig', 'Handsome Fomori', 'Winter Moon', 'Woolly Mammoth', 'Lord of Winter', 'Abominable Weaver', 'Scion of Ice', 'Shatterhorn', 'Frostfeather', 'Imp', 'Leprechaun', 'Seraph', 'Sacred Charge', 'Centaur', 'Infestation', "Nature's Wrath", 'Goat Monk', 'Luminous Weaver', 'Gnomes!', 'Hungry Caterpillar', 'Grrnadier', 'Thunder Snake', 'Lightning Bats', 'Storm Shark', 'Kraken', 'Stormzilla', 'Stormwing', 'Triton', 'Catalan', 'Queen Calypso', 'Catch of the Day', 'Hammer of Thor', 'Wild Bolt', 'Insane Bolt', 'Leviathan', 'Storm Owl', 'Scion of Storm', "Rusalka's Wrath", 'Thunderman', 'Blood Bat', 'Troll', 'Cyclops', 'Minotaur', 'Vermin Virtuoso', 'Gobbler', 'Athena Battle Sight', 'Keeper of the Flame', 'Ninja Pigs', 'Splashsquatch', 'Medusa', 'Celestial Calendar', 'Scion of Myth', "Witch's House Call", 'Tatzlewurm Terror', 'Dark Sprite', 'Ghoul', 'Banshee', 'Vampire', 'Skeletal Pirate', 'Crimson Phantom', 'Wraith', 'Monster Mash', 'Headless Horseman', 'Lord of Night', "Dr. Von's Monster", 'Winged Sorrow', 'Scion of Death', 'Snack Attack', 'Scarab', 'Scorpion', 'Locust Swarm', 'Spectral Blast', 'Hydra', 'Loremaster', 'Ninja Piglets', 'Samoorai', 'Savage Paw', 'Spiritual Tribunal', 'Judgement', 'Vengeful Seraph', 'Chimera', 'Supernova', 'Mana Burn', 'Sabertooth', 'Gaze of Fate', 'Scion of Balance', 'Mockenspiel', 'Beary Surprise', 'Camp Bandit', 'Obsidian Colossus', 'Grim Reader', 'Dark & Stormy', "Barbarian's Saga", 'Quartermane', 'The Bantam', 'The Shadoe', 'Mandar', 'Dog Tracy', 'Buck Gordon', 'Duck Savage', 'Hunting Wyrm', 'Shift Piscean', 'Shift Grendel', 'Shift Rattlebones', 'Shift Greenoak', 'Shift Thornpaw', 'Shift Ogre', 'Shift Dread Paladin', 'Shift Sugar Glider', 'Shift Fire Dwarf', 'Van Der Borst', 'Shift Bunferatu', 'Shift Ghulture', 'Frost Minotaur', 'Deadly Minotaur', 'Lively Minotaur', 'Natural Attack', 'Storm Sweep', 'Cat Scratch', 'Colossal Uppercut', 'Colossus Crunch', 'Cursed Flame', 'Ignite', 'Flame Strike', 'Firestorm', 'Storm Strike', 'Maelstrom', 'Taco Toss', 'Stinky Salute', 'Ice Breaker', 'Ritual Blade', 'Mander Blast', 'Death Ninja Pig', 'Ninja Slice', 'Ninja Slam', 'Thunder Spike', 'Stomp', 'Swipe', 'Wrath of Aquila', 'Wrath of Cronus', 'Wrath of Apollo', 'Wrath of Zeus', 'Wrath of Poseidon', 'Wrath of Ares', 'Scales of Destiny', 'Gravestorm', 'Deathly Depths', 'Starspawn', 'Improbable Gaze', 'Tree of Strife'])
 AOE_DOTS = frozenset(["Death's Champion", "Champion's Blight", 'Scald', 'Wings of Fate', 'Rain of Fire', 'Fire Dragon', 'Reindeer Knight', 'Snow Angel', 'Deer Knight', 'Iron Curse'])
 AOE_HITS = frozenset(['Confounding Fiend', 'Desperate Daimyo', 'Cursed Medusa', 'Cursed Medusa I', 'Cursed Medusa II', 'Confounding Fiend I', 'Colossal Scorpion', 'Cold Harvest', 'Bloodletter', 'Arctic Blast', 'Colossafrog', 'Raging Bull', 'Meteor Strike', 'Blizzard', 'Snowball Barrage', 'Frost Giant', "Ratatoskr's Spin", 'Forest Lord', 'Tempest', 'Storm Lord', 'Sirens', 'Glowbug Squall', 'Sound of Musicology', 'Humongofrog', 'Earthquake', 'Orthrus', 'Mystic Colossus', 'Ship of Fools', 'Scarecrow', 'Call of Khrulhu', 'Leafstorm', 'Sandstorm', 'Power Nova', 'Ra', 'Nested Fury', 'Squall Wyvern', "Morganthe's Will", 'Steel Giant', 'Lycian Chimera', 'Lernaean Hydra', 'Lord of Atonement', "Morganthe's Venom", 'Eirkur Axebreaker', 'Wildfire Treant', 'Lava Giant', 'Fiery Giant', 'Lava Lord', 'Lord of Blazes', 'Snowball Strike', "Morganthe's Gaze", 'Tundra Lord', "Morganthe's Angst", 'Squall Wyvern', 'Lord of the Squall', "Morganthe's Ardor", 'Enraged Forest Lord', "Morganthe's Requiem", 'Death Seraph', 'Ominous Scarecrow', 'Bonetree Lord', 'Fable Lord', 'Lord Humongofrog', 'Noble Humongofrog', "Morganthe's Deceit", 'Lord of the Jungle', 'Freeze Ray', "Old One's Endgame", 'Blast Off!', 'Lava Giant', 'Lava Lord', 'Snowball Strike'])
 SELECT_SHADOW_HITS = frozenset(['Ultra Shadowstrike', 'Dark Nova', 'Shadowplume'])
@@ -181,6 +181,7 @@ pvp_no_enchant_logic_list = [
 
 # Assigns a casting logic to a spell's origin set
 casting_logic_dict = {
+    PIP_AURAS: 'AOE Pip Aura',
 	SELECT_RESHUFFLE: 'Ally Select Reshuffle',
 	HIT_ENCHANTS: 'Hit Enchant',
 	HEAL_ENCHANTS: 'Heal Enchant',
@@ -309,8 +310,8 @@ DAMAGE_TYPE_SCHOOLS = [
 ]
 
 # define the master hitting strategy
-master_strategy = ['AOE Golem Minion', 'Ally Select Blade', 'Enemy Select Trap', 'AOE Minion', 'AOE Global', 'AOE Blade', 'AOE Trap', 'AOE Hit Aura','AOE Golem Minion', 'Ally Select Blade', 'Enemy Select Trap', 'AOE Minion', 'AOE Global', 'AOE Blade', 'AOE Trap', 'AOE Hit Aura', 'AOE Offensive Shadow Creature', 'AOE DOT', 'AOE Hit', 'Enemy Select DOT', 'Enemy Select Hit', 'Enemy Select Hit Divide', 'AOE Polymorph']
-mob_strategy = ['AOE DOT', 'AOE Hit', 'Enemy Select DOT', 'Enemy Select Hit', 'Enemy Select Hit Divide', 'AOE Hit Aura', 'AOE Trap', 'AOE Global', 'AOE Blade','AOE Golem Minion' ,'AOE Minion', 'AOE Offensive Shadow Creature', 'AOE Polymorph']
+master_strategy = ['AOE Pip Aura', 'AOE Golem Minion', 'Ally Select Blade', 'Enemy Select Trap', 'AOE Minion', 'AOE Global', 'AOE Blade', 'AOE Trap', 'AOE Hit Aura','AOE Golem Minion', 'Ally Select Blade', 'Enemy Select Trap', 'AOE Minion', 'AOE Global', 'AOE Blade', 'AOE Trap', 'AOE Hit Aura', 'AOE Offensive Shadow Creature', 'AOE DOT', 'AOE Hit', 'Enemy Select DOT', 'Enemy Select Hit', 'Enemy Select Hit Divide', 'AOE Polymorph']
+mob_strategy = ['AOE DOT', 'AOE Hit', 'Enemy Select DOT', 'Enemy Select Hit', 'Enemy Select Hit Divide', 'AOE Pip Aura', 'AOE Hit Aura', 'AOE Trap', 'AOE Global', 'AOE Blade','AOE Golem Minion' ,'AOE Minion', 'AOE Offensive Shadow Creature', 'AOE Polymorph']
 pvp_strategy = ['Ally Select Stun Block', 'AOE Global', 'AOE Defense Aura', 'AOE Offensive Shadow Creature', 'AOE DOT', 'AOE Hit', 'Enemy Select DOT', 'Enemy Select Hit', 'Enemy Select Hit Divide']
 
 # Basic types
@@ -322,7 +323,7 @@ prism_types = ['AOE Prism', 'Enemy Select Prism']
 minion_types = ['AOE Minion', 'AOE Golem Minion']
 minion_utility_types = ['Ally Select Minion Utility', 'Ally Select Pacify', 'AOE Pacify', 'AOE Taunt']
 global_types = ['AOE Global']
-buff_types = ['Ally Select Blade', 'Enemy Select Trap', 'AOE Minion', 'AOE Global', 'AOE Blade', 'AOE Trap', 'AOE Hit Aura', 'AOE Offensive Shadow Creature']
+buff_types = ['AOE Pip Aura', 'Ally Select Blade', 'Enemy Select Trap', 'AOE Minion', 'AOE Global', 'AOE Blade', 'AOE Trap', 'AOE Hit Aura', 'AOE Offensive Shadow Creature']
 
 # Utilities for negative types
 weakness_counter_types = ['Ally Select Weakness Counter Utility', 'AOE Weakness Counter Utility', 'Enemy Select Wand Hit']
@@ -445,8 +446,6 @@ school_id_to_name = {v: k for k, v in school_name_to_id.items()}
 
 opposite_school_ids = {72777: 2343174, 2330892: 78318724, 2343174: 72777, 2448141: 83375795, 78318724: 2330892, 83375795: 2448141}
 
-
-
 class Fighter(CombatHandler):
 	def __init__(self, client: Client, clients: list[Client]):
 		self.client = client
@@ -468,73 +467,7 @@ class Fighter(CombatHandler):
 				return []
 
 
-	@logger.catch()
-	async def new_cast(
-			self,
-			target: Union["CombatCard", "wizwalker.combat.CombatMember", None],
-			*,
-			sleep_time: Optional[float] = 1.0,
-			debug_paint: bool = True,
-		):
-			"""
-			Cast this Card on another Card; a Member or with no target
-			Args:
-				target: Card, Member, or None if there is no target
-				sleep_time: How long to sleep after enchants and between multicasts or None for no sleep
-				debug_paint: If the card should be highlighted before clicking
-			"""
-			if isinstance(target, CombatCard):
-				cards_len_before = len(await self.combat_handler.get_cards())
-
-				await self.combat_handler.client.mouse_handler.click_window(
-					self._spell_window
-				)
-
-				await asyncio.sleep(sleep_time)
-
-				await self.combat_handler.client.mouse_handler.set_mouse_position_to_window(
-					target._spell_window
-				)
-
-				await asyncio.sleep(sleep_time)
-
-				if debug_paint:
-					await target._spell_window.debug_paint()
-
-				await self.combat_handler.client.mouse_handler.click_window(
-					target._spell_window
-				)
-
-				# wait until card number goes down
-				while len(await self.combat_handler.get_cards()) > cards_len_before:
-					await asyncio.sleep(0.1)
-
-				# wiz can't keep up with how fast we can cast
-				if sleep_time is not None:
-					await asyncio.sleep(sleep_time)
-
-			elif target is None:
-				await self.combat_handler.client.mouse_handler.click_window(
-					self._spell_window
-				)
-				# we don't need to sleep because nothing will be casted after
-
-			else:
-				await self.combat_handler.client.mouse_handler.click_window(
-					self._spell_window
-				)
-
-				# see above
-				if sleep_time is not None:
-					await asyncio.sleep(sleep_time)
-
-				await self.combat_handler.client.mouse_handler.click_window(
-					await target.get_name_text_window())
-
-	CombatCard.cast = new_cast
-
-
-	@logger.catch()
+	#@logger.catch()
 	async def is_fighting(self):
 		'''New accurate check for if we're in combat, using spellbook visibility'''
 		spellbook_path = ['WorldView', 'windowHUD', 'btnSpellbook']
@@ -542,27 +475,36 @@ class Fighter(CombatHandler):
 		return (not check and await self.client.in_battle())
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def wait_for_next_round(self, current_round: int, sleep_time: float = 0.5):
 		"""
 		Wait for the round number to change
 		"""
 		# can't use wait_for_value bc of the special in_combat condition
 		# so we don't get stuck waiting if combat ends
-		while await self.is_fighting() and self.client.combat_status:
+		while await self.client.in_battle() and self.client.combat_status:
 			new_round_number = await self.round_number()
 			if new_round_number > current_round:
 				return
 			await asyncio.sleep(sleep_time)
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def wait_for_combat(self, sleep_time: float = 0.5):
 		"""
 		Wait until in combat
 		"""
-		await utils.wait_for_value(self.is_fighting, True, sleep_time)
-		await self.handle_combat()
+		await utils.wait_for_value(self.client.in_battle, True, sleep_time)
+		self.error = False
+		while self.client.in_battle:
+			try:
+				await self.handle_combat()
+				self.error = False
+			except Exception as e:
+				print(f"{self.client.title} something went wrong: {e}")
+				self.error = True
+			else:
+				break
 		await self.client.send_key(Keycode.D, 0.1)
 
 
@@ -577,7 +519,7 @@ class Fighter(CombatHandler):
 		raise ValueError
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def handle_combat(self):
 		"""Handles an entire combat interaction"""
 		self.tc = True
@@ -599,62 +541,50 @@ class Fighter(CombatHandler):
 		self.selected_ally = None
 		self.selected_ally_id = None
 
-		while await self.is_fighting() and self.client.combat_status:
+		while await self.client.in_battle() and self.client.combat_status:
 			await self.wait_for_planning_phase()
 			self.real_round = await self.round_number()
 			# TODO: handle this taking longer than planning timer time
-			if not self.client.mouseless_status:
-				try:
-					await self.client.mouse_handler.activate_mouseless()
-				except:
-					pass
-				self.client.mouseless_status = True
-
-			# start = time.perf_counter()
-			await self.assign_stats()
-			self.card_exclusions = await self.get_valid_cards(None)
-			for c in self.cards:
-				c: CombatCard
-				type = await c.type_name()
-				g_spell = await c.get_graphical_spell()
-				effects = await g_spell.spell_effects()
-				# print(await c.display_name())
-				# print(await c.spell_id())
-				# for e in effects:
-				# 	name = await e.effect_type()
-				# 	print(name)
-				# print(type)
-				# print('-------------------------------------')
-			self.fizzled = await self.fizzle_detection()
-			if self.cards:
-				await self.assign_card_names()
-				await self.assign_pip_values()
-				await self.discard_unsupported()
-				await self.assign_spell_logic()
-				await self.effect_enchant_ID(self.client_member)
-				await self.enchant_all()
-				if self.client.discard_duplicate_cards:
-					await self.discard_useless()
-				else:
-					self.combat_resolver = await self.client.duel.combat_resolver()
-				await self.get_tc()
-				await self.handle_round()
-			else: 
-				logger.debug(f"Client {self.client.title} - Passing")
-				await self.pass_button()
-				self.passed = True
+			async with self.client.mouse_handler:
+				# start = time.perf_counter()
+				await self.assign_stats()
+				self.card_exclusions = await self.get_valid_cards(None)
+				for c in self.cards:
+					c: CombatCard
+					type = await c.type_name()
+					g_spell = await c.get_graphical_spell()
+					effects = await g_spell.spell_effects()
+					# print(await c.display_name())
+					# print(await c.spell_id())
+					# for e in effects:
+					# 	name = await e.effect_type()
+					# 	print(name)
+					# print(type)
+					# print('-------------------------------------')
+				self.fizzled = await self.fizzle_detection()
+				if self.cards:
+					await self.assign_card_names()
+					await self.assign_pip_values()
+					await self.discard_unsupported()
+					await self.assign_spell_logic()
+					await self.effect_enchant_ID(self.client_member)
+					await self.enchant_all()
+					if self.client.discard_duplicate_cards:
+						await self.discard_useless()
+					else:
+						self.combat_resolver = await self.client.duel.combat_resolver()
+					await self.get_tc()
+					await self.handle_round()
+				else: 
+					logger.debug(f"Client {self.client.title} - Passing")
+					await self.pass_button()
+					self.passed = True
 			# end = time.perf_counter()
 			# logger.debug(f'Turn logic took {end - start} seconds')
-			if self.client.mouseless_status:
-				try:
-					await self.client.mouse_handler.deactivate_mouseless()
-				except:
-					pass
-				self.client.mouseless_status = False
 			await self.wait_for_next_round(self.real_round)
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def get_valid_cards(self, exclusions):
 		await asyncio.sleep(0.45)
 		self.cards = await self.get_cards()
@@ -675,7 +605,7 @@ class Fighter(CombatHandler):
 		return exclusions
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def enchant_logic_stacking(self, spell, enchant, selected) -> bool:
 		"""Checks if enchanted version of the card is already in play"""
 		graphical_spell = await spell.wait_for_graphical_spell()
@@ -690,7 +620,7 @@ class Fighter(CombatHandler):
 		return True # will return true if hypothetical enchanted version hasn't been casted
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def is_spell_in_hanging_effect(self, spell):
 		graphical_spell = await spell.wait_for_graphical_spell()
 		card_atr = (await graphical_spell.template_id(), await graphical_spell.enchantment())
@@ -700,7 +630,7 @@ class Fighter(CombatHandler):
 		return False
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def discard_spell_in_hanging_effect(self, spell):
 		graphical_spell = await spell.wait_for_graphical_spell()
 		card_atr = (await graphical_spell.template_id(), await graphical_spell.enchantment())
@@ -709,10 +639,14 @@ class Fighter(CombatHandler):
 			if i[0] == card_atr[0] and i[1] == card_atr[1]:
 				logger.debug(f"Client {self.client.title} - Discarding {self.card_names[spell]}")
 				await spell.discard(sleep_time = 0.25)
-				break
+				_ = await self.get_valid_cards(self.card_exclusions)
+				await self.assign_card_names()
+				await self.assign_spell_logic()
+				await self.assign_pip_values()
+				return
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def effect_enchant_ID(self, selected):
 		"""Reads casted & in hand enchanted cards for enchanting logic"""
 		#TODO selected ally/enemy for enchanting stacking logic
@@ -736,7 +670,7 @@ class Fighter(CombatHandler):
 			self.current_hand_IDs.append(card_atr)
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def get_card_counts(self) -> Tuple[int, int]: #Olaf's reads UI of card counts
 		"""Reads UI for card count and returns values"""
 		window = None
@@ -750,18 +684,21 @@ class Fighter(CombatHandler):
 		return int(res1), int(res2)
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def fizzle_detection(self) -> bool:
 		"""Compares prev card count to current card count to detect fizzling"""
 		self.cur_card_count = len(await self.get_cards()) + (await self.get_card_counts())[0] # checks the current amount of cards in hand at start of round 
 		if self.real_round > 1 : #checks if round is greater than 1 because you can't fizzle on round 1
-			if self.cur_card_count >= self.prev_card_count and not self.passed: # checks if the current card count equals previous card count without passing, if it's true it means you fizzled.
-				logger.debug(f"Client {self.client.title} - Fizzled")
-				return True
+			if not self.error:
+				if self.cur_card_count >= self.prev_card_count and not self.passed: # checks if the current card count equals previous card count without passing or erroring, if it's true it means you fizzled.
+					logger.debug(f"Client {self.client.title} - Fizzled")
+					return True
+			else:
+				self.error = False
 		return False
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def assign_card_names(self):
 		"""Assigns the name for each card in a dict to avoid over reading"""
 		self.card_names = {}
@@ -773,7 +710,7 @@ class Fighter(CombatHandler):
 				# 	await self.assign_card_names()
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def discard_unsupported(self):
 		"""Discards all spells not in the master spell list"""
 		discarded = True
@@ -790,7 +727,7 @@ class Fighter(CombatHandler):
 					break
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def assign_spell_logic(self):
 		"""Assigns spell logic string and enchanting logic strings to all spells """
 		self.spell_logic = {}
@@ -803,7 +740,7 @@ class Fighter(CombatHandler):
 						self.enchant_logic[c] = enchant_logic_dict[s]
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def assign_pip_values(self):
 		'''Assigns a calculated pip value to every spell in the hand. Shadow pips are worth 4 regular pips.'''
 		self.pip_values = {}
@@ -816,7 +753,7 @@ class Fighter(CombatHandler):
 			self.pip_values[s] = card_rank
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def enchant_all(self):
 		"""Enchants all compatible cards with any compatible enchants"""
 		enchanted = True
@@ -864,7 +801,7 @@ class Fighter(CombatHandler):
 					break
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def discard_duplicate_types(self, iterations: int = 1):
 		"""Discards duplicate spell types in hand"""
 		#TODO make a version that discards based on spell name
@@ -890,7 +827,6 @@ class Fighter(CombatHandler):
 							await self.assign_card_names()
 							await self.assign_spell_logic()
 							await self.assign_pip_values()
-							await self.enchant_all()
 							discarded = True
 							break
 
@@ -898,7 +834,7 @@ class Fighter(CombatHandler):
 	async def is_control_grayed(self, win: Window): # if button is not gray it will return false
 		return await win.read_value_from_offset(688, "bool")
 
-	@logger.catch()
+	#@logger.catch()
 	async def get_tc(self):
 		if self.tc:
 			'''Draws TC equivalent to half the available free spaces in the hand. Example: 3/7 cards in hand = drawing twice'''
@@ -925,11 +861,11 @@ class Fighter(CombatHandler):
 				if name == x:
 					return i
 
-	@logger.catch()
+	#@logger.catch()
 	async def discard_useless(self, strategy: list[str] = None):
 		'''Discards spells that would be detrimental to cast. Example: Will discard minions in hand if a minion is already up'''
 		discarded = True
-		minions = [a for a in self.allies if await a.is_minion()]
+		minions = self.mobs
 		self.combat_resolver = await self.client.duel.combat_resolver()
 		while discarded:
 			discarded = False
@@ -962,17 +898,17 @@ class Fighter(CombatHandler):
 				for i in to_discard:
 					logger.debug(f"Client {self.client.title} - Discarding {self.card_names[i]}")
 					await i.discard(sleep_time=0.25)
-				_ = await self.get_valid_cards(self.card_exclusions)
-				await self.assign_card_names()
-				await self.assign_spell_logic()
-				await self.assign_pip_values()
-				await self.enchant_all()
+					_ = await self.get_valid_cards(self.card_exclusions)
+					await self.assign_card_names()
+					await self.assign_spell_logic()
+					await self.assign_pip_values()
+					await self.enchant_all()
 				discarded = True
 
 
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def assign_stats(self):
 		'''Assign client-specific stats and member/participant objects and stats'''
 		self.members = await self.get_members()
@@ -1055,7 +991,7 @@ class Fighter(CombatHandler):
 		self.selected_enemy = max(self.mob_healths, key = lambda h: self.mob_healths[h])
 
 
-	@logger.catch()
+	#@logger.catch()
 	async def handle_round(self):
 		"""Uses strategy lists and conditional strategies to decide on the best spell to cast, then casts it."""
 
@@ -1110,7 +1046,7 @@ class Fighter(CombatHandler):
 			selected_ally = self.client_member
 
 		# Healing logic
-		player_members = [a for a in self.allies if await a.is_player() == True]
+		player_members = self.allies
 		health_percentages = {}
 		for a in player_members:
 			health_percentages[a] = float(await a.health()) / float(await a.max_health())
@@ -1120,7 +1056,7 @@ class Fighter(CombatHandler):
 		if health_percentages[highest_priority_ally] < 0.51:
 			selected_ally = highest_priority_ally
 			priority_types += heal_types
-		if len([c for c in self.cards if self.card_names[c] == "Reshuffle"]) > len([c for c in self.cards if not self.card_names[c] == "Reshuffle" and not await c.is_treasure_card()]) and len([self.cards]) < 6:
+		if len([c for c in self.cards if self.card_names[c] == "Reshuffle"]) >= len([c for c in self.cards if not self.card_names[c] == "Reshuffle" and not await c.is_treasure_card()]) and len([self.cards]) < 6:
 			selected_ally = self.client_member
 			priority_types += reshuffle_types
 
@@ -1399,10 +1335,10 @@ class Fighter(CombatHandler):
 						selected_spell_logic = self.spell_logic[selected_spell]
 						# Ally Selection, if not done via playstyle mods already
 						if not selected_ally:
-							selected_ally = await self.get_selected_ally(selected_spell)
+							selected_ally = await self.get_selected_ally(selected_spell) # does spell work for any of the users school + who has the highest damage
 
-							if selected_ally is not None:
-								await self.effect_enchant_ID(selected_ally)
+							if selected_ally is not None: 
+								await self.effect_enchant_ID(selected_ally) # gets spells 
 
 								if await self.is_spell_in_hanging_effect(selected_spell) == False: # and self.client.discard_duplicate_cards: # or self.client.discard_duplicate_cards:
 									spell_selected = True
@@ -1431,8 +1367,7 @@ class Fighter(CombatHandler):
 
 									if selected_ally is not None:
 										self.selected_ally_id = await selected_ally.owner_id()
-
-								break
+										break
 							# keep track of spell incase we cannot find a valid alternative
 							# for non-team based combat, do not consider allies as an option
 							elif not self.client.automatic_team_based_combat and not self.client.discard_duplicate_cards and backup_spell is None:
@@ -1456,6 +1391,8 @@ class Fighter(CombatHandler):
 		#cards = [ele for ele in self.cards if ele not in self.removed_spells]
 
 		self.bypass_strategy_to_kill, self.can_kill = await self.damage_calc_handle_round(self.cards)
+		if self.bypass_strategy_to_kill:
+			print(f" debug bypass Client {self.client.title} - Casting {self.card_names[self.bypass_strategy_to_kill]}")
 		# print(self.can_kill)
 		self.prev_card_count = len(await self.get_cards()) + (await self.get_card_counts())[0] # gets card amount after enchants and discards
 		# update previously used spell types, and those that aren't purely done by conditionals
@@ -1486,6 +1423,7 @@ class Fighter(CombatHandler):
 		# Casting logic
 		while True:
 			if self.selected_spell:
+				print(f" debug Client {self.client.title} - Casting {self.card_names[self.selected_spell]}")
 				selected_spell_logic = self.spell_logic[self.selected_spell]
 				if 'AOE' in selected_spell_logic:
 					logger.debug(f"Client {self.client.title} - Casting {self.card_names[self.selected_spell]}")
@@ -1508,8 +1446,8 @@ class Fighter(CombatHandler):
 				self.passed = False
 			else:
 				logger.debug(f"Client {self.client.title} - Passing")
-				await attempt_activate_mouseless(self.client)
-				await self.pass_button()
+				async with self.client.mouse_handler:
+					await self.pass_button()
 				self.passed = True
 
 			# detect failed cast, only if the client is soloing and is not in pvp as to avoid issues
@@ -1523,22 +1461,42 @@ class Fighter(CombatHandler):
 			else:
 				break
 
-	async def get_selected_ally(self, spell):
-		spiritblade = [2330892, 78318724, 2448141, 1027491821]  # list of schools [life, death, myth, balance]
-		elementalblade = [83375795, 2343174, 72777, 102749182]  # list of schools [storm, fire, ice, balance]
+	async def get_selected_ally(self, spell: CombatCard):
+
 		non_balance_uni_blade_names = ['Dark Pact']
 		selected_graphical_spell = await spell.get_graphical_spell()
 		selected_spell_school = await selected_graphical_spell.magic_school_id()
-		allies_to_compare = [a for a in self.allies if await a.is_player() == True if await self.member_participants[a].primary_magic_school_id() == selected_spell_school or self.card_names[spell] == "Spirit Blade" and await self.member_participants[a].primary_magic_school_id() in spiritblade or self.card_names[spell] == "Elemental Blade" and await self.member_participants[a].primary_magic_school_id() in elementalblade or selected_spell_school == 1027491821 or self.card_names[spell] in non_balance_uni_blade_names]
+		async def get_allies_to_compare(spell: CombatCard):
+			spiritblade = [2330892, 78318724, 2448141, 1027491821]  # list of schools [life, death, myth, balance]
+			elementalblade = [83375795, 2343174, 72777, 1027491821 ]  # list of schools [storm, fire, ice, balance]
+			compare = []
+			for ally in self.allies:
+				if await ally.is_player():
+					if await self.member_participants[ally].primary_magic_school_id() == selected_spell_school:
+						compare.append(ally)
+					elif self.card_names[spell] == "Spirit Blade" and await self.member_participants[ally].primary_magic_school_id() in spiritblade:
+						compare.append(ally)
+					elif self.card_names[spell] == "Elemental Blade" and await self.member_participants[ally].primary_magic_school_id() in elementalblade:
+						compare.append(ally)
+					elif selected_spell_school == 1027491821:
+						if not self.card_names[spell] == "Elemental Blade" and not self.card_names[spell] == "Spirit Blade":
+							compare.append(ally)
+					elif self.card_names[spell] in non_balance_uni_blade_names:
+						compare.append(ally)
+			return compare
+		allies_to_compare = await get_allies_to_compare(spell)
+	
 		if allies_to_compare:
 			max_ally_damages = {}
 			for a in allies_to_compare:
 				max_ally_damages[a] = max(self.member_damages[a])
 			# return the ally with the max damage, school matched
 			selected_ally = max(max_ally_damages, key=lambda a: max_ally_damages[a])
+			allies_to_compare_names = [await a.name() for a in allies_to_compare]
+			#print(f"{await selected_ally.name()} , {await spell.display_name()}, {allies_to_compare_names}")
 			return selected_ally
-
-		return None
+		else:
+			return None
 
 #big thanks to major for doing most of the work, & click for helping
 	#TODO not overread
