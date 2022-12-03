@@ -354,17 +354,18 @@ async def mass_key_press(foreground_client : Client, background_clients : list[C
 
 async def sync_camera(client: Client, xyz: XYZ = None, yaw: float = None):
 	# Teleports the freecam to a specified position, yaw, etc.
-	if not xyz:
-		xyz = await client.body.position()
+	# if not xyz:
+	# 	xyz = await client.body.position()
 
-	if not yaw:
-		yaw = await client.body.yaw()
+	# if not yaw:
+	# 	yaw = await client.body.yaw()
 
-	xyz.z += 200
+	# xyz.z += 200
 
-	camera = await client.game_client.free_camera_controller()
-	await camera.write_position(xyz)
-	await camera.write_yaw(yaw)
+	# camera = await client.game_client.free_camera_controller()
+	# await camera.write_position(xyz)
+	# await camera.write_yaw(yaw)
+	logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
 
 
 async def xyz_sync(foreground_client : Client, background_clients : list[Client], turn_after : bool = True, debug : bool = False):
@@ -614,29 +615,31 @@ async def main():
 
 	async def toggle_freecam_hotkey(debug: bool = True):
 		global freecam_status
-		if foreground_client:
-			if await is_free(foreground_client):
-				if await foreground_client.game_client.is_freecam():
-					if debug:
-						logger.debug(f'{toggle_freecam_key} key pressed, disabling freecam.')
-					await foreground_client.camera_elastic()
-					freecam_status = False
-				else:
-					if debug:
-						logger.debug(f'{toggle_freecam_key} key pressed, enabling freecam.')
-					freecam_status = True
-					await sync_camera(foreground_client)
-					await foreground_client.camera_freecam()
+		logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
+		# if foreground_client:
+		# 	if await is_free(foreground_client):
+		# 		if await foreground_client.game_client.is_freecam():
+		# 			if debug:
+		# 				logger.debug(f'{toggle_freecam_key} key pressed, disabling freecam.')
+		# 			await foreground_client.camera_elastic()
+		# 			freecam_status = False
+		# 		else:
+		# 			if debug:
+		# 				logger.debug(f'{toggle_freecam_key} key pressed, enabling freecam.')
+		# 			freecam_status = True
+		# 			await sync_camera(foreground_client)
+		# 			await foreground_client.camera_freecam()
 
 
 	async def tp_to_freecam_hotkey():
-		if foreground_client:
-			logger.debug(f'Shift + {toggle_freecam_key} key pressed, teleporting foreground client to freecam position.')
-			if await foreground_client.game_client.is_freecam():
-				camera = await foreground_client.game_client.free_camera_controller()
-				camera_pos = await camera.position()
-				await toggle_freecam_hotkey(False)
-				await foreground_client.teleport(camera_pos, wait_on_inuse=True, purge_on_after_unuser_fixer=True)
+		logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
+		# if foreground_client:
+		# 	logger.debug(f'Shift + {toggle_freecam_key} key pressed, teleporting foreground client to freecam position.')
+		# 	if await foreground_client.game_client.is_freecam():
+		# 		camera = await foreground_client.game_client.free_camera_controller()
+		# 		camera_pos = await camera.position()
+		# 		await toggle_freecam_hotkey(False)
+		# 		await foreground_client.teleport(camera_pos, wait_on_inuse=True, purge_on_after_unuser_fixer=True)
 
 
 	async def toggle_questing_hotkey():
@@ -1195,7 +1198,8 @@ async def main():
 										await toggle_auto_pet_hotkey()
 
 									case 'Freecam':
-										await toggle_freecam_hotkey()
+										logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
+										# await toggle_freecam_hotkey()
 
 									case 'Camera Collision':
 										if foreground_client:
@@ -1285,7 +1289,8 @@ async def main():
 									case 'Mass':
 										await mass_navmap_teleport_hotkey()
 									case 'Freecam':
-										await tp_to_freecam_hotkey()
+										logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
+										# await tp_to_freecam_hotkey()
 									case _:
 										logger.debug(f'Unknown teleport type: {com.data}')
 
@@ -1341,7 +1346,8 @@ async def main():
 							case deimosgui.GUICommandType.AnchorCam:
 								if foreground_client:
 									if freecam_status:
-										await toggle_freecam_hotkey()
+										logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
+										# await toggle_freecam_hotkey()
 
 									camera = await foreground_client.game_client.elastic_camera_controller()
 
@@ -1355,46 +1361,48 @@ async def main():
 										await camera.write_attached_client_object(entity)
 
 							case deimosgui.GUICommandType.SetCamPosition:
-								if foreground_client:
-									if not freecam_status:
-										await toggle_freecam_hotkey()
+								logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
+								# if foreground_client:
+									# if not freecam_status:
+										# await toggle_freecam_hotkey()
 
-									camera: DynamicCameraController = await foreground_client.game_client.selected_camera_controller()
-									camera_pos: XYZ = await camera.position()
-									camera_pitch, camera_roll, camera_yaw = await camera.orientation()
+									# camera: DynamicCameraController = await foreground_client.game_client.selected_camera_controller()
+									# camera_pos: XYZ = await camera.position()
+									# camera_pitch, camera_roll, camera_yaw = await camera.orientation()
 
-									x_input = param_input(com.data['X'], camera_pos.x)
-									y_input = param_input(com.data['Y'], camera_pos.y)
-									z_input = param_input(com.data['Z'], camera_pos.z)
-									yaw_input = param_input(com.data['Yaw'], camera_yaw)
-									roll_input = param_input(com.data['Roll'], camera_roll)
-									pitch_input = param_input(com.data['Pitch'], camera_pitch)
+									# x_input = param_input(com.data['X'], camera_pos.x)
+									# y_input = param_input(com.data['Y'], camera_pos.y)
+									# z_input = param_input(com.data['Z'], camera_pos.z)
+									# yaw_input = param_input(com.data['Yaw'], camera_yaw)
+									# roll_input = param_input(com.data['Roll'], camera_roll)
+									# pitch_input = param_input(com.data['Pitch'], camera_pitch)
 
-									input_pos = XYZ(x_input, y_input, z_input)
-									logger.debug(f'Teleporting Camera to {input_pos}, yaw={yaw_input}, roll={roll_input}, pitch={pitch_input}')
+									# input_pos = XYZ(x_input, y_input, z_input)
+									# logger.debug(f'Teleporting Camera to {input_pos}, yaw={yaw_input}, roll={roll_input}, pitch={pitch_input}')
 
-									await camera.write_position(input_pos)
-									await camera.update_orientation(Orient(pitch_input, roll_input, yaw_input))
+									# await camera.write_position(input_pos)
+									# await camera.update_orientation(Orient(pitch_input, roll_input, yaw_input))
 
 							case deimosgui.GUICommandType.SetCamDistance:
-								if foreground_client:
-									camera = await foreground_client.game_client.elastic_camera_controller()
-									current_zoom = await camera.distance()
-									current_min = await camera.min_distance()
-									current_max = await camera.max_distance()
-									distance_input = param_input(com.data["Distance"], current_zoom)
-									min_input = param_input(com.data["Min"], current_min)
-									max_input = param_input(com.data["Max"], current_max)
-									logger.debug(f'Setting camera distance to {distance_input}, min={min_input}, max={max_input}')
+								logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
+								# if foreground_client:
+								# 	camera = await foreground_client.game_client.elastic_camera_controller()
+								# 	current_zoom = await camera.distance()
+								# 	current_min = await camera.min_distance()
+								# 	current_max = await camera.max_distance()
+								# 	distance_input = param_input(com.data["Distance"], current_zoom)
+								# 	min_input = param_input(com.data["Min"], current_min)
+								# 	max_input = param_input(com.data["Max"], current_max)
+								# 	logger.debug(f'Setting camera distance to {distance_input}, min={min_input}, max={max_input}')
 
-									if com.data["Distance"]:
-										await camera.write_distance_target(distance_input)
-										await camera.write_distance(distance_input)
-									if com.data["Min"]:
-										await camera.write_min_distance(min_input)
-										await camera.write_zoom_resolution(min_input)
-									if com.data["Max"]:
-										await camera.write_max_distance(max_input)
+								# 	if com.data["Distance"]:
+								# 		await camera.write_distance_target(distance_input)
+								# 		await camera.write_distance(distance_input)
+								# 	if com.data["Min"]:
+								# 		await camera.write_min_distance(min_input)
+								# 		await camera.write_zoom_resolution(min_input)
+								# 	if com.data["Max"]:
+								# 		await camera.write_max_distance(max_input)
 
 							case deimosgui.GUICommandType.GoToZone:
 								if foreground_client:
@@ -1442,12 +1450,13 @@ async def main():
 									await asyncio.gather(*[auto_potions_force_buy(client, True) for client in clients])
 
 							case deimosgui.GUICommandType.ExecuteFlythrough:
-								async def _flythrough():
-									await execute_flythrough(foreground_client, com.data)
-									await foreground_client.camera_elastic()
+								logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
+								# async def _flythrough():
+								# 	await execute_flythrough(foreground_client, com.data)
+								# 	await foreground_client.camera_elastic()
 
-								if foreground_client:
-									flythrough_task = asyncio.create_task(_flythrough())
+								# if foreground_client:
+								# 	flythrough_task = asyncio.create_task(_flythrough())
 
 							case deimosgui.GUICommandType.KillFlythrough:
 								if flythrough_task is not None and not flythrough_task.cancelled():
