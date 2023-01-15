@@ -30,7 +30,7 @@ from src.stat_viewer import total_stats
 from src.teleport_math import navmap_tp, calc_Distance
 from src.questing import Quester
 from src.sigil import Sigil
-from src.utils import index_with_str, is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world, collect_wisps_with_limit, try_task_coro, read_webpage
+from src.utils import index_with_str, is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world, collect_wisps_with_limit, try_task_coro, read_webpage, assign_pet_level
 from src.paths import advance_dialog_path, decline_quest_path
 import PySimpleGUI as gui
 import pyperclip
@@ -208,6 +208,7 @@ freecam_status = False
 hotkey_status = False
 questing_status = False
 auto_pet_status = False
+side_quest_status = False
 tool_status = True
 original_client_locations = dict()
 
@@ -698,6 +699,23 @@ async def main():
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Auto PetStatus', 'Enabled')))
 				auto_pet_task = asyncio.create_task(try_task_coro(auto_pet_loop, walker.clients, True))
 
+	async def toggle_side_quests():
+		global side_quest_status
+
+		if side_quest_status is not None:
+			if side_quest_status:
+				logger.debug('Disabling side quests.')
+				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Side QuestsStatus', 'Disabled')))		
+
+			else:
+				logger.debug('Enabling side quests.')
+				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Side QuestsStatus', 'Enabled')))
+			
+			side_quest_status = not side_quest_status
+		else:
+			logger.debug('This config variable has not yet been initialized, enabling the option now.')
+			side_quest_status = True
+
 
 	async def enable_hotkeys(exclude_freecam: bool = False, debug: bool = False):
 		# adds every hotkey
@@ -824,14 +842,13 @@ async def main():
 
 		await asyncio.gather(*[async_combat(p) for p in walker.clients])
 
-
 	async def dialogue_loop():
 		# auto advances dialogue for every client, individually and concurrently
 		async def async_dialogue(client: Client):
 			while True:
 				if not freecam_status:
 					if await is_visible_by_path(client, advance_dialog_path):
-						if await is_visible_by_path(client, decline_quest_path):
+						if await is_visible_by_path(client, decline_quest_path) and not side_quest_status:
 							await client.send_key(key=Keycode.ESC)
 							await asyncio.sleep(0.1)
 							await client.send_key(key=Keycode.ESC)
@@ -1201,6 +1218,9 @@ async def main():
 										logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
 										# await toggle_freecam_hotkey()
 
+									case 'Side Quests':
+										await toggle_side_quests()
+
 									case 'Camera Collision':
 										if foreground_client:
 											camera: ElasticCameraController = await foreground_client.game_client.elastic_camera_controller()
@@ -1359,6 +1379,14 @@ async def main():
 										entity_name = await entity.object_name()
 										logger.debug(f'Anchoring camera to entity {entity_name}')
 										await camera.write_attached_client_object(entity)
+
+							case deimosgui.GUICommandType.SetPetWorld:
+								if (com.data[1] is None):
+									logger.debug('Invalid pet world selected!')
+								else:
+									logger.debug(f'Setting Auto Pet World to {com.data[1]}')
+									assign_pet_level(com.data[1])
+										
 
 							case deimosgui.GUICommandType.SetCamPosition:
 								logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")

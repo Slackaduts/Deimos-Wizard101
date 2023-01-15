@@ -37,6 +37,8 @@ class GUICommandType(Enum):
 	ExecuteBot = auto()
 	KillBot = auto()
 
+	SetPetWorld = auto()
+
 	SetScale = auto()
 
 	# deimos -> window
@@ -66,7 +68,7 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 	def hotkey_button(name, auto_size=False, text_color=gui_text_color, button_color=gui_button_color):
 		return original_hotkey_button(name, auto_size, text_color, button_color)
 
-	toggles = ['Speedhack', 'Combat', 'Dialogue', 'Sigil', 'Questing', 'Auto Pet']
+	toggles = ['Speedhack', 'Combat', 'Dialogue', 'Sigil', 'Questing', 'Auto Pet', 'Side Quests']
 	hotkeys = ['Quest TP', 'Freecam', 'Freecam TP']
 	mass_hotkeys = ['Mass TP', 'XYZ Sync', 'X Press']
 	toggles_layout = [[hotkey_button(name), gui.Text(f'Disabled', key=f'{name}Status', auto_size_text=False, size=(7, 1), text_color=gui_text_color)] for name in toggles]
@@ -181,6 +183,7 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 	misc_utils_layout = [
 		[gui.Text(dev_utils_notice, text_color=gui_text_color)],
 		[gui.Text('Scale:', text_color=gui_text_color), gui.InputText(size=(8, 1), key='scale'), hotkey_button('Set Scale')],
+		[gui.Text('Select a pet world:', text_color=gui_text_color), gui.Combo(['WizardCity', 'Krokotopia', 'Marleybone', 'Mooshu', 'Dragonspyre'], default_value='WizardCity', readonly=True,text_color=gui_text_color, size=(13, 1), key='PetWorldInput'), hotkey_button('Set Auto Pet World', True)],
 	]
 
 	framed_misc_utils_layout = gui.Frame('Misc Utils', misc_utils_layout, title_color=gui_text_color)
@@ -244,7 +247,7 @@ def manage_gui(send_queue: queue.Queue, recv_queue: queue.Queue, gui_theme, gui_
 				send_queue.put(GUICommand(GUICommandType.Close))
 
 			# Toggles
-			case 'Speedhack' | 'Combat' | 'Dialogue' | 'Sigil' | 'Questing' | 'Auto Pet' | 'Freecam' | \
+			case 'Speedhack' | 'Combat' | 'Dialogue' | 'Sigil' | 'Questing' | 'Auto Pet' | 'Freecam' | 'Side Quests' | \
 						'Toggle Camera Collision':
 				send_queue.put(GUICommand(GUICommandType.ToggleOption, event.replace('Toggle', '').strip()))
 
@@ -363,6 +366,10 @@ def manage_gui(send_queue: queue.Queue, recv_queue: queue.Queue, gui_theme, gui_
 				ally_input = inputs['AllyInput']
 				window['EnemyInput'].update(ally_input)
 				window['AllyInput'].update(enemy_input)
+
+			case 'Set Auto Pet World':
+				if inputs['PetWorldInput']:
+					send_queue.put(GUICommand(GUICommandType.SetPetWorld, (False, str(inputs['PetWorldInput']))))
 
 			# Other
 			case _:

@@ -1224,3 +1224,15 @@ def read_webpage(url):
 		return []
 	else:
 		return line_list
+
+def assign_pet_level(destinationLevel):
+	pet_world_tracks = ['btnTrack0', 'btnTrack1', 'btnTrack2', 'btnTrack3', 'btnTrack4']
+	pet_world_list = ['WizardCity', 'Krokotopia', 'Marleybone', 'Mooshu', 'Dragonspyre']
+
+	pet_world_index = pet_world_list.index(destinationLevel)
+	selected_track = pet_world_tracks[pet_world_index]
+
+	if selected_track is not None:
+		for index, track in enumerate(wizard_city_dance_game_path):
+			if (track in pet_world_tracks):
+				wizard_city_dance_game_path[index] = selected_track
