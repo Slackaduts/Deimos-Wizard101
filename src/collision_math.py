@@ -4,8 +4,8 @@ import asyncio
 import math
 from typing import Iterable, List, Tuple
 from wizwalker import XYZ, Orient, Client
-import matplotlib
-import matplotlib.pyplot as plt
+# import matplotlib
+# import matplotlib.pyplot as plt
 from src.collision import BoxGeomParams, CollisionWorld, CylinderGeomParams, MeshGeomParams, ProxyMesh, ProxyType, SphereGeomParams, TubeGeomParams, get_collision_data, CollisionFlag
 from src.teleport_math import calc_squareDistance
 import aiofiles

@@ -403,7 +403,7 @@ class Quester():
             return True
             
         elif "Nanavator" in await self.read_spiral_door_title(client):
-            location = await self.find_quest_zone_area_name(client, nanavato_locations)
+            location = await self.find_quest_zone_area_name(client, nanavator_locations)
             await new_portals_cycle(client, location)
             return True
         
