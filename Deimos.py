@@ -1230,8 +1230,8 @@ async def main():
 										logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
 										# await toggle_freecam_hotkey()
 
-									case 'Side Quests':
-										await toggle_side_quests()
+									# case 'Side Quests':
+									# 	await toggle_side_quests()
 
 									case 'Camera Collision':
 										if foreground_client:
