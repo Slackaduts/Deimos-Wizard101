@@ -30,7 +30,7 @@ from src.stat_viewer import total_stats
 from src.teleport_math import navmap_tp, calc_Distance
 from src.questing import Quester
 from src.sigil import Sigil
-from src.utils import index_with_str, is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world, collect_wisps_with_limit, try_task_coro, read_webpage, assign_pet_level
+from src.utils import index_with_str, is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world, collect_wisps_with_limit, try_task_coro, read_webpage#, assign_pet_level
 from src.paths import advance_dialog_path, decline_quest_path
 import PySimpleGUI as gui
 import pyperclip
@@ -561,21 +561,31 @@ async def main():
 				combat_task = asyncio.create_task(try_task_coro(combat_loop, walker.clients, True))
 
 
-	async def toggle_dialogue_hotkey():
+	async def toggle_dialogue_hotkey(side_quests: bool = False):
 		global dialogue_task
 		global gui_send_queue
+		global side_quest_status
 
 		if not freecam_status:
 			if dialogue_task is not None and not dialogue_task.cancelled():
+				side_quest_status = False
 				dialogue_task.cancel()
 				dialogue_task = None
 				logger.debug(f'{toggle_auto_dialogue_key} key pressed, disabling auto dialogue.')
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('DialogueStatus', 'Disabled')))
 
 			else:
-				logger.debug(f'{toggle_auto_dialogue_key} key pressed, enabling auto dialogue.')
+				side_quest_log_str = ""
+				side_quest_status = side_quests
+				if side_quest_status:
+					side_quest_log_str += " and auto side quests functionality"
+				logger.debug(f'{toggle_auto_dialogue_key} key pressed, enabling auto dialogue{side_quest_log_str}.')
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('DialogueStatus', 'Enabled')))
 				dialogue_task = asyncio.create_task(try_task_coro(dialogue_loop, walker.clients, True))
+
+
+	async def toggle_dialogue_side_quests_hotkey():
+		await toggle_dialogue_hotkey(True)
 
 
 
@@ -699,22 +709,22 @@ async def main():
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Auto PetStatus', 'Enabled')))
 				auto_pet_task = asyncio.create_task(try_task_coro(auto_pet_loop, walker.clients, True))
 
-	async def toggle_side_quests():
-		global side_quest_status
+	# async def toggle_side_quests():
+	# 	global side_quest_status
 
-		if side_quest_status is not None:
-			if side_quest_status:
-				logger.debug('Disabling side quests.')
-				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Side QuestsStatus', 'Disabled')))		
+	# 	if side_quest_status is not None:
+	# 		if side_quest_status:
+	# 			logger.debug('Disabling side quests.')
+	# 			gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Side QuestsStatus', 'Disabled')))		
 
-			else:
-				logger.debug('Enabling side quests.')
-				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Side QuestsStatus', 'Enabled')))
+	# 		else:
+	# 			logger.debug('Enabling side quests.')
+	# 			gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Side QuestsStatus', 'Enabled')))
 			
-			side_quest_status = not side_quest_status
-		else:
-			logger.debug('This config variable has not yet been initialized, enabling the option now.')
-			side_quest_status = True
+	# 		side_quest_status = not side_quest_status
+	# 	else:
+	# 		logger.debug('This config variable has not yet been initialized, enabling the option now.')
+	# 		side_quest_status = True
 
 
 	async def enable_hotkeys(exclude_freecam: bool = False, debug: bool = False):
@@ -732,6 +742,7 @@ async def main():
 			await listener.add_hotkey(Keycode[friend_teleport_key], friend_teleport_sync_hotkey, modifiers=ModifierKeys.NOREPEAT)
 			await listener.add_hotkey(Keycode[toggle_auto_combat_key], toggle_combat_hotkey, modifiers=ModifierKeys.NOREPEAT)
 			await listener.add_hotkey(Keycode[toggle_auto_dialogue_key], toggle_dialogue_hotkey, modifiers=ModifierKeys.NOREPEAT)
+			await listener.add_hotkey(Keycode[toggle_auto_dialogue_key], toggle_dialogue_side_quests_hotkey, modifiers=ModifierKeys.SHIFT | ModifierKeys.NOREPEAT)
 			await listener.add_hotkey(Keycode[toggle_auto_sigil_key], toggle_sigil_hotkey, modifiers=ModifierKeys.NOREPEAT)
 			if not exclude_freecam:
 				await listener.add_hotkey(Keycode[toggle_freecam_key], toggle_freecam_hotkey, modifiers=ModifierKeys.NOREPEAT)
@@ -757,6 +768,7 @@ async def main():
 				await listener.remove_hotkey(Keycode[kill_tool_key], modifiers=ModifierKeys.NOREPEAT)
 			await listener.remove_hotkey(Keycode[toggle_auto_combat_key], modifiers=ModifierKeys.NOREPEAT)
 			await listener.remove_hotkey(Keycode[toggle_auto_dialogue_key], modifiers=ModifierKeys.NOREPEAT)
+			await listener.remove_hotkey(Keycode[toggle_auto_dialogue_key], modifiers=ModifierKeys.SHIFT | ModifierKeys.NOREPEAT)
 			await listener.remove_hotkey(Keycode[toggle_auto_sigil_key], modifiers=ModifierKeys.NOREPEAT)
 			if not exclude_freecam:
 				await listener.remove_hotkey(Keycode[toggle_freecam_key], modifiers=ModifierKeys.NOREPEAT)
@@ -1380,12 +1392,12 @@ async def main():
 										logger.debug(f'Anchoring camera to entity {entity_name}')
 										await camera.write_attached_client_object(entity)
 
-							case deimosgui.GUICommandType.SetPetWorld:
-								if (com.data[1] is None):
-									logger.debug('Invalid pet world selected!')
-								else:
-									logger.debug(f'Setting Auto Pet World to {com.data[1]}')
-									assign_pet_level(com.data[1])
+							# case deimosgui.GUICommandType.SetPetWorld:
+							# 	if (com.data[1] is None):
+							# 		logger.debug('Invalid pet world selected!')
+							# 	else:
+							# 		logger.debug(f'Setting Auto Pet World to {com.data[1]}')
+							# 		assign_pet_level(com.data[1])
 										
 
 							case deimosgui.GUICommandType.SetCamPosition:

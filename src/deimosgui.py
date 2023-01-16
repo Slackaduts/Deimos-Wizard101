@@ -3,6 +3,8 @@ import queue
 import re
 import PySimpleGUI as gui
 from src.combat_objects import school_id_to_names
+from src.paths import wizard_city_dance_game_path
+from src.utils import assign_pet_level
 
 
 class GUICommandType(Enum):
@@ -37,7 +39,7 @@ class GUICommandType(Enum):
 	ExecuteBot = auto()
 	KillBot = auto()
 
-	SetPetWorld = auto()
+	# SetPetWorld = auto()
 
 	SetScale = auto()
 
@@ -68,7 +70,7 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 	def hotkey_button(name, auto_size=False, text_color=gui_text_color, button_color=gui_button_color):
 		return original_hotkey_button(name, auto_size, text_color, button_color)
 
-	toggles = ['Speedhack', 'Combat', 'Dialogue', 'Sigil', 'Questing', 'Auto Pet', 'Side Quests']
+	toggles = ['Speedhack', 'Combat', 'Dialogue', 'Sigil', 'Questing', 'Auto Pet']
 	hotkeys = ['Quest TP', 'Freecam', 'Freecam TP']
 	mass_hotkeys = ['Mass TP', 'XYZ Sync', 'X Press']
 	toggles_layout = [[hotkey_button(name), gui.Text(f'Disabled', key=f'{name}Status', auto_size_text=False, size=(7, 1), text_color=gui_text_color)] for name in toggles]
@@ -183,7 +185,7 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 	misc_utils_layout = [
 		[gui.Text(dev_utils_notice, text_color=gui_text_color)],
 		[gui.Text('Scale:', text_color=gui_text_color), gui.InputText(size=(8, 1), key='scale'), hotkey_button('Set Scale')],
-		[gui.Text('Select a pet world:', text_color=gui_text_color), gui.Combo(['WizardCity', 'Krokotopia', 'Marleybone', 'Mooshu', 'Dragonspyre'], default_value='WizardCity', readonly=True,text_color=gui_text_color, size=(13, 1), key='PetWorldInput'), hotkey_button('Set Auto Pet World', True)],
+		[gui.Text('Select a pet world:', text_color=gui_text_color), gui.Combo(['WizardCity', 'Krokotopia', 'Marleybone', 'Mooshu', 'Dragonspyre'], default_value='WizardCity', readonly=True,text_color=gui_text_color, size=(13, 1), key='PetWorldInput')], #, hotkey_button('Set Auto Pet World', True) 
 	]
 
 	framed_misc_utils_layout = gui.Frame('Misc Utils', misc_utils_layout, title_color=gui_text_color)
@@ -247,7 +249,7 @@ def manage_gui(send_queue: queue.Queue, recv_queue: queue.Queue, gui_theme, gui_
 				send_queue.put(GUICommand(GUICommandType.Close))
 
 			# Toggles
-			case 'Speedhack' | 'Combat' | 'Dialogue' | 'Sigil' | 'Questing' | 'Auto Pet' | 'Freecam' | 'Side Quests' | \
+			case 'Speedhack' | 'Combat' | 'Dialogue' | 'Sigil' | 'Questing' | 'Auto Pet' | 'Freecam' | \
 						'Toggle Camera Collision':
 				send_queue.put(GUICommand(GUICommandType.ToggleOption, event.replace('Toggle', '').strip()))
 
@@ -367,13 +369,17 @@ def manage_gui(send_queue: queue.Queue, recv_queue: queue.Queue, gui_theme, gui_
 				window['EnemyInput'].update(ally_input)
 				window['AllyInput'].update(enemy_input)
 
-			case 'Set Auto Pet World':
-				if inputs['PetWorldInput']:
-					send_queue.put(GUICommand(GUICommandType.SetPetWorld, (False, str(inputs['PetWorldInput']))))
+			# case 'Set Auto Pet World':
+			# 	if inputs['PetWorldInput']:
+			# 		send_queue.put(GUICommand(GUICommandType.SetPetWorld, (False, str(inputs['PetWorldInput']))))
 
 			# Other
 			case _:
 				pass
+
+		#Updates pet world when it changes, without the need for a button press -slack
+		if inputs['PetWorldInput'] != wizard_city_dance_game_path[-1]:
+			assign_pet_level(inputs['PetWorldInput'])
 
 		def import_check(input_window_str: str, output_window_str: str):
 			if inputs and inputs[input_window_str]:

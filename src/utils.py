@@ -19,7 +19,7 @@ from typing import List, Optional, Coroutine
 # from src.teleport_math import calc_Distance
 
 streamportal_locations = ["aeriel", "zanadu", "outer athanor", "inner athanor", "sepidious", "mandalla", "chaos jungle", "reverie", "nimbus", "port aero", "husk"]
-nanavato_locations = ["karamelle city", "sweetzburg", "nibbleheim", "gutenstadt", "black licorice forest", "candy corn farm", "gobblerton"]
+nanavator_locations = ["karamelle city", "sweetzburg", "nibbleheim", "gutenstadt", "black licorice forest", "candy corn farm", "gobblerton"]
 
 async def get_window_from_path(root_window: Window, name_path: list[str]) -> Window:
 	# FULL CREDIT TO SIROLAF FOR THIS FUNCTION
