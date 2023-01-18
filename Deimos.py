@@ -862,6 +862,38 @@ async def main():
 
 		await asyncio.gather(*[async_questing(p) for p in walker.clients])
 
+	async def anti_afk_questing_loop():
+		async def async_afk_questing(client: Client):
+			while True:
+				global questing_task
+
+				await asyncio.sleep(0.1)
+				if not freecam_status:
+					client_xyz = await client.body.position()
+					await asyncio.sleep(120)
+					client_xyz_2 = await client.body.position()
+					distance_moved = calc_Distance(client_xyz, client_xyz_2)
+					if distance_moved < 5.0 and not await client.in_battle() and not client.feeding_pet_status and not client.entity_detect_combat_status:
+
+						# During questing, one or more clients may be waiting outside while the others are completing a solo zone quest - we do not want to restart in these cases
+						client_in_solo_zone = False
+						for p in walker.clients:
+							if p.in_solo_zone:
+								client_in_solo_zone = True
+
+						# restart questing
+						if questing_task is not None and not questing_task.cancelled() and not client_in_solo_zone:
+								logger.debug(f'Questing appears to have halted - restarting.')
+								questing_task.cancel()
+								questing_task = None
+								await asyncio.sleep(1.0)
+
+								if questing_task is None:
+									questing_task = asyncio.create_task(try_task_coro(questing_loop, walker.clients, True))
+
+
+		await asyncio.gather(*[async_afk_questing(p) for p in walker.clients])
+
 	# logger.catch()
 	async def auto_pet_loop():
 		# Auto questing on a per client basis.
@@ -1114,22 +1146,6 @@ async def main():
 						await client.send_key(key=Keycode.A)
 						await asyncio.sleep(0.1)
 						await client.send_key(key=Keycode.D)
-
-						# During questing, one or more clients may be waiting outside while the others are completing a solo zone quest - we do not want to restart in these cases
-						client_in_solo_zone = False
-						for p in walker.clients:
-							if p.in_solo_zone:
-								client_in_solo_zone = True
-
-						# restart questing
-						if questing_task is not None and not questing_task.cancelled() and not client_in_solo_zone:
-								logger.debug(f'Questing appears to have halted - restarting.')
-								questing_task.cancel()
-								questing_task = None
-								await asyncio.sleep(1.0)
-
-								if questing_task is None:
-									questing_task = asyncio.create_task(try_task_coro(questing_loop, walker.clients, True))
 
 		await asyncio.gather(*[async_anti_afk(p) for p in walker.clients])
 
@@ -1823,17 +1839,18 @@ async def main():
 		rpc_loop_task = asyncio.create_task(rpc_loop())
 		drop_logging_loop_task = asyncio.create_task(drop_logging_loop())
 		zone_check_loop_task = asyncio.create_task(zone_check_loop())
+		anti_afk_questing_loop_task = asyncio.create_task(anti_afk_questing_loop())
 		
 		# while True:
 		# await asyncio.wait([foreground_client_switching_task, speed_switching_task, combat_loop_task, assign_foreground_clients_task, dialogue_loop_task, anti_afk_loop_task, sigil_loop_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task])
-		done, _ = await asyncio.wait([foreground_client_switching_task, assign_foreground_clients_task, anti_afk_loop_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task], return_when=asyncio.FIRST_EXCEPTION)
+		done, _ = await asyncio.wait([foreground_client_switching_task, assign_foreground_clients_task, anti_afk_loop_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task, anti_afk_questing_loop_task], return_when=asyncio.FIRST_EXCEPTION)
 		for t in done:
 			if t.done() and t.exception() != None:
 				exc = t.exception()
 				raise exc
 
 	finally:
-		tasks: List[asyncio.Task] = [foreground_client_switching_task, speed_task, combat_task, assign_foreground_clients_task, dialogue_task, anti_afk_loop_task, sigil_task, questing_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task]
+		tasks: List[asyncio.Task] = [foreground_client_switching_task, speed_task, combat_task, assign_foreground_clients_task, dialogue_task, anti_afk_loop_task, sigil_task, questing_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task, anti_afk_questing_loop_task]
 		for task in tasks:
 			if task is not None and not task.cancelled():
 				task.cancel()

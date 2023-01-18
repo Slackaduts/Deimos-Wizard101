@@ -311,7 +311,7 @@ async def split_walk(client: Client, xyz: XYZ = None, segments: int = 5, origina
     points_on_line.append(xyz)
     for point_xyz in points_on_line:
         # print('for loop for split walking')
-        if not await is_free(client) or await client.zone_name() != original_zone:
+        if not await is_free(client) or await client.zone_name() != original_zone or are_xyzs_within_threshold(xyz_1=await client.body.position(), xyz_2=xyz, threshold=100):
             break
 
         try:
