@@ -6,7 +6,7 @@ from typing import Iterable, List, Tuple, TypeAlias
 from wizwalker import XYZ, Orient, Client
 # import matplotlib
 # import matplotlib.pyplot as plt
-from collision import BoxGeomParams, CollisionWorld, CylinderGeomParams, MeshGeomParams, ProxyMesh, ProxyType, SphereGeomParams, TubeGeomParams, get_collision_data, CollisionFlag
+from .collision import BoxGeomParams, CollisionWorld, CylinderGeomParams, MeshGeomParams, ProxyMesh, ProxyType, SphereGeomParams, TubeGeomParams, get_collision_data, CollisionFlag
 #from teleport_math import calc_squareDistance
 
 

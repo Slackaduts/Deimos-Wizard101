@@ -378,7 +378,7 @@ def manage_gui(send_queue: queue.Queue, recv_queue: queue.Queue, gui_theme, gui_
 				pass
 
 		#Updates pet world when it changes, without the need for a button press -slack
-		if inputs['PetWorldInput'] != wizard_city_dance_game_path[-1]:
+		if inputs and inputs['PetWorldInput'] != wizard_city_dance_game_path[-1]:
 			assign_pet_level(inputs['PetWorldInput'])
 
 		def import_check(input_window_str: str, output_window_str: str):
