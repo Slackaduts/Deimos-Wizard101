@@ -30,7 +30,7 @@ from src.stat_viewer import total_stats
 from src.teleport_math import navmap_tp, calc_Distance
 from src.questing import Quester
 from src.sigil import Sigil
-from src.utils import index_with_str, is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world, collect_wisps_with_limit, try_task_coro, read_webpage
+from src.utils import index_with_str, is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world, collect_wisps_with_limit, try_task_coro, read_webpage#, assign_pet_level
 from src.paths import advance_dialog_path, decline_quest_path
 import PySimpleGUI as gui
 import pyperclip
@@ -208,6 +208,7 @@ freecam_status = False
 hotkey_status = False
 questing_status = False
 auto_pet_status = False
+side_quest_status = False
 tool_status = True
 original_client_locations = dict()
 
@@ -354,18 +355,17 @@ async def mass_key_press(foreground_client : Client, background_clients : list[C
 
 async def sync_camera(client: Client, xyz: XYZ = None, yaw: float = None):
 	# Teleports the freecam to a specified position, yaw, etc.
-	# if not xyz:
-	# 	xyz = await client.body.position()
+	if not xyz:
+		xyz = await client.body.position()
 
-	# if not yaw:
-	# 	yaw = await client.body.yaw()
+	if not yaw:
+		yaw = await client.body.yaw()
 
-	# xyz.z += 200
+	xyz.z += 200
 
-	# camera = await client.game_client.free_camera_controller()
-	# await camera.write_position(xyz)
-	# await camera.write_yaw(yaw)
-	logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
+	camera = await client.game_client.free_camera_controller()
+	await camera.write_position(xyz)
+	await camera.write_yaw(yaw)
 
 
 async def xyz_sync(foreground_client : Client, background_clients : list[Client], turn_after : bool = True, debug : bool = False):
@@ -560,21 +560,31 @@ async def main():
 				combat_task = asyncio.create_task(try_task_coro(combat_loop, walker.clients, True))
 
 
-	async def toggle_dialogue_hotkey():
+	async def toggle_dialogue_hotkey(side_quests: bool = False):
 		global dialogue_task
 		global gui_send_queue
+		global side_quest_status
 
 		if not freecam_status:
 			if dialogue_task is not None and not dialogue_task.cancelled():
+				side_quest_status = False
 				dialogue_task.cancel()
 				dialogue_task = None
 				logger.debug(f'{toggle_auto_dialogue_key} key pressed, disabling auto dialogue.')
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('DialogueStatus', 'Disabled')))
 
 			else:
-				logger.debug(f'{toggle_auto_dialogue_key} key pressed, enabling auto dialogue.')
+				side_quest_log_str = ""
+				side_quest_status = side_quests
+				if side_quest_status:
+					side_quest_log_str += " and auto side quests functionality"
+				logger.debug(f'{toggle_auto_dialogue_key} key pressed, enabling auto dialogue{side_quest_log_str}.')
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('DialogueStatus', 'Enabled')))
 				dialogue_task = asyncio.create_task(try_task_coro(dialogue_loop, walker.clients, True))
+
+
+	async def toggle_dialogue_side_quests_hotkey():
+		await toggle_dialogue_hotkey(True)
 
 
 
@@ -615,31 +625,31 @@ async def main():
 
 	async def toggle_freecam_hotkey(debug: bool = True):
 		global freecam_status
-		logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
-		# if foreground_client:
-		# 	if await is_free(foreground_client):
-		# 		if await foreground_client.game_client.is_freecam():
-		# 			if debug:
-		# 				logger.debug(f'{toggle_freecam_key} key pressed, disabling freecam.')
-		# 			await foreground_client.camera_elastic()
-		# 			freecam_status = False
-		# 		else:
-		# 			if debug:
-		# 				logger.debug(f'{toggle_freecam_key} key pressed, enabling freecam.')
-		# 			freecam_status = True
-		# 			await sync_camera(foreground_client)
-		# 			await foreground_client.camera_freecam()
+		if foreground_client:
+			if await is_free(foreground_client):
+				if await foreground_client.game_client.is_freecam():
+					if debug:
+						logger.debug(f'{toggle_freecam_key} key pressed, disabling freecam.')
+					await foreground_client.camera_elastic()
+					freecam_status = False
+
+				else:
+					if debug:
+						logger.debug(f'{toggle_freecam_key} key pressed, enabling freecam.')
+
+					freecam_status = True
+					await sync_camera(foreground_client)
+					await foreground_client.camera_freecam()
 
 
 	async def tp_to_freecam_hotkey():
-		logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
-		# if foreground_client:
-		# 	logger.debug(f'Shift + {toggle_freecam_key} key pressed, teleporting foreground client to freecam position.')
-		# 	if await foreground_client.game_client.is_freecam():
-		# 		camera = await foreground_client.game_client.free_camera_controller()
-		# 		camera_pos = await camera.position()
-		# 		await toggle_freecam_hotkey(False)
-		# 		await foreground_client.teleport(camera_pos, wait_on_inuse=True, purge_on_after_unuser_fixer=True)
+		if foreground_client:
+			logger.debug(f'Shift + {toggle_freecam_key} key pressed, teleporting foreground client to freecam position.')
+			if await foreground_client.game_client.is_freecam():
+				camera = await foreground_client.game_client.free_camera_controller()
+				camera_pos = await camera.position()
+				await toggle_freecam_hotkey(False)
+				await foreground_client.teleport(camera_pos, wait_on_inuse=True, purge_on_after_unuser_fixer=True)
 
 
 	async def toggle_questing_hotkey():
@@ -698,6 +708,23 @@ async def main():
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Auto PetStatus', 'Enabled')))
 				auto_pet_task = asyncio.create_task(try_task_coro(auto_pet_loop, walker.clients, True))
 
+	# async def toggle_side_quests():
+	# 	global side_quest_status
+
+	# 	if side_quest_status is not None:
+	# 		if side_quest_status:
+	# 			logger.debug('Disabling side quests.')
+	# 			gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Side QuestsStatus', 'Disabled')))		
+
+	# 		else:
+	# 			logger.debug('Enabling side quests.')
+	# 			gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Side QuestsStatus', 'Enabled')))
+			
+	# 		side_quest_status = not side_quest_status
+	# 	else:
+	# 		logger.debug('This config variable has not yet been initialized, enabling the option now.')
+	# 		side_quest_status = True
+
 
 	async def enable_hotkeys(exclude_freecam: bool = False, debug: bool = False):
 		# adds every hotkey
@@ -714,6 +741,7 @@ async def main():
 			await listener.add_hotkey(Keycode[friend_teleport_key], friend_teleport_sync_hotkey, modifiers=ModifierKeys.NOREPEAT)
 			await listener.add_hotkey(Keycode[toggle_auto_combat_key], toggle_combat_hotkey, modifiers=ModifierKeys.NOREPEAT)
 			await listener.add_hotkey(Keycode[toggle_auto_dialogue_key], toggle_dialogue_hotkey, modifiers=ModifierKeys.NOREPEAT)
+			await listener.add_hotkey(Keycode[toggle_auto_dialogue_key], toggle_dialogue_side_quests_hotkey, modifiers=ModifierKeys.SHIFT | ModifierKeys.NOREPEAT)
 			await listener.add_hotkey(Keycode[toggle_auto_sigil_key], toggle_sigil_hotkey, modifiers=ModifierKeys.NOREPEAT)
 			if not exclude_freecam:
 				await listener.add_hotkey(Keycode[toggle_freecam_key], toggle_freecam_hotkey, modifiers=ModifierKeys.NOREPEAT)
@@ -739,6 +767,7 @@ async def main():
 				await listener.remove_hotkey(Keycode[kill_tool_key], modifiers=ModifierKeys.NOREPEAT)
 			await listener.remove_hotkey(Keycode[toggle_auto_combat_key], modifiers=ModifierKeys.NOREPEAT)
 			await listener.remove_hotkey(Keycode[toggle_auto_dialogue_key], modifiers=ModifierKeys.NOREPEAT)
+			await listener.remove_hotkey(Keycode[toggle_auto_dialogue_key], modifiers=ModifierKeys.SHIFT | ModifierKeys.NOREPEAT)
 			await listener.remove_hotkey(Keycode[toggle_auto_sigil_key], modifiers=ModifierKeys.NOREPEAT)
 			if not exclude_freecam:
 				await listener.remove_hotkey(Keycode[toggle_freecam_key], modifiers=ModifierKeys.NOREPEAT)
@@ -824,14 +853,13 @@ async def main():
 
 		await asyncio.gather(*[async_combat(p) for p in walker.clients])
 
-
 	async def dialogue_loop():
 		# auto advances dialogue for every client, individually and concurrently
 		async def async_dialogue(client: Client):
 			while True:
 				if not freecam_status:
 					if await is_visible_by_path(client, advance_dialog_path):
-						if await is_visible_by_path(client, decline_quest_path):
+						if await is_visible_by_path(client, decline_quest_path) and not side_quest_status:
 							await client.send_key(key=Keycode.ESC)
 							await asyncio.sleep(0.1)
 							await client.send_key(key=Keycode.ESC)
@@ -864,6 +892,38 @@ async def main():
 						await questing.auto_quest(ignore_pet_level_up, only_play_dance_game)
 
 		await asyncio.gather(*[async_questing(p) for p in walker.clients])
+
+	async def anti_afk_questing_loop():
+		async def async_afk_questing(client: Client):
+			while True:
+				global questing_task
+
+				await asyncio.sleep(0.1)
+				if not freecam_status:
+					client_xyz = await client.body.position()
+					await asyncio.sleep(120)
+					client_xyz_2 = await client.body.position()
+					distance_moved = calc_Distance(client_xyz, client_xyz_2)
+					if distance_moved < 5.0 and not await client.in_battle() and not client.feeding_pet_status and not client.entity_detect_combat_status:
+
+						# During questing, one or more clients may be waiting outside while the others are completing a solo zone quest - we do not want to restart in these cases
+						client_in_solo_zone = False
+						for p in walker.clients:
+							if p.in_solo_zone:
+								client_in_solo_zone = True
+
+						# restart questing
+						if questing_task is not None and not questing_task.cancelled() and not client_in_solo_zone:
+								logger.debug(f'Questing appears to have halted - restarting.')
+								questing_task.cancel()
+								questing_task = None
+								await asyncio.sleep(1.0)
+
+								if questing_task is None:
+									questing_task = asyncio.create_task(try_task_coro(questing_loop, walker.clients, True))
+
+
+		await asyncio.gather(*[async_afk_questing(p) for p in walker.clients])
 
 	# logger.catch()
 	async def auto_pet_loop():
@@ -1118,22 +1178,6 @@ async def main():
 						await asyncio.sleep(0.1)
 						await client.send_key(key=Keycode.D)
 
-						# During questing, one or more clients may be waiting outside while the others are completing a solo zone quest - we do not want to restart in these cases
-						client_in_solo_zone = False
-						for p in walker.clients:
-							if p.in_solo_zone:
-								client_in_solo_zone = True
-
-						# restart questing
-						if questing_task is not None and not questing_task.cancelled() and not client_in_solo_zone:
-								logger.debug(f'Questing appears to have halted - restarting.')
-								questing_task.cancel()
-								questing_task = None
-								await asyncio.sleep(1.0)
-
-								if questing_task is None:
-									questing_task = asyncio.create_task(try_task_coro(questing_loop, walker.clients, True))
-
 		await asyncio.gather(*[async_anti_afk(p) for p in walker.clients])
 
 
@@ -1198,8 +1242,10 @@ async def main():
 										await toggle_auto_pet_hotkey()
 
 									case 'Freecam':
-										logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
-										# await toggle_freecam_hotkey()
+										await toggle_freecam_hotkey()
+
+									# case 'Side Quests':
+									# 	await toggle_side_quests()
 
 									case 'Camera Collision':
 										if foreground_client:
@@ -1289,8 +1335,7 @@ async def main():
 									case 'Mass':
 										await mass_navmap_teleport_hotkey()
 									case 'Freecam':
-										logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
-										# await tp_to_freecam_hotkey()
+										await tp_to_freecam_hotkey()
 									case _:
 										logger.debug(f'Unknown teleport type: {com.data}')
 
@@ -1346,8 +1391,7 @@ async def main():
 							case deimosgui.GUICommandType.AnchorCam:
 								if foreground_client:
 									if freecam_status:
-										logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
-										# await toggle_freecam_hotkey()
+										await toggle_freecam_hotkey()
 
 									camera = await foreground_client.game_client.elastic_camera_controller()
 
@@ -1360,49 +1404,55 @@ async def main():
 										logger.debug(f'Anchoring camera to entity {entity_name}')
 										await camera.write_attached_client_object(entity)
 
+							# case deimosgui.GUICommandType.SetPetWorld:
+							# 	if (com.data[1] is None):
+							# 		logger.debug('Invalid pet world selected!')
+							# 	else:
+							# 		logger.debug(f'Setting Auto Pet World to {com.data[1]}')
+							# 		assign_pet_level(com.data[1])
+										
+
 							case deimosgui.GUICommandType.SetCamPosition:
-								logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
-								# if foreground_client:
-									# if not freecam_status:
-										# await toggle_freecam_hotkey()
+								if foreground_client:
+									if not freecam_status:
+										await toggle_freecam_hotkey()
 
-									# camera: DynamicCameraController = await foreground_client.game_client.selected_camera_controller()
-									# camera_pos: XYZ = await camera.position()
-									# camera_pitch, camera_roll, camera_yaw = await camera.orientation()
+									camera: DynamicCameraController = await foreground_client.game_client.selected_camera_controller()
+									camera_pos: XYZ = await camera.position()
+									camera_pitch, camera_roll, camera_yaw = await camera.orientation()
 
-									# x_input = param_input(com.data['X'], camera_pos.x)
-									# y_input = param_input(com.data['Y'], camera_pos.y)
-									# z_input = param_input(com.data['Z'], camera_pos.z)
-									# yaw_input = param_input(com.data['Yaw'], camera_yaw)
-									# roll_input = param_input(com.data['Roll'], camera_roll)
-									# pitch_input = param_input(com.data['Pitch'], camera_pitch)
+									x_input = param_input(com.data['X'], camera_pos.x)
+									y_input = param_input(com.data['Y'], camera_pos.y)
+									z_input = param_input(com.data['Z'], camera_pos.z)
+									yaw_input = param_input(com.data['Yaw'], camera_yaw)
+									roll_input = param_input(com.data['Roll'], camera_roll)
+									pitch_input = param_input(com.data['Pitch'], camera_pitch)
 
-									# input_pos = XYZ(x_input, y_input, z_input)
-									# logger.debug(f'Teleporting Camera to {input_pos}, yaw={yaw_input}, roll={roll_input}, pitch={pitch_input}')
+									input_pos = XYZ(x_input, y_input, z_input)
+									logger.debug(f'Teleporting Camera to {input_pos}, yaw={yaw_input}, roll={roll_input}, pitch={pitch_input}')
 
-									# await camera.write_position(input_pos)
-									# await camera.update_orientation(Orient(pitch_input, roll_input, yaw_input))
+									await camera.write_position(input_pos)
+									await camera.update_orientation(Orient(pitch_input, roll_input, yaw_input))
 
 							case deimosgui.GUICommandType.SetCamDistance:
-								logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
-								# if foreground_client:
-								# 	camera = await foreground_client.game_client.elastic_camera_controller()
-								# 	current_zoom = await camera.distance()
-								# 	current_min = await camera.min_distance()
-								# 	current_max = await camera.max_distance()
-								# 	distance_input = param_input(com.data["Distance"], current_zoom)
-								# 	min_input = param_input(com.data["Min"], current_min)
-								# 	max_input = param_input(com.data["Max"], current_max)
-								# 	logger.debug(f'Setting camera distance to {distance_input}, min={min_input}, max={max_input}')
+								if foreground_client:
+									camera = await foreground_client.game_client.elastic_camera_controller()
+									current_zoom = await camera.distance()
+									current_min = await camera.min_distance()
+									current_max = await camera.max_distance()
+									distance_input = param_input(com.data["Distance"], current_zoom)
+									min_input = param_input(com.data["Min"], current_min)
+									max_input = param_input(com.data["Max"], current_max)
+									logger.debug(f'Setting camera distance to {distance_input}, min={min_input}, max={max_input}')
 
-								# 	if com.data["Distance"]:
-								# 		await camera.write_distance_target(distance_input)
-								# 		await camera.write_distance(distance_input)
-								# 	if com.data["Min"]:
-								# 		await camera.write_min_distance(min_input)
-								# 		await camera.write_zoom_resolution(min_input)
-								# 	if com.data["Max"]:
-								# 		await camera.write_max_distance(max_input)
+									if com.data["Distance"]:
+										await camera.write_distance_target(distance_input)
+										await camera.write_distance(distance_input)
+									if com.data["Min"]:
+										await camera.write_min_distance(min_input)
+										await camera.write_zoom_resolution(min_input)
+									if com.data["Max"]:
+										await camera.write_max_distance(max_input)
 
 							case deimosgui.GUICommandType.GoToZone:
 								if foreground_client:
@@ -1450,13 +1500,12 @@ async def main():
 									await asyncio.gather(*[auto_potions_force_buy(client, True) for client in clients])
 
 							case deimosgui.GUICommandType.ExecuteFlythrough:
-								logger.critical("Due to a Wizard101 update, freecam is broken until further notice. Apologies for any inconveinence.")
-								# async def _flythrough():
-								# 	await execute_flythrough(foreground_client, com.data)
-								# 	await foreground_client.camera_elastic()
+								async def _flythrough():
+									await execute_flythrough(foreground_client, com.data)
+									await foreground_client.camera_elastic()
 
-								# if foreground_client:
-								# 	flythrough_task = asyncio.create_task(_flythrough())
+								if foreground_client:
+									flythrough_task = asyncio.create_task(_flythrough())
 
 							case deimosgui.GUICommandType.KillFlythrough:
 								if flythrough_task is not None and not flythrough_task.cancelled():
@@ -1832,17 +1881,18 @@ async def main():
 		rpc_loop_task = asyncio.create_task(rpc_loop())
 		drop_logging_loop_task = asyncio.create_task(drop_logging_loop())
 		zone_check_loop_task = asyncio.create_task(zone_check_loop())
+		anti_afk_questing_loop_task = asyncio.create_task(anti_afk_questing_loop())
 		
 		# while True:
 		# await asyncio.wait([foreground_client_switching_task, speed_switching_task, combat_loop_task, assign_foreground_clients_task, dialogue_loop_task, anti_afk_loop_task, sigil_loop_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task])
-		done, _ = await asyncio.wait([foreground_client_switching_task, assign_foreground_clients_task, anti_afk_loop_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task], return_when=asyncio.FIRST_EXCEPTION)
+		done, _ = await asyncio.wait([foreground_client_switching_task, assign_foreground_clients_task, anti_afk_loop_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task, anti_afk_questing_loop_task], return_when=asyncio.FIRST_EXCEPTION)
 		for t in done:
 			if t.done() and t.exception() != None:
 				exc = t.exception()
 				raise exc
 
 	finally:
-		tasks: List[asyncio.Task] = [foreground_client_switching_task, speed_task, combat_task, assign_foreground_clients_task, dialogue_task, anti_afk_loop_task, sigil_task, questing_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task]
+		tasks: List[asyncio.Task] = [foreground_client_switching_task, speed_task, combat_task, assign_foreground_clients_task, dialogue_task, anti_afk_loop_task, sigil_task, questing_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task, anti_afk_questing_loop_task]
 		for task in tasks:
 			if task is not None and not task.cancelled():
 				task.cancel()

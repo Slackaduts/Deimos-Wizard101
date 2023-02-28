@@ -403,7 +403,7 @@ class Quester():
             return True
             
         elif "Nanavator" in await self.read_spiral_door_title(client):
-            location = await self.find_quest_zone_area_name(client, nanavato_locations)
+            location = await self.find_quest_zone_area_name(client, nanavator_locations)
             await new_portals_cycle(client, location)
             return True
         
@@ -830,7 +830,7 @@ class Quester():
             await asyncio.sleep(.1)
 
         start_time = time.time()
-        while time.time() < start_time + 5.0:
+        while time.time() < start_time + 3.0:
             # we most likely entered another dialogue - wait for it to end, then reset the timer
             if not await is_free_leader_questing(talking_client):
                 logger.info('Detected dialogue - waiting for it to end.')
