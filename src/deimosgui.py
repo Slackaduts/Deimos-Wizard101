@@ -137,7 +137,7 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 		(tl('Dialogue'), GUIKeys.toggle_dialogue),
 		(tl('Sigil'), GUIKeys.toggle_sigil),
 		(tl('Questing'), GUIKeys.toggle_questing),
-		(tl('Auto Pet', GUIKeys.toggle_auto_pet))
+		(tl('Auto Pet'), GUIKeys.toggle_auto_pet)
 	]
 	hotkeys: list[tuple[str, str]] = [
 		(tl('Quest TP'), GUIKeys.hotkey_quest_tp),
@@ -410,7 +410,7 @@ def manage_gui(send_queue: queue.Queue, recv_queue: queue.Queue, gui_theme, gui_
 
 
 			# Custom tp
-			case GUIKeys.button_custom_tp
+			case GUIKeys.button_custom_tp:
 				tp_inputs = [inputs['XInput'], inputs['YInput'], inputs['ZInput'], inputs['YawInput']]
 				if any(tp_inputs):
 					send_queue.put(GUICommand(GUICommandType.CustomTeleport, {

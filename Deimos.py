@@ -47,7 +47,7 @@ from src.tokenizer import tokenize
 cMessageBox = ctypes.windll.user32.MessageBoxW
 
 
-tool_version = '3.7.2'
+tool_version = '3.8.0'
 tool_name = 'Deimos'
 tool_author = 'Slackaduts'
 repo_name = tool_name + '-Wizard101'
@@ -1241,7 +1241,7 @@ async def main():
 									case GUIKeys.toggle_questing:
 										await toggle_questing_hotkey()
 
-									case GUIKeys.toggle_questing:
+									case GUIKeys.toggle_auto_pet:
 										await toggle_auto_pet_hotkey()
 
 									case GUIKeys.toggle_freecam:
