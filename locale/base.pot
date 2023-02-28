@@ -1,0 +1,352 @@
+# Translations template for PROJECT.
+# Copyright (C) 2023 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2023.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2023-02-28 20:36+0100\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.12.1\n"
+
+#: src/deimosgui.py:125
+msgid ""
+"Deimos will always be free and open-source.\n"
+"By using Deimos, you agree to the GPL v3 license agreement.\n"
+"If you bought this, you got scammed!"
+msgstr ""
+
+#: src/deimosgui.py:125
+msgid "License Agreement"
+msgstr ""
+
+#: src/deimosgui.py:135
+msgid "Speedhack"
+msgstr ""
+
+#: src/deimosgui.py:136
+msgid "Combat"
+msgstr ""
+
+#: src/deimosgui.py:137
+msgid "Dialogue"
+msgstr ""
+
+#: src/deimosgui.py:138
+msgid "Sigil"
+msgstr ""
+
+#: src/deimosgui.py:139
+msgid "Questing"
+msgstr ""
+
+#: src/deimosgui.py:140
+msgid "Auto Pet"
+msgstr ""
+
+#: src/deimosgui.py:143
+msgid "Quest TP"
+msgstr ""
+
+#: src/deimosgui.py:144
+msgid "Freecam"
+msgstr ""
+
+#: src/deimosgui.py:145
+msgid "Freecam TP"
+msgstr ""
+
+#: src/deimosgui.py:148
+msgid "Mass TP"
+msgstr ""
+
+#: src/deimosgui.py:149
+msgid "XYZ Sync"
+msgstr ""
+
+#: src/deimosgui.py:150
+msgid "X Press"
+msgstr ""
+
+#: src/deimosgui.py:152
+msgid "Disabled"
+msgstr ""
+
+#: src/deimosgui.py:153
+msgid "Toggles"
+msgstr ""
+
+#: src/deimosgui.py:155 src/deimosgui.py:338
+msgid "Hotkeys"
+msgstr ""
+
+#: src/deimosgui.py:157
+msgid "Mass Hotkeys"
+msgstr ""
+
+#: src/deimosgui.py:159
+msgid "Client"
+msgstr ""
+
+#: src/deimosgui.py:165 src/deimosgui.py:198 src/deimosgui.py:249
+msgid "Yaw"
+msgstr ""
+
+#: src/deimosgui.py:167
+msgid "Zone"
+msgstr ""
+
+#: src/deimosgui.py:169
+msgid "Copy Position"
+msgstr ""
+
+#: src/deimosgui.py:170
+msgid "Copy Zone"
+msgstr ""
+
+#: src/deimosgui.py:171
+msgid "Copy Rotation"
+msgstr ""
+
+#: src/deimosgui.py:188
+msgid "Utils"
+msgstr ""
+
+#: src/deimosgui.py:190
+msgid ""
+"The utils below are for advanced users and no support will be given on "
+"them."
+msgstr ""
+
+#: src/deimosgui.py:199
+msgid "Custom TP"
+msgstr ""
+
+#: src/deimosgui.py:202
+msgid "Entity Name"
+msgstr ""
+
+#: src/deimosgui.py:203
+msgid "Entity TP"
+msgstr ""
+
+#: src/deimosgui.py:207
+msgid "TP Utils"
+msgstr ""
+
+#: src/deimosgui.py:212
+msgid "Copy Entity List"
+msgstr ""
+
+#: src/deimosgui.py:213
+msgid "Copy UI Tree"
+msgstr ""
+
+#: src/deimosgui.py:216
+msgid "Zone Name"
+msgstr ""
+
+#: src/deimosgui.py:217
+msgid "Go To Zone"
+msgstr ""
+
+#: src/deimosgui.py:218
+msgid "Mass Go To Zone"
+msgstr ""
+
+#: src/deimosgui.py:221
+msgid "World Name"
+msgstr ""
+
+#: src/deimosgui.py:227
+msgid "Go To World"
+msgstr ""
+
+#: src/deimosgui.py:228
+msgid "Mass Go To World"
+msgstr ""
+
+#: src/deimosgui.py:231
+msgid "Go To Bazaar"
+msgstr ""
+
+#: src/deimosgui.py:232
+msgid "Mass Go To Bazaar"
+msgstr ""
+
+#: src/deimosgui.py:233
+msgid "Refill Potions"
+msgstr ""
+
+#: src/deimosgui.py:234
+msgid "Mass Refill Potions"
+msgstr ""
+
+#: src/deimosgui.py:238 src/deimosgui.py:340
+msgid "Dev Utils"
+msgstr ""
+
+#: src/deimosgui.py:246
+msgid "Set Camera Position"
+msgstr ""
+
+#: src/deimosgui.py:250
+msgid "Roll"
+msgstr ""
+
+#: src/deimosgui.py:251
+msgid "Pitch"
+msgstr ""
+
+#: src/deimosgui.py:254
+msgid "Entity"
+msgstr ""
+
+#: src/deimosgui.py:255
+msgid "Anchor"
+msgstr ""
+
+#: src/deimosgui.py:256
+msgid "Toggle Camera Collision"
+msgstr ""
+
+#: src/deimosgui.py:259
+msgid "Distance"
+msgstr ""
+
+#: src/deimosgui.py:260
+msgid "Min"
+msgstr ""
+
+#: src/deimosgui.py:261
+msgid "Max"
+msgstr ""
+
+#: src/deimosgui.py:262
+msgid "Set Distance"
+msgstr ""
+
+#: src/deimosgui.py:265
+msgid "Copy Camera Position"
+msgstr ""
+
+#: src/deimosgui.py:266
+msgid "Copy Camera Rotation"
+msgstr ""
+
+#: src/deimosgui.py:270
+msgid "Camera Controls"
+msgstr ""
+
+#: src/deimosgui.py:275
+msgid "Caster/Target Indices"
+msgstr ""
+
+#: src/deimosgui.py:277
+msgid "Dmg"
+msgstr ""
+
+#: src/deimosgui.py:278
+msgid "School"
+msgstr ""
+
+#: src/deimosgui.py:281
+msgid "Crit"
+msgstr ""
+
+#: src/deimosgui.py:282
+msgid "View Stats"
+msgstr ""
+
+#: src/deimosgui.py:283
+msgid "Copy Stats"
+msgstr ""
+
+#: src/deimosgui.py:285
+msgid "No client has been selected."
+msgstr ""
+
+#: src/deimosgui.py:287
+msgid "Swap Members"
+msgstr ""
+
+#: src/deimosgui.py:288
+msgid "Force School Damage"
+msgstr ""
+
+#: src/deimosgui.py:293 src/deimosgui.py:341
+msgid "Stat Viewer"
+msgstr ""
+
+#: src/deimosgui.py:300
+msgid "Import Flythrough"
+msgstr ""
+
+#: src/deimosgui.py:302
+msgid "Export Flythrough"
+msgstr ""
+
+#: src/deimosgui.py:303
+msgid "Execute Flythrough"
+msgstr ""
+
+#: src/deimosgui.py:304
+msgid "Kill Flythrough"
+msgstr ""
+
+#: src/deimosgui.py:308
+msgid "Flythrough Creator"
+msgstr ""
+
+#: src/deimosgui.py:318
+msgid "Run Bot"
+msgstr ""
+
+#: src/deimosgui.py:319
+msgid "Kill Bot"
+msgstr ""
+
+#: src/deimosgui.py:323
+msgid "Bot Creator"
+msgstr ""
+
+#: src/deimosgui.py:328
+msgid "Scale"
+msgstr ""
+
+#: src/deimosgui.py:329
+msgid "Set Scale"
+msgstr ""
+
+#: src/deimosgui.py:334
+msgid "Misc Utils"
+msgstr ""
+
+#: src/deimosgui.py:339
+msgid "Camera"
+msgstr ""
+
+#: src/deimosgui.py:342
+msgid "Flythrough"
+msgstr ""
+
+#: src/deimosgui.py:343
+msgid "Bot"
+msgstr ""
+
+#: src/deimosgui.py:344
+msgid "Misc"
+msgstr ""
+
+#: src/deimosgui.py:349
+msgid "Deimos will always be a free tool. If you paid for this, you got scammed!"
+msgstr ""
+
