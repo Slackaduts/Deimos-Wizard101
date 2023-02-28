@@ -41,6 +41,7 @@ from wizwalker.extensions.wizsprinter.wiz_navigator import toZoneDisplayName, to
 from typing import List, Tuple
 
 from src import deimosgui
+from src.deimosgui import GUIKeys
 from src.tokenizer import tokenize
 
 cMessageBox = ctypes.windll.user32.MessageBoxW
@@ -1223,31 +1224,31 @@ async def main():
 
 							case deimosgui.GUICommandType.ToggleOption:
 								match com.data:
-									case 'Speedhack':
+									case GUIKeys.toggle_speedhack:
 										await toggle_speed_hotkey()
 
-									case 'Combat':
+									case GUIKeys.toggle_combat:
 										await toggle_combat_hotkey()
 
-									case 'Dialogue':
+									case GUIKeys.toggle_dialogue:
 										await toggle_dialogue_hotkey()
 
-									case 'Sigil':
+									case GUIKeys.toggle_sigil:
 										await toggle_sigil_hotkey()
 
-									case 'Questing':
+									case GUIKeys.toggle_questing:
 										await toggle_questing_hotkey()
 
-									case 'Auto Pet':
+									case GUIKeys.toggle_questing:
 										await toggle_auto_pet_hotkey()
 
-									case 'Freecam':
+									case GUIKeys.toggle_freecam:
 										await toggle_freecam_hotkey()
 
 									# case 'Side Quests':
 									# 	await toggle_side_quests()
 
-									case 'Camera Collision':
+									case GUIKeys.toggle_camera_collision:
 										if foreground_client:
 											camera: ElasticCameraController = await foreground_client.game_client.elastic_camera_controller()
 
@@ -1261,19 +1262,19 @@ async def main():
 
 							case deimosgui.GUICommandType.Copy:
 								match com.data:
-									case 'Zone':
+									case GUIKeys.copy_zone:
 										logger.debug('Copied Zone')
 										pyperclip.copy(current_zone)
 
-									case 'Position':
+									case GUIKeys.copy_position:
 										logger.debug('Copied Position')
 										pyperclip.copy(f'XYZ({current_pos.x}, {current_pos.y}, {current_pos.z})')
 
-									case 'Rotation':
+									case GUIKeys.copy_rotation:
 										logger.debug('Copied Rotation')
 										pyperclip.copy(f'Orient({current_rotation.pitch}, {current_rotation.roll}, {current_rotation.yaw})')
 
-									case 'Entity List':
+									case GUIKeys.copy_entity_list:
 										if foreground_client:
 											logger.debug('Copied Entity List')
 											sprinter = SprintyClient(foreground_client)
@@ -1285,7 +1286,7 @@ async def main():
 												entities_info += f'{entity_name}, XYZ(x={entity_pos.x}, y={entity_pos.y}, z={entity_pos.z})\n'
 											pyperclip.copy(entities_info)
 
-									case 'Camera Position':
+									case GUIKeys.copy_camera_position:
 										if foreground_client:
 											camera = await foreground_client.game_client.selected_camera_controller()
 											camera_pos = await camera.position()
@@ -1293,14 +1294,14 @@ async def main():
 											logger.debug('Copied Selected Camera Position')
 											pyperclip.copy(f'XYZ({camera_pos.x}, {camera_pos.y}, {camera_pos.z})')
 
-									case 'Camera Rotation':
+									case GUIKeys.copy_camera_rotation:
 										if foreground_client:
 											camera = await foreground_client.game_client.selected_camera_controller()
 											camera_pitch, camera_roll, camera_yaw = await camera.orientation()
 											logger.debug('Copied Camera Rotations')
 											pyperclip.copy(f'Orient({camera_pitch}, {camera_roll}, {camera_pitch})')
 
-									case 'UI Tree':
+									case GUIKeys.copy_ui_tree:
 										foreground: Client = foreground_client
 										if foreground_client:
 											ui_tree = ''
@@ -1318,7 +1319,7 @@ async def main():
 											logger.debug(f'Copied UI Tree for client {foreground.title}')
 											pyperclip.copy(ui_tree)
 
-									case 'Stats':
+									case GUIKeys.copy_stats:
 										if enemy_stats:
 											logger.debug('Copied Stats')
 											pyperclip.copy('\n'.join(enemy_stats))
@@ -1330,11 +1331,11 @@ async def main():
 
 							case deimosgui.GUICommandType.Teleport:
 								match com.data:
-									case 'Quest':
+									case GUIKeys.hotkey_quest_tp:
 										await navmap_teleport_hotkey()
-									case 'Mass':
+									case GUIKeys.mass_hotkey_mass_tp:
 										await mass_navmap_teleport_hotkey()
-									case 'Freecam':
+									case GUIKeys.hotkey_freecam_tp:
 										await tp_to_freecam_hotkey()
 									case _:
 										logger.debug(f'Unknown teleport type: {com.data}')
