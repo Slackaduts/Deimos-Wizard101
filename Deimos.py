@@ -143,11 +143,13 @@ def read_config(config_name : str):
 	global gui_theme
 	global gui_text_color
 	global gui_button_color
+	global gui_langcode
 	show_gui = parser.getboolean('gui', 'show_gui', fallback=True)
 	gui_on_top = parser.getboolean('gui', 'on_top', fallback=True)
 	gui_theme = parser.get('gui', 'theme', fallback='Black')
 	gui_text_color = parser.get('gui', 'text_color', fallback='white')
 	gui_button_color = parser.get('gui', 'button_color', fallback='#4a019e')
+	gui_langcode = parser.get('gui', 'locale', fallback='en')
 
 
 	# Auto Sigil Settings
@@ -1193,7 +1195,7 @@ async def main():
 			# swap queue order because sending from window means receiving from here
 			gui_thread = threading.Thread(
 				target=deimosgui.manage_gui,
-				args=(recv_queue, gui_send_queue, gui_theme, gui_text_color, gui_button_color, tool_name, tool_version, gui_on_top)
+				args=(recv_queue, gui_send_queue, gui_theme, gui_text_color, gui_button_color, tool_name, tool_version, gui_on_top, gui_langcode)
 			)
 			gui_thread.daemon = True
 			gui_thread.start()

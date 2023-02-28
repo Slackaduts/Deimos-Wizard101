@@ -8,14 +8,6 @@ from src.paths import wizard_city_dance_game_path
 from src.utils import assign_pet_level
 
 
-gettext.bindtextdomain('messages', 'locale')
-gettext.textdomain('messages')
-tl = gettext.gettext
-
-
-# TODO: Update deimos.py to work with new stuff here
-
-
 class GUICommandType(Enum):
 	# deimos <-> window
 	Close = auto()
@@ -118,8 +110,17 @@ def hotkey_button(name: str, key, auto_size: bool, text_color: str, button_color
 	return gui.Button(name, button_color=(text_color, button_color), auto_size_button=auto_size, key=key)
 
 
-def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_version, gui_on_top):
+def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_version, gui_on_top, langcode):
 	gui.theme(gui_theme)
+
+	if langcode != 'en':
+		translate = gettext.translation("messages", "locale", languages=[langcode])
+		tl = translate.gettext
+	else:
+		# maybe use gettext (module) as translate instead?
+		gettext.bindtextdomain('messages', 'locale')
+		gettext.textdomain('messages')
+		tl = gettext.gettext
 
 	gui.popup(tl('Deimos will always be free and open-source.\nBy using Deimos, you agree to the GPL v3 license agreement.\nIf you bought this, you got scammed!'), title=tl('License Agreement'), keep_on_top=True, text_color=gui_text_color, button_color=(gui_text_color, gui_button_color))
 
@@ -354,8 +355,8 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 	return window
 
 
-def manage_gui(send_queue: queue.Queue, recv_queue: queue.Queue, gui_theme, gui_text_color, gui_button_color, tool_name, tool_version, gui_on_top):
-	window = create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_version, gui_on_top)
+def manage_gui(send_queue: queue.Queue, recv_queue: queue.Queue, gui_theme, gui_text_color, gui_button_color, tool_name, tool_version, gui_on_top, langcode):
+	window = create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_version, gui_on_top, langcode)
 
 	running = True
 
