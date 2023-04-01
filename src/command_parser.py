@@ -12,7 +12,7 @@ from src.gui_inputs import is_numeric, param_input
 from src.utils import read_webpage, index_with_str, get_window_from_path, teleport_to_friend_from_list, auto_potions_force_buy, use_potion, is_free, logout_and_in, click_window_by_path, wait_for_visible_by_path, refill_potions, refill_potions_if_needed, wait_for_zone_change
 from src.camera_utils import glide_to, point_to_xyz, rotating_glide_to, orbit
 from src.tokenizer import tokenize
-from src.collision_math import plot_cube
+# from src.collision_math import plot_cube
 import re
 from loguru import logger
 
@@ -337,8 +337,8 @@ async def parse_command(clients: List[Client], command_str: str):
                     else:
                         logger.error('Failed to go to zone.  It may be spelled incorrectly, or may not be supported.')
 
-                case 'col':
-                    await plot_cube(clients[0])
+                # case 'col':
+                #     await plot_cube(clients[0])
 
                 case _:
                     await asyncio.sleep(0.25)
