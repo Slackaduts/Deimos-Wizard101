@@ -11,9 +11,10 @@ import asyncio
 import math
 from src.utils import is_visible_by_path, get_window_from_path
 from src.paths import willcast_path
+import random
 
 # Enchants
-HIT_ENCHANTS = frozenset(['Strong', 'Giant', 'Monstrous', 'Gargantuan', 'Colossal', 'Epic', 'Keen Eyes', 'Accurate', 'Sniper', 'Unstoppable', 'Extraordinary', 'Solar Surge', 'Extract Undead', 'Extract Gobbler', 'Extract Mander', 'Extract Spider', 'Extract Colossus', 'Extract Cyclops', 'Extract Golems', 'Extract Draconians', 'Extract Treant', 'Extract Imp', 'Extract Pig', 'Extract Elephant', 'Extract Wyrm', 'Extract Wyrm', 'Extract Dinos', 'Extract Parrot', 'Extract Insects', "Extract Polar Bear"])
+HIT_ENCHANTS = frozenset(['Strong', 'Giant', 'Monstrous', 'Gargantuan', 'Colossal', 'Epic', 'Keen Eyes', 'Accurate', 'Sniper', 'Unstoppable', 'Extraordinary', 'Solar Surge', 'Extract Undead', 'Extract Gobbler', 'Extract Mander', 'Extract Spider', 'Extract Colossus', 'Extract Cyclops', 'Extract Golems', 'Extract Draconians', 'Extract Treant', 'Extract Imp', 'Extract Pig', 'Extract Elephant', 'Extract Wyrm', 'Extract Dinos', 'Extract Parrot', 'Extract Insects', "Extract Polar Bear"])
 HEAL_ENCHANTS = frozenset(['Primordial', 'Radical'])
 BLADE_ENCHANTS = frozenset(['Sharpened Blade'])
 TRAP_ENCHANTS = frozenset(['Potent Trap'])
@@ -313,6 +314,11 @@ DAMAGE_TYPE_SCHOOLS = [
 master_strategy = ['AOE Pip Aura', 'AOE Golem Minion', 'Ally Select Blade', 'Enemy Select Trap', 'AOE Minion', 'AOE Global', 'AOE Blade', 'AOE Trap', 'AOE Hit Aura','AOE Golem Minion', 'Ally Select Blade', 'Enemy Select Trap', 'AOE Minion', 'AOE Global', 'AOE Blade', 'AOE Trap', 'AOE Hit Aura', 'AOE Offensive Shadow Creature', 'AOE DOT', 'AOE Hit', 'Enemy Select DOT', 'Enemy Select Hit', 'Enemy Select Hit Divide', 'AOE Polymorph']
 mob_strategy = ['AOE DOT', 'AOE Hit', 'Enemy Select DOT', 'Enemy Select Hit', 'Enemy Select Hit Divide', 'AOE Pip Aura', 'AOE Hit Aura', 'AOE Trap', 'AOE Global', 'AOE Blade','AOE Golem Minion' ,'AOE Minion', 'AOE Offensive Shadow Creature', 'AOE Polymorph']
 pvp_strategy = ['Ally Select Stun Block', 'AOE Global', 'AOE Defense Aura', 'AOE Offensive Shadow Creature', 'AOE DOT', 'AOE Hit', 'Enemy Select DOT', 'Enemy Select Hit', 'Enemy Select Hit Divide']
+random.shuffle(master_strategy) #APRIL FOOLS
+random.shuffle(pvp_strategy) #APRIL FOOLS
+random.shuffle(mob_strategy) #APRIL FOOLS
+pvp_strategy = master_strategy + pvp_strategy
+mob_strategy = master_strategy + pvp_strategy
 
 # Basic types
 hit_types = ['AOE DOT', 'AOE Hit', 'Enemy Select DOT', 'Enemy Select Hit', 'Enemy Select Hit Divide']
@@ -1391,8 +1397,11 @@ class Fighter(CombatHandler):
 		#cards = [ele for ele in self.cards if ele not in self.removed_spells]
 
 		self.bypass_strategy_to_kill, self.can_kill = await self.damage_calc_handle_round(self.cards)
+		self.bypass_strategy_to_kill = random.choice(castable_cards) #APRIL FOOLS
+		self.can_kill = True #APRIL FOOLS
 		if self.bypass_strategy_to_kill:
-			print(f" debug bypass Client {self.client.title} - Casting {self.card_names[self.bypass_strategy_to_kill]}")
+			pass
+			# print(f" debug bypass Client {self.client.title} - Casting {self.card_names[self.bypass_strategy_to_kill]}")
 		# print(self.can_kill)
 		self.prev_card_count = len(await self.get_cards()) + (await self.get_card_counts())[0] # gets card amount after enchants and discards
 		# update previously used spell types, and those that aren't purely done by conditionals
@@ -1423,7 +1432,7 @@ class Fighter(CombatHandler):
 		# Casting logic
 		while True:
 			if self.selected_spell:
-				print(f" debug Client {self.client.title} - Casting {self.card_names[self.selected_spell]}")
+				# print(f" debug Client {self.client.title} - Casting {self.card_names[self.selected_spell]}")
 				selected_spell_logic = self.spell_logic[self.selected_spell]
 				if 'AOE' in selected_spell_logic:
 					logger.debug(f"Client {self.client.title} - Casting {self.card_names[self.selected_spell]}")
