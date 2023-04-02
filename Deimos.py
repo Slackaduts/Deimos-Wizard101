@@ -47,7 +47,7 @@ from src.tokenizer import tokenize
 cMessageBox = ctypes.windll.user32.MessageBoxW
 
 
-tool_version = '3.7.3'
+tool_version = '3.7.4'
 tool_name = 'Deimos'
 tool_author = 'Slackaduts'
 repo_name = tool_name + '-Wizard101'
