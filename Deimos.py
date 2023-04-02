@@ -4,10 +4,10 @@ import requests
 import queue
 import threading
 import wizwalker
-from wizwalker import Keycode, HotkeyListener, ModifierKeys, utils, XYZ, Orient, MemoryInvalidated
+from wizwalker import Keycode, HotkeyListener, ModifierKeys, utils, XYZ, Orient
 from wizwalker.client_handler import ClientHandler, Client
 from wizwalker.extensions.scripting import teleport_to_friend_from_list
-from wizwalker.memory.memory_objects.camera_controller import DynamicCameraController, FreeCameraController, ElasticCameraController
+from wizwalker.memory.memory_objects.camera_controller import DynamicCameraController, ElasticCameraController
 from wizwalker.memory.memory_objects.window import Window
 import os
 import time
@@ -38,8 +38,7 @@ from src.sprinty_client import SprintyClient
 from src.gui_inputs import param_input
 from src import discsdk
 from wizwalker.extensions.wizsprinter.wiz_navigator import toZoneDisplayName, toZone
-from typing import List, Tuple
-from math import radians
+from typing import List
 
 from src import deimosgui
 from src.deimosgui import GUIKeys
@@ -48,7 +47,7 @@ from src.tokenizer import tokenize
 cMessageBox = ctypes.windll.user32.MessageBoxW
 
 
-tool_version = '3.7.3'
+tool_version = '3.7.4'
 tool_name = 'Deimos'
 tool_author = 'Slackaduts'
 repo_name = tool_name + '-Wizard101'
@@ -644,9 +643,6 @@ async def main():
 					freecam_status = True
 					await sync_camera(foreground_client)
 					await foreground_client.camera_freecam()
-					camera = await foreground_client.game_client.free_camera_controller()
-					roll = await camera.roll() #APRIL FOOLS
-					await camera.write_roll(roll + radians(180)) #APRIL FOOLS
 
 
 	async def tp_to_freecam_hotkey():
@@ -1195,10 +1191,6 @@ async def main():
 			global flythrough_task
 			gui_send_queue = queue.Queue()
 			recv_queue = queue.Queue()
-
-			gui_theme = "HotDogStand" #APRIL FOOLS
-			gui_text_color = "#ff69b4" #APRIL FOOLS
-			gui_button_color = "#556b2f" #APRIL FOOLS
 
 			# swap queue order because sending from window means receiving from here
 			gui_thread = threading.Thread(
