@@ -3,12 +3,14 @@ import ctypes
 import time
 import traceback
 import requests
+import subprocess
 
 import wizwalker.errors
 from wizwalker import Client, Keycode, XYZ, user32
 from wizwalker.extensions.scripting.utils import _maybe_get_named_window, _cycle_to_online_friends, _click_on_friend, _teleport_to_friend, _friend_list_entry
 from wizwalker.extensions.wizsprinter.wiz_navigator import toZone
 from wizwalker.memory import Window, WindowFlags
+from wizwalker.utils import get_all_wizard_handles, get_pid_from_handle, override_wiz_install_location
 from loguru import logger
 
 from src.dance_game_hook import attempt_deactivate_dance_hook
@@ -22,32 +24,21 @@ streamportal_locations = ["aeriel", "zanadu", "outer athanor", "inner athanor", 
 nanavator_locations = ["karamelle city", "sweetzburg", "nibbleheim", "gutenstadt", "black licorice forest", "candy corn farm", "gobblerton"]
 
 async def get_window_from_path(root_window: Window, name_path: list[str]) -> Window:
-	# FULL CREDIT TO SIROLAF FOR THIS FUNCTION
-	async def _recurse_follow_path(window, path):
-		if len(path) == 0:
-			return window
-		for child in await window.children():
-			if await child.name() == path[0]:
-				found_window = await _recurse_follow_path(child, path[1:])
-				if not found_window is False:
-					return found_window
-
-		return False
-
-	return await _recurse_follow_path(root_window, name_path)
+	# FULL CREDIT TO SIROLAF FOR THIS FUNCTION; this is a modified version of the original that reduces function calls -Ultimate314
+	if not name_path:
+		return root_window
+	for child in await root_window.children():
+		if await child.name() == name_path[0]:
+			if found_window := await get_window_from_path(child, name_path[1:]):
+				return found_window
 
 
 async def is_visible_by_path(client: Client, path: list[str]):
-	# FULL CREDIT TO SIROLAF FOR THIS FUNCTION
-	# checks visibility of a window from the path
-	root = client.root_window
-	windows = await get_window_from_path(root, path)
-	if windows == False:
-		return False
-	elif await windows.is_visible():
-		return True
-	else:
-		return False
+	# FULL CREDIT TO SIROLAF FOR THIS FUNCTION - now with optimized logic -Ultimate314
+	# checks visibility of a window from the path 
+	if window := await get_window_from_path(client.root_window, path):
+		return await window.is_visible()
+	return False
 
 
 async def read_control_checkbox_text(checkbox: Window) -> str:
@@ -261,23 +252,21 @@ async def safe_click_window(client: Client, path):
 
 
 async def click_window_by_path(client: Client, path: list[str], hooks: bool = False):
-	# FULL CREDIT TO SIROLAF FOR THIS FUNCTION, notfaj was here :3
+	# FULL CREDIT TO SIROLAF FOR THIS FUNCTION, notfaj was here :3, now Ultimate314 is here to optimize it slightly
 	# clicks window from path, must actually exist in the UI tree
 	async with client.mouse_handler:
-		root = client.root_window
-		windows = await get_window_from_path(root, path)
-		if windows:
-			await client.mouse_handler.click_window(windows)
+		if window := await get_window_from_path(client.root_window, path):
+			await client.mouse_handler.click_window(window)
 		else:
 			await asyncio.sleep(0.1)
 
 
 
 async def text_from_path(client: Client, path: list[str]) -> str:
-	# Returns text from a window via the window path
-	window = await get_window_from_path(client.root_window, path)
-	return await window.maybe_text()
-
+	# Returns text from a window via the window path, optimized it for better performance -Ultimate314
+	if window := await get_window_from_path(client.root_window, path):
+		return await window.maybe_text()
+	return ""
 
 async def wait_for_loading_screen(client: Client):
 	# Wait for a loading screen, then wait until the loading screen has finished.
@@ -546,7 +535,7 @@ async def auto_potions_force_buy(client: Client, mark: bool = False, minimum_man
 				await client.send_key(Keycode.PAGE_UP, 0.1)
 
 
-async def is_control_grayed(button):
+async def is_control_grayed(button: Window):
 	return await button.read_value_from_offset(688, "bool")
 
 
@@ -1217,14 +1206,10 @@ def index_with_str(input_str, desired_str: str) -> int:
 def read_webpage(url):
 	# return a list of lines from a hosted file
 	try:
-		response = requests.get(url, allow_redirects=True)
-		page_text = response.text
-		line_list = page_text.splitlines()
+		return requests.get(url, allow_redirects=True).text.splitlines()
 	except:
 		return []
-	else:
-		return line_list
-
+	
 def assign_pet_level(destinationLevel):
 	pet_world_tracks = ['btnTrack0', 'btnTrack1', 'btnTrack2', 'btnTrack3', 'btnTrack4']
 	pet_world_list = ['WizardCity', 'Krokotopia', 'Marleybone', 'Mooshu', 'Dragonspyre']
@@ -1236,3 +1221,9 @@ def assign_pet_level(destinationLevel):
 		for index, track in enumerate(wizard_city_dance_game_path):
 			if (track in pet_world_tracks):
 				wizard_city_dance_game_path[index] = selected_track
+
+def override_wiz_install_using_handle():
+	"""
+	This function allows you to automatically override your wiz install location, provided that wizard101 is open.
+	"""
+	override_wiz_install_location(subprocess.Popen(f'wmic PROCESS WHERE "ProcessID={get_pid_from_handle(get_all_wizard_handles()[0])}" GET ExecutablePath /format:list', stdout=subprocess.PIPE).communicate()[0].decode().strip().replace("\\Bin\\WizardGraphicalClient.exe", "").replace("ExecutablePath=", ""))
