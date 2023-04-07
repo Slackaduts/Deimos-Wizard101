@@ -102,12 +102,14 @@ def read_config(config_name : str):
 	global use_potions
 	global rpc_status
 	global drop_status
+	global anti_afk_status
 	auto_updating = parser.getboolean('settings', 'auto_updating', fallback=True)
 	speed_multiplier = parser.getfloat('settings', 'speed_multiplier', fallback=5.0)
 	wiz_path = parser.get('settings', 'wiz_path', fallback=None)
 	use_potions = parser.getboolean('settings', 'use_potions', fallback=True)
 	rpc_status = parser.getboolean('settings', 'rich_presence', fallback=True)
 	drop_status = parser.getboolean('settings', 'drop_logging', fallback=True)
+	anti_afk_status = parser.getboolean('settings', 'use_anti_afk', fallback=True) 
 
 
 	# Hotkeys
@@ -1162,6 +1164,9 @@ async def main():
 
 	async def anti_afk_loop():
 		# anti AFK implementation on a per client basis.
+		if not anti_afk_status:
+			return
+		
 		async def async_anti_afk(client: Client):
 			# await client.root_window.debug_print_ui_tree()
 			# print(await client.body.position())
