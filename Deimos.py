@@ -102,14 +102,12 @@ def read_config(config_name : str):
 	global use_potions
 	global rpc_status
 	global drop_status
-	global anti_afk
 	auto_updating = parser.getboolean('settings', 'auto_updating', fallback=True)
 	speed_multiplier = parser.getfloat('settings', 'speed_multiplier', fallback=5.0)
 	wiz_path = parser.get('settings', 'wiz_path', fallback=None)
 	use_potions = parser.getboolean('settings', 'use_potions', fallback=True)
 	rpc_status = parser.getboolean('settings', 'rich_presence', fallback=True)
 	drop_status = parser.getboolean('settings', 'drop_logging', fallback=True)
-	anti_afk = parser.getboolean('settings', 'use_anti_afk', fallback=True)
 
 
 	# Hotkeys
@@ -1746,42 +1744,6 @@ async def main():
 
 		await asyncio.gather(*[async_zone_check(p) for p in walker.clients])
 
-	
-	def get_loop_tasks():
-		foreground_client_switching_task = asyncio.create_task(foreground_client_switching())
-		assign_foreground_clients_task = asyncio.create_task(assign_foreground_clients())
-		# speed_switching_task = asyncio.create_task(speed_switching())
-		# combat_loop_task = asyncio.create_task(combat_loop())
-		# dialogue_loop_task = asyncio.create_task(dialogue_loop())
-		# sigil_loop_task = asyncio.create_task(sigil_loop())
-		in_combat_loop_task = asyncio.create_task(is_client_in_combat_loop())
-		gui_task = asyncio.create_task(handle_gui())
-		questing_leader_combat_detection_task = asyncio.create_task(entity_detect_combat_loop())
-		potion_usage_loop_task = asyncio.create_task(potion_usage_loop())
-		rpc_loop_task = asyncio.create_task(rpc_loop())
-		drop_logging_loop_task = asyncio.create_task(drop_logging_loop())
-		zone_check_loop_task = asyncio.create_task(zone_check_loop())
-		anti_afk_questing_loop_task = asyncio.create_task(anti_afk_questing_loop())
-
-		tasks = [
-			foreground_client_switching_task,
-			assign_foreground_clients_task,
-			in_combat_loop_task,
-			gui_task,
-			questing_leader_combat_detection_task,
-			potion_usage_loop_task,
-			rpc_loop_task,
-			drop_logging_loop_task,
-			zone_check_loop_task,
-			anti_afk_questing_loop_task
-		]
-
-		if anti_afk:
-			anti_afk_loop_task = asyncio.create_task(anti_afk_loop())
-			tasks.append(anti_afk_loop_task)
-
-		return tasks
-
 
 	await asyncio.sleep(0)
 	walker = ClientHandler()
@@ -1908,20 +1870,38 @@ async def main():
 	tool_status = True
 	exc = None
 	try:
-		loop_tasks = get_loop_tasks()
-		done, _ = await asyncio.wait(loop_tasks, return_when=asyncio.FIRST_EXCEPTION)
+		foreground_client_switching_task = asyncio.create_task(foreground_client_switching())
+		assign_foreground_clients_task = asyncio.create_task(assign_foreground_clients())
+		# speed_switching_task = asyncio.create_task(speed_switching())
+		# combat_loop_task = asyncio.create_task(combat_loop())
+		# dialogue_loop_task = asyncio.create_task(dialogue_loop())
+		anti_afk_loop_task = asyncio.create_task(anti_afk_loop())
+		# sigil_loop_task = asyncio.create_task(sigil_loop())
+		in_combat_loop_task = asyncio.create_task(is_client_in_combat_loop())
+		gui_task = asyncio.create_task(handle_gui())
+		questing_leader_combat_detection_task = asyncio.create_task(entity_detect_combat_loop())
+		potion_usage_loop_task = asyncio.create_task(potion_usage_loop())
+		rpc_loop_task = asyncio.create_task(rpc_loop())
+		drop_logging_loop_task = asyncio.create_task(drop_logging_loop())
+		zone_check_loop_task = asyncio.create_task(zone_check_loop())
+		anti_afk_questing_loop_task = asyncio.create_task(anti_afk_questing_loop())
+		
+		# while True:
+		# await asyncio.wait([foreground_client_switching_task, speed_switching_task, combat_loop_task, assign_foreground_clients_task, dialogue_loop_task, anti_afk_loop_task, sigil_loop_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task])
+		done, _ = await asyncio.wait([foreground_client_switching_task, assign_foreground_clients_task, anti_afk_loop_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task, anti_afk_questing_loop_task], return_when=asyncio.FIRST_EXCEPTION)
 		for t in done:
 			if t.done() and t.exception() != None:
 				exc = t.exception()
 				raise exc
+
 	finally:
-		loop_tasks.extend([speed_task, combat_task, dialogue_task, sigil_task, questing_task])
-		tasks: List[asyncio.Task] = loop_tasks
+		tasks: List[asyncio.Task] = [foreground_client_switching_task, speed_task, combat_task, assign_foreground_clients_task, dialogue_task, anti_afk_loop_task, sigil_task, questing_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task, anti_afk_questing_loop_task]
 		for task in tasks:
 			if task is not None and not task.cancelled():
 				task.cancel()
 
 		await tool_finish()
+
 
 def bool_to_string(input: bool):
 	if input:
