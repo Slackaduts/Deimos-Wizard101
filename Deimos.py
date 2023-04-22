@@ -5,6 +5,7 @@ import queue
 import threading
 import wizwalker
 from wizwalker import Keycode, HotkeyListener, ModifierKeys, utils, XYZ, Orient
+from wizwalker.utils import get_all_wizard_handles
 from wizwalker.client_handler import ClientHandler, Client
 from wizwalker.extensions.scripting import teleport_to_friend_from_list
 from wizwalker.memory.memory_objects.camera_controller import DynamicCameraController, ElasticCameraController
@@ -30,7 +31,7 @@ from src.stat_viewer import total_stats
 from src.teleport_math import navmap_tp, calc_Distance
 from src.questing import Quester
 from src.sigil import Sigil
-from src.utils import index_with_str, is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world, collect_wisps_with_limit, try_task_coro, read_webpage#, assign_pet_level
+from src.utils import index_with_str, is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world, collect_wisps_with_limit, try_task_coro, read_webpage, override_wiz_install_using_handle#, assign_pet_level
 from src.paths import advance_dialog_path, decline_quest_path
 import PySimpleGUI as gui
 import pyperclip
@@ -98,14 +99,12 @@ def read_config(config_name : str):
 	# Settings
 	global auto_updating
 	global speed_multiplier
-	global wiz_path
 	global use_potions
 	global rpc_status
 	global drop_status
 	global anti_afk_status
 	auto_updating = parser.getboolean('settings', 'auto_updating', fallback=True)
 	speed_multiplier = parser.getfloat('settings', 'speed_multiplier', fallback=5.0)
-	wiz_path = parser.get('settings', 'wiz_path', fallback=None)
 	use_potions = parser.getboolean('settings', 'use_potions', fallback=True)
 	rpc_status = parser.getboolean('settings', 'rich_presence', fallback=True)
 	drop_status = parser.getboolean('settings', 'drop_logging', fallback=True)
@@ -1753,9 +1752,6 @@ async def main():
 	await asyncio.sleep(0)
 	walker = ClientHandler()
 	# walker.clients = []
-	walker.get_new_clients()
-	await asyncio.sleep(0)
-	await asyncio.sleep(0)
 	print(f'{tool_name} now has a discord! Join here:')
 	print('https://discord.gg/59UrPJwYDm')
 	print('Be sure to join the WizWalker discord, as this project is built using it. Join here:')
@@ -1790,12 +1786,12 @@ async def main():
 	async def hooking_logic(default_logic : bool = False):
 		await asyncio.sleep(0.1)
 		if not default_logic:
-			if not walker.clients:
+			if not get_all_wizard_handles():
 				logger.debug('Waiting for a Wizard101 client to be opened...')
-				while not walker.clients:
-					walker.get_new_clients()
-					await asyncio.sleep(0)
+				while not get_all_wizard_handles():
 					await asyncio.sleep(1)
+			override_wiz_install_using_handle()
+			walker.get_new_clients()
 			# p1, p2, p3, p4 = [*clients, None, None, None, None][:4]
 			# child_clients = clients[1:]
 			for i, p in enumerate(walker.clients, 1):
@@ -1955,16 +1951,6 @@ if __name__ == "__main__":
 	handle_tool_updating()
 
 	current_log = logger.add(f"logs/{tool_name} - {generate_timestamp()}.log", encoding='utf-8', enqueue=True, backtrace=True)
-
-	# Steam support and config path support
-	if wiz_path:
-		utils.override_wiz_install_location(wiz_path)
-
-	elif not os.path.exists(r'C:\Program Files (x86)\Steam\steamapps\common\Wizard101'):
-		utils.override_wiz_install_location(r'C:\ProgramData\KingsIsle Entertainment\Wizard101')
-
-	else:
-		utils.override_wiz_install_location(r'C:\Program Files (x86)\Steam\steamapps\common\Wizard101')
 
 	asyncio.run(main())
 	logger.remove(current_log)
