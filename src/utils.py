@@ -5,7 +5,8 @@ import traceback
 import requests
 
 import wizwalker.errors
-from wizwalker import Client, Keycode, XYZ, user32
+from wizwalker import Client, Keycode, XYZ, kernel32
+from wizwalker.utils import get_all_wizard_handles, override_wiz_install_location, get_pid_from_handle
 from wizwalker.extensions.scripting.utils import _maybe_get_named_window, _cycle_to_online_friends, _click_on_friend, _teleport_to_friend, _friend_list_entry
 from wizwalker.extensions.wizsprinter.wiz_navigator import toZone
 from wizwalker.memory import Window, WindowFlags
@@ -1326,3 +1327,16 @@ async def class_snapshot(instance, recurse: bool = True, current_depth = 0, max_
                 snapshot_data[name] = await class_snapshot(output, recurse, current_depth, max_depth, types_blacklist)
 
     return snapshot_data
+
+
+def override_wiz_install_using_handle(max_size = 100):
+    """
+    This function allows you to automatically override your wiz install location, provided that wizard101 is open.
+    """
+    path = ctypes.create_unicode_buffer(max_size)
+    pid = get_pid_from_handle(get_all_wizard_handles()[0])
+    handle = kernel32.OpenProcess(0x410, 0, pid) # PROCESS_QUERY_INFORMATION and PROCESS_VM_READ
+    ctypes.windll.psapi.GetModuleFileNameExW(handle, None, ctypes.byref(path), max_size)
+    kernel32.CloseHandle(handle)
+    install_location = path.value.replace("\Bin\WizardGraphicalClient.exe", "")
+    override_wiz_install_location(install_location)
