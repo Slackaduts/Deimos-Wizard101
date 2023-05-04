@@ -1277,7 +1277,6 @@ async def class_snapshot(instance, recurse: bool = True, current_depth = 0, max_
 
         return issubclass(return_type, types)
 
-
     for name, func in inspect.getmembers(instance, predicate=inspect.ismethod):
         signature = inspect.signature(func)
         if not name.startswith('__') and not len(signature.parameters) and not _is_return_type_blacklisted(func): # Skip built-in methods and only consider functions without arguments
