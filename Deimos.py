@@ -31,8 +31,9 @@ from src.stat_viewer import total_stats
 from src.teleport_math import navmap_tp, calc_Distance
 from src.questing import Quester
 from src.sigil import Sigil
-from src.utils import index_with_str, is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world, collect_wisps_with_limit, try_task_coro, read_webpage, override_wiz_install_using_handle#, assign_pet_level
-from src.paths import advance_dialog_path, decline_quest_path
+from src.utils import index_with_str, is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world, collect_wisps_with_limit, try_task_coro, read_webpage, override_wiz_install_using_handle, get_window_from_path#, assign_pet_level
+from src.paths import advance_dialog_path, decline_quest_path, team_up_button_path
+from src.parse_inventory_contents import ParsePack
 import PySimpleGUI as gui
 import pyperclip
 from src.sprinty_client import SprintyClient
@@ -157,9 +158,13 @@ def read_config(config_name : str):
 	global use_team_up
 	global buy_potions
 	global client_to_follow
+	global auto_sell
+	global bazzar_sell
 	use_team_up = parser.getboolean('sigil', 'use_team_up', fallback=False)
 	buy_potions = parser.getboolean('settings', 'buy_potions', fallback=True)
 	client_to_follow = parser.get('sigil', 'client_to_follow', fallback=None)
+	auto_sell = parser.getboolean('sigil', 'auto_sell', fallback=False)
+	bazzar_sell = parser.getboolean('sigil', 'bazzar_sell', fallback=False)
 
 
 	# Auto Questing Settings
@@ -1179,11 +1184,13 @@ async def main():
 					client_xyz_2 = await client.body.position()
 					distance_moved = calc_Distance(client_xyz, client_xyz_2)
 					if distance_moved < 5.0 and not await client.in_battle() and not client.feeding_pet_status and not client.entity_detect_combat_status:
-
-						logger.debug(f"Client {client.title} - AFK client detected, moving slightly.")
-						await client.send_key(key=Keycode.A)
-						await asyncio.sleep(0.1)
-						await client.send_key(key=Keycode.D)
+						if await is_visible_by_path(client, team_up_button_path) is True:
+							logger.debug(f"Client {client.title} - AFK client detected, but client is near sigil. Could be farming so we don't run ANTI-AFK")
+						else:
+							logger.debug(f"Client {client.title} - AFK client detected, moving slightly.")
+							await client.send_key(key=Keycode.A)
+							await asyncio.sleep(0.1)
+							await client.send_key(key=Keycode.D)
 
 		await asyncio.gather(*[async_anti_afk(p) for p in walker.clients])
 
@@ -1560,6 +1567,17 @@ async def main():
 								logger.debug(f'Set Scale to {desired_scale}')
 								await asyncio.gather(*[client.body.write_scale(desired_scale) for client in walker.clients])
 
+							case deimosgui.GUICommandType.parse_inventory:
+								if foreground_client:
+									async with ParsePack(foreground_client) as parse_pack:
+										string_of_items = await parse_pack.open_and_select_backpack_all_tab()
+									file_of_items_parsed = open('parsed_inventory.txt', 'w')
+									file_of_items_parsed.write(string_of_items)
+									file_of_items_parsed.close()
+									list_of_items = string_of_items.split(",")
+									logger.debug(f"{foreground_client.title} - Successfully parsed inventory and stored it in 'parsed_inventory.txt'")
+									gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('append_items_list', list_of_items)))
+
 				except queue.Empty:
 					pass
 
@@ -1835,6 +1853,8 @@ async def main():
 		p.auto_pet_status = False
 		p.feeding_pet_status = False
 		p.use_team_up = use_team_up
+		p.auto_sell = auto_sell
+		p.bazzar_sell = bazzar_sell
 		p.dance_hook_status = False
 		p.entity_detect_combat_status = False
 		p.invincible_combat_timer = False
@@ -1943,7 +1963,9 @@ def handle_tool_updating():
 				auto_update()
 
 			if not is_version_greater(tool_version, version):
-				config_update()
+				print('Config doesnt match source, Im using a custom config')
+				pass
+				# config_update()
 
 
 if __name__ == "__main__":

@@ -173,3 +173,10 @@ energy_amount_path = ['WorldView', 'DeckConfiguration', '', 'ControlSprite', 'wn
 quest_buttons_parent_path = ['WorldView', 'DeckConfiguration', 'wndQuestList']
 quest_two_button_path = ['WorldView', 'DeckConfiguration', 'wndQuestList', 'wndQuestInfo1']
 all_quests_sort_button_path = ['WorldView', 'DeckConfiguration', 'wndQuestList', 'QuestLogAllButton']
+
+# Backpack Items Path (SlackPack)
+equipped_item = ['WorldView', 'compareEquipped', 'ControlWidget', 'mainLayout']
+new_item = ['WorldView', 'compareNewItem', 'ControlWidget', 'mainLayout']
+
+# Deck Check Item Paths (DeckCheck)
+SpellList = ['WorldView', 'DeckConfiguration', 'DeckConfigurationWindow', 'ControlSprite', 'DeckPage', 'CardsInDeck']

@@ -2,7 +2,10 @@ from enum import Enum, auto
 import gettext
 import queue
 import re
+import os
+import operator as op
 import PySimpleGUI as gui
+from loguru import logger
 from src.combat_objects import school_id_to_names
 from src.paths import wizard_city_dance_game_path
 from src.utils import assign_pet_level
@@ -44,6 +47,11 @@ class GUICommandType(Enum):
 
 	SetScale = auto()
 
+	# Inventory buttons
+	parse_inventory = auto()
+	append_items_to_sell = auto()
+	append_items_list = ()
+
 	# deimos -> window
 	UpdateWindow = auto()
 	UpdateWindowValues = auto()
@@ -53,31 +61,38 @@ class GUICommandType(Enum):
 # - inherit from StrEnum in 3.11 to make this nicer
 # - fix naming convention, it's inconsistent
 class GUIKeys:
+	# Main Toggles
 	toggle_speedhack = "togglespeedhack"
 	toggle_combat = "togglecombat"
 	toggle_dialogue = "toggledialogue"
 	toggle_sigil = "togglesigil"
 	toggle_questing = "toggle_questing"
 	toggle_auto_pet = "toggleautopet"
-	toggle_freecam = "togglefreecam"
-	toggle_camera_collision = "togglecameracollision"
 
+	# Hotkeys
+	toggle_freecam = "togglefreecam"
 	hotkey_quest_tp = "hotkeyquesttp"
 	hotkey_freecam_tp = "hotkeyfreecamtp"
 
+	# Mass Clients Hotkeys
 	mass_hotkey_mass_tp = "masshotkeymasstp"
 	mass_hotkey_xyz_sync = "masshotkeyxyzsync"
 	mass_hotkey_x_press = "masshotkeyxpress"
 
+	# Camera Buttons
+	toggle_camera_collision = "togglecameracollision"
+	copy_camera_position = "copycameraposition"
+	copy_camera_rotation = "copycamerarotation"
+	button_set_camera_position = "buttonsetcameraposition"
+	button_anchor = "buttonanchor"
+	button_set_distance = "buttonsetdistance"
+
+	# Dev Utils Buttons
 	copy_position = "copyposition"
 	copy_zone = "copyzone"
 	copy_rotation = "copyrotation"
 	copy_entity_list = "copyentitylist"
 	copy_ui_tree = "copyuitree"
-	copy_camera_position = "copycameraposition"
-	copy_stats = "copystats"
-	copy_camera_rotation = "copycamerarotation"
-
 	button_custom_tp = "buttoncustomtp"
 	button_entity_tp = "buttonentitytp"
 	button_go_to_zone = "buttongotozone"
@@ -88,15 +103,26 @@ class GUIKeys:
 	button_mass_go_to_bazaar = "buttonmassgotobazaar"
 	button_refill_potions = "buttonrefillpotions"
 	button_mass_refill_potions = "buttonmassrefillpotions"
-	button_set_camera_position = "buttonsetcameraposition"
-	button_anchor = "buttonanchor"
-	button_set_distance = "buttonsetdistance"
+
+	# Stats Buttons
+	copy_stats = "copystats"
 	button_view_stats = "buttonviewstats"
 	button_swap_members = "buttonswapmembers"
+
+	# Flythrough Buttons
 	button_execute_flythrough = "buttonexecuteflythrough"
 	button_kill_flythrough = "buttonkillflythrough"
+
+	# Bot Buttons
 	button_run_bot = "buttonrunbot"
 	button_kill_bot = "buttonkillbot"
+
+	# Inventory buttons
+	button_parse_inventory_items = "buttonparseinventoryitems"
+	button_append_items_to_sell = "buttonappenditemstosell"
+	button_remove_items_to_sell = "buttonremoveitemstosell"
+	append_list = "appendlist"
+	# Misc Buttons
 	button_set_scale = "buttonsetscale"
 
 
@@ -129,6 +155,18 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 
 	def hotkey_button(name, key, auto_size=False, text_color=gui_text_color, button_color=gui_button_color):
 		return original_hotkey_button(name, key, auto_size, text_color, button_color)
+
+	def get_parsed_inventory(filepath: str) -> list:
+		file_of_items_parsed = open(filepath, 'r')
+		string_of_items = file_of_items_parsed.read()
+		_list_of_items = string_of_items.split(',')
+		# Remove duplicate items in list
+		list_of_items_to_append = []
+		for i in _list_of_items:
+			if op.countOf(_list_of_items, i) >= 1 and (i not in list_of_items_to_append):
+				list_of_items_to_append.append(i)
+		file_of_items_parsed.close()
+		return list_of_items_to_append
 
 	# TODO: Switch to using keys for this stuff
 	toggles: list[tuple[str, str]] = [
@@ -166,9 +204,9 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 
 	zone_info = gui.Text(tl('Zone') + ': ', key='Zone', auto_size_text=False, size=(62, 1), text_color=gui_text_color)
 
-	copy_pos = hotkey_button(tl('Copy Position'), GUIKeys.copy_position)
+	copy_pos = hotkey_button(tl('Copy Position'), GUIKeys.copy_position, auto_size=True)
 	copy_zone = hotkey_button(tl('Copy Zone'), GUIKeys.copy_zone)
-	copy_yaw = hotkey_button(tl('Copy Rotation'), GUIKeys.copy_rotation)
+	copy_yaw = hotkey_button(tl('Copy Rotation'), GUIKeys.copy_rotation, auto_size=True)
 
 	client_info_layout = [
 		[client_title],
@@ -333,6 +371,25 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 
 	framed_misc_utils_layout = gui.Frame(tl('Misc Utils'), misc_utils_layout, title_color=gui_text_color)
 
+	inventory_features_layout = [
+		[gui.Text(dev_utils_notice, text_color=gui_text_color)],
+		[hotkey_button(tl('Parse Inventory Items'), GUIKeys.button_parse_inventory_items, auto_size=True)],
+
+		[gui.Text('Select items below to add the items to the quick sell list', text_color=gui_text_color)],
+		[gui.Listbox(values=get_parsed_inventory(filepath='parsed_inventory.txt'), select_mode=gui.LISTBOX_SELECT_MODE_MULTIPLE, size=(24, 4), key='append_items_list')],
+		[hotkey_button(tl('Append Items To Sell'), GUIKeys.button_append_items_to_sell, auto_size=True)],
+	]
+
+	framed_inventory_features_layout = gui.Frame(tl('Append items to items_to_sell.txt'), inventory_features_layout, title_color=gui_text_color)
+
+	inventory_features_layout2 = [
+		[gui.Text('Select items below to remove the items from the quick sell list', text_color=gui_text_color)],
+		[gui.Listbox(values=get_parsed_inventory(filepath='items_to_sell.txt'), select_mode=gui.LISTBOX_SELECT_MODE_MULTIPLE, size=(24, 4), key='remove_items_list')],
+		[hotkey_button(tl('Remove Items To Sell'), GUIKeys.button_remove_items_to_sell, auto_size=True)],
+	]
+
+	framed_inventory_features_layout2 = gui.Frame(tl('Remove Items from items_to_sell.txt'), inventory_features_layout2, title_color=gui_text_color)
+
 	tabs = [
 		[
 			gui.Tab(tl('Hotkeys'), [[framed_toggles_layout, framed_hotkeys_layout, framed_mass_hotkeys_layout, framed_utils_layout]], title_color=gui_text_color),
@@ -341,6 +398,7 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 			gui.Tab(tl('Stat Viewer'), [[framed_stat_viewer_layout]], title_color=gui_text_color),
 			gui.Tab(tl('Flythrough'), [[framed_flythrough_layout]], title_color=gui_text_color),
 			gui.Tab(tl('Bot'), [[framed_bot_creator_layout]], title_color=gui_text_color),
+			gui.Tab(tl('Inventory'), [[framed_inventory_features_layout], [framed_inventory_features_layout2]], title_color=gui_text_color),
 			gui.Tab(tl('Misc'), [[framed_misc_utils_layout]], title_color=gui_text_color)
 		]
 	]
@@ -520,10 +578,103 @@ def manage_gui(send_queue: queue.Queue, recv_queue: queue.Queue, gui_theme, gui_
 			# 		send_queue.put(GUICommand(GUICommandType.SetPetWorld, (False, str(inputs['PetWorldInput']))))
 
 			# Other
+			case GUIKeys.button_parse_inventory_items:
+				send_queue.put(GUICommand(GUICommandType.parse_inventory))
+				# gui.Popup(f"Successfully parsed inventory and stored it in 'parsed_inventory.txt'", keep_on_top=True)
+				# Above needs to wait for function to finish, now clue how so just commented out for now
+			case GUIKeys.button_append_items_to_sell:
+				_user_input = inputs['append_items_list']
+				user_input: str = ','.join(map(str, _user_input))
+				if user_input == '':
+					logger.debug('Error: User tried to enter NULL to "append" to items to sell')
+				else:
+					if os.stat('items_to_sell.txt').st_size == 0:
+						with open('items_to_sell.txt', 'a') as file:
+							file.write(user_input)
+							logger.debug('Successfully created items to sell')
+						file.close()
+
+						with open('items_to_sell.txt', 'r') as file:
+							string_of_items_to_sell_updated = file.read()
+							list_of_items_to_sell_updated = string_of_items_to_sell_updated.split(',')
+						file.close()
+
+						with open('parsed_inventory.txt', 'r') as file:
+							string_of_items_parsed = file.read()
+							list_of_items_parsed_updated = string_of_items_parsed.split(',')
+							for item in _user_input:
+								list_of_items_parsed_updated.remove(item)
+						file.close()
+
+						with open('parsed_inventory.txt', 'w') as file:
+							string_of_items_parsed_updated: str = ','.join(map(str, list_of_items_parsed_updated))
+							file.write(string_of_items_parsed_updated)
+
+						window['remove_items_list'].update(values=list_of_items_to_sell_updated)
+						window['append_items_list'].update(values=list_of_items_parsed_updated)
+					else:
+						with open('items_to_sell.txt', 'a') as file:
+							file.write(',' + user_input)
+							logger.debug('Successfully appended items to sell list')
+							file.close()
+						file.close()
+
+						with open('items_to_sell.txt', 'r') as file:
+							string_of_items_to_sell_updated = file.read()
+							list_of_items_to_sell_updated = string_of_items_to_sell_updated.split(',')
+						file.close()
+
+						with open('parsed_inventory.txt', 'r') as file:
+							string_of_items_parsed = file.read()
+							list_of_items_parsed_updated = string_of_items_parsed.split(',')
+							for item in _user_input:
+								list_of_items_parsed_updated.remove(item)
+						file.close()
+
+						with open('parsed_inventory.txt', 'w') as file:
+							string_of_items_parsed_updated: str = ','.join(map(str, list_of_items_parsed_updated))
+							file.write(string_of_items_parsed_updated)
+
+						file.close()
+						window['remove_items_list'].update(values=list_of_items_to_sell_updated)
+						window['append_items_list'].update(values=list_of_items_parsed_updated)
+
+
+						# window['append_items_list'].update()
+
+			case GUIKeys.button_remove_items_to_sell:
+				# string_of_user_input = selected items from list box
+				string_of_user_input = inputs['remove_items_list']
+				if string_of_user_input == '':
+					logger.debug('Error: User tried to enter NULL to "remove" to items to sell')
+				else:
+					# Reading the items to sell.txt
+					file_path = 'items_to_sell.txt'
+					file_of_items_to_sell = open(file_path, "r")
+					string_of_list_of_items_to_sell = file_of_items_to_sell.read()
+					list_of_items_to_sell = string_of_list_of_items_to_sell.split(",")
+
+					# Matching items to items in the file and remove it from the list
+					for item_to_remove_from_sell_list in string_of_user_input:
+						if item_to_remove_from_sell_list in string_of_user_input:
+							list_of_items_to_sell.remove(item_to_remove_from_sell_list)
+
+					file_of_items_to_sell.close()
+					# Convert list to string
+					updated_string_of_items_to_sell: str = ','.join(map(str, list_of_items_to_sell))
+
+					# Write string to file so it can be read by
+					new_list_with_items_removed = open(file_path, 'w')
+					new_list_with_items_removed.write(updated_string_of_items_to_sell)
+					new_list_with_items_removed.close()
+					logger.debug(f'Successfully removed items to sell: {string_of_user_input}')
+					# Here is where I want it to update the listbox element for PySimpleGUI but nothing is updated
+					new_list_with_items_removed.close()
+					window['remove_items_list'].update(values=list_of_items_to_sell)
 			case _:
 				pass
 
-		#Updates pet world when it changes, without the need for a button press -slack
+		# Updates pet world when it changes, without the need for a button press -slack
 		if inputs and inputs['PetWorldInput'] != wizard_city_dance_game_path[-1]:
 			assign_pet_level(inputs['PetWorldInput'])
 
@@ -548,5 +699,4 @@ def manage_gui(send_queue: queue.Queue, recv_queue: queue.Queue, gui_theme, gui_
 
 		import_check('bot_file_path', 'bot_creator')
 		export_check('bot_save_path', 'bot_creator')
-
 	window.close()

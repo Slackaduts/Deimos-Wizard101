@@ -5,6 +5,7 @@ from src.teleport_math import navmap_tp, calc_FrontalVector, are_xyzs_within_thr
 from src.utils import is_visible_by_path, click_window_by_path, wait_for_zone_change, auto_potions, logout_and_in, is_free, get_quest_name, collect_wisps
 from src.paths import team_up_button_path, team_up_confirm_path, dungeon_warning_path, cancel_chest_roll_path, npc_range_path
 from src.sprinty_client import SprintyClient
+from src.flash_trash import FlashTrash
 from typing import List
 
 
@@ -104,9 +105,37 @@ class Sigil():
 
 	@logger.catch()
 	async def solo_farming_logic(self):
+
 		while self.client.sigil_status:
 			while not await is_visible_by_path(self.client, team_up_button_path) and self.client.sigil_status:
 				await asyncio.sleep(0.1)
+
+			# Automatically sells farming items
+			if self.client.auto_sell:
+				logger.debug(f'Client {self.client.title} - Quick Selling Items')
+				async with FlashTrash(self.client) as flash_trash:
+					await flash_trash.open_and_select_backpack_all_tab()
+				await asyncio.sleep(1)
+			elif self.client.bazzar_sell and self.client.auto_sell:
+				logger.debug(f"Client {self.client.title} - Config misconfigured, can't have both bazzar_sell and quick_sell true")
+
+			if self.client.bazzar_sell and self.client.auto_sell is False:
+				logger.debug(f'Client {self.client.title} - Running Bazzar sell + Backpack Checks Logic')
+				async with FlashTrash(self.client) as flash_trash:
+					if not await flash_trash.check_if_client_is_close_to_max_gold():
+						logger.debug(f'Client {self.client.title} - Is not close to Max Gold, checking inventory space')
+						if await flash_trash.check_if_client_is_close_to_max_backpack_space():
+							logger.debug(f'Client {self.client.title} - Going to Bazzar to Sell Items')
+							await flash_trash.goto_bazzar_and_open_sell_tab()
+							await flash_trash.navigate_to_sell_tab()
+							await flash_trash.select_tab_and_call_read_function()
+							await flash_trash.select_houseing_tab_and_call_read_function()
+						else:
+							logger.debug(f'Client {self.client.title} - Is not close to Max Inventory Space, the farming continues')
+					else:
+						logger.debug(f'Client {self.client.title} - Client is Maxed on Gold')
+			elif self.client.bazzar_sell and self.client.auto_sell:
+				logger.debug(f"Client {self.client.title} - Config misconfigured, can't have both bazzar_sell and quick_sell True")
 
 			# Automatically use and buy potions if needed
 			await auto_potions(self.client)
@@ -119,7 +148,7 @@ class Sigil():
 			if await get_quest_name(self.client) == self.original_quest:
 				start_xyz = await self.client.body.position() 
 				second_xyz = await calc_FrontalVector(self.client, speed_constant=200, speed_adjusted=False)
-				await asyncio.sleep(5.0)
+				await asyncio.sleep(0.5)
 				await SprintyClient(self.client).tp_to_closest_mob()
 				await self.wait_for_combat_finish()
 				await asyncio.sleep(0.1)
@@ -147,8 +176,16 @@ class Sigil():
 						break
 
 				logger.debug(f'Client {self.client.title} - Awaiting loading')
+				x = 0
 				while await self.client.is_loading():
-					await asyncio.sleep(0.1)
+					if x == 100:
+						logger.debug(f'Client {self.client.title} - Is Stuck in Whileloop, add logic to fix it')
+					# Added X keycode send because I noticed that the sigil farm gets stuck RIGHT at the sigil
+					# I'm not sure why it get's stuck the sigil Teamup is visible
+					await self.client.send_key(Keycode.X)
+					await asyncio.sleep(1)
+					x = x + 1
+				logger.debug(f'Client {self.client.title} - Exited While Loop for loading')
 
 			else:
 				# TODO: Logic for dungeons with questlines
@@ -196,6 +233,35 @@ class Sigil():
 		while self.client.sigil_status:
 			while not await is_visible_by_path(self.client, team_up_button_path) and self.client.sigil_status:
 				await asyncio.sleep(0.1)
+
+			if self.client.auto_sell:
+				for client in self.clients:
+					logger.debug(f'Client {client.title} - Quick Selling Items')
+					async with FlashTrash(client) as flash_trash:
+						await flash_trash.open_and_select_backpack_all_tab()
+					await asyncio.sleep(1)
+
+			if self.client.bazzar_sell and self.client.auto_sell is False:
+				for client in self.clients:
+					logger.debug(f'Client {client.title} - Running Bazzar sell + Backpack Checks Logic')
+					async with FlashTrash(client) as flash_trash:
+						if not await flash_trash.check_if_client_is_close_to_max_gold():
+							logger.debug(f'Client {client.title} - Is not close to Max Gold, checking inventory space')
+							if await flash_trash.check_if_client_is_close_to_max_backpack_space():
+								logger.debug(f'Client {client.title} - Going to Bazzar to Sell Items')
+								await flash_trash.goto_bazzar_and_open_sell_tab()
+								await flash_trash.navigate_to_sell_tab()
+								await flash_trash.select_tab_and_call_read_function()
+								await flash_trash.select_houseing_tab_and_call_read_function()
+							else:
+								logger.debug(f'Client {client.title} - Is not close to Max Inventory Space, the farming continues')
+						else:
+							logger.debug(f'Client {client.title} - Client is Maxed on Gold')
+			elif self.client.bazzar_sell and self.client.auto_sell:
+				logger.debug(f"Client {self.client.title} - Config misconfigured, can't have both bazzar_sell and quick_sell True")
+
+			else:
+				logger.debug(f'Client {self.client.title} - Quick Selling Disabled')
 
 			# Automatically use and buy potions if needed
 			for client in self.clients:

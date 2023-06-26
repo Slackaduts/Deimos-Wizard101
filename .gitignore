@@ -1,3 +1,9 @@
 *.pyc
 logs/
 Deimos-Testconfig.ini
+.idea/Deimos-Wizard101-development-fork.iml
+.idea/inspectionProfiles/profiles_settings.xml
+.idea/misc.xml
+.idea/modules.xml
+.idea/vcs.xml
+.idea/workspace.xml
