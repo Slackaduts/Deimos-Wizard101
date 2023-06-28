@@ -418,6 +418,36 @@ async def navigate_to_commons_from_ravenwood(client: Client):
     await wait_for_zone_change(client, current_zone=current_zone)
 
 
+async def navigate_to_shopping_district(client: Client):
+    current_zone = await client.zone_name()
+    await client.teleport(XYZ(1359.4481201171875, -3299.5595703125, -27.9923095703125))
+    await client.goto(1342.4510498046875, -3590.277587890625)
+    while not await client.is_loading():
+        await client.send_key(Keycode.W, 0.1)
+    await wait_for_zone_change(client, current_zone=current_zone)
+
+
+async def navigate_to_olde_town(client: Client):
+    current_zone = await client.zone_name()
+    await client.teleport(XYZ(-5442.1318359375, -3267.8291015625, -29.36358642578125))
+    await client.goto(-6120.72900390625, -3274.565185546875)
+    while not await client.is_loading():
+        await client.send_key(Keycode.W, 0.1)
+    await wait_for_zone_change(client, current_zone=current_zone)
+
+
+async def navigate_to_bazzar(client: Client):
+    current_zone = await client.zone_name()
+    await client.teleport(XYZ(-1493.262451171875, 2224.0732421875, -277.3763427734375))
+    await client.goto(-1699.54345703125, 2245.400146484375)
+    while not await client.is_loading():
+        await client.send_key(Keycode.W, 0.1)
+    await wait_for_zone_change(client, current_zone=current_zone)
+    await client.goto(67.37213134765625, 298.70880126953125)
+    await client.send_key(Keycode.X, seconds=0.2)
+
+
+
 async def navigate_to_potions(client: Client):
     # Teleport to hilda brewer
     Hilda_XYZ = XYZ(-4398.70654296875, 1016.1954345703125, 229.00079345703125)
@@ -1339,3 +1369,116 @@ def override_wiz_install_using_handle(max_size = 100):
     kernel32.CloseHandle(handle)
     install_location = path.value.replace("\Bin\WizardGraphicalClient.exe", "")
     override_wiz_install_location(install_location)
+
+    def required_params(self, signature: inspect.Signature) -> int:
+        '''Counts the number of params required for a function, based off of its function signature.'''
+        req_params = 0
+
+        for param in signature.parameters.values():
+            if param.default is inspect.Parameter.empty:
+                req_params += 1
+
+        return req_params
+
+    async def conditional_await(self, func, args: dict = {}) -> any:
+        '''Awaits any function that returns something if async, runs normally if sync.'''
+        if inspect.iscoroutinefunction(func):
+            return await func(**args)
+
+        else:
+            return func(**args)
+
+    async def class_snapshot(self, instance, recurse: bool = True, current_depth: int = 0, max_depth: int = 25,
+                             types_blacklist=(inspect._empty, Window, wizwalker.memory.DynamicWindow),
+                             edge_cases: dict = {}):
+        '''Recursively calls every function in a class, async or not. Assembles a dict containing the outputs for these, referenced by function name. Only does functions that have no arguments.'''
+        snapshot_data = {}
+
+        if current_depth >= max_depth:  # If we have reached or exceeded max depth, return an empty dict
+            return snapshot_data
+
+        if not recurse and current_depth:  # If we have any depth and we are not recursing, return an empty dict
+            return snapshot_data
+
+        current_depth += 1  # Tick our current depth
+
+        valid_types = (int, float, bool, str, Enum, type(None))  # valid built-in types
+        iter_types = (
+        list, dict, set, tuple)  # types we can iterate through in a useful manner, as strings are iterable
+
+        def _is_valid_type(obj, types=valid_types):
+            # Returns True if the object supplied's type is apart of the list of supplied valid types
+            return issubclass(type(obj), types)
+
+        def _is_return_type_blacklisted(func, types: tuple = types_blacklist):
+            return_type = typing.get_type_hints(func).get("return")
+            if isinstance(return_type, typing._GenericAlias):
+                return_type = return_type.__args__[0]
+
+            return issubclass(return_type, types)
+
+        for name, func in inspect.getmembers(instance, predicate=inspect.ismethod):
+            signature = inspect.signature(func)
+            if name in edge_cases:
+                edge_case_args = edge_cases[name]
+                is_func_compat = True
+
+            else:
+                edge_case_args = {}
+                is_func_compat = (not name.startswith('__') and not len(
+                    signature.parameters) and not _is_return_type_blacklisted(func))
+
+            if is_func_compat:  # Skip built-in methods and only consider functions without arguments
+                try:
+                    output = await conditional_await(func, edge_case_args)
+
+                except Exception as e:  # This is sussy, but some functions will inevitably error and we want to continue regardless. - slack
+                    snapshot_data[name] = None
+                    continue
+
+                if issubclass(type(output), Enum):  # Use only the value of the enum
+                    output = output.value
+
+                if _is_valid_type(output):  # If this is just normal data, we can use the output
+                    snapshot_data[name] = output
+
+                elif _is_valid_type(output, iter_types):  # If the output is iterable, check everything inside it
+                    if issubclass(type(output), dict):  # dict handling, checks both the keys and values
+                        output_dict = {}
+                        for o_k, o_v in output:
+                            snapshot_k = o_k
+                            snapshot_v = o_v
+
+                            if not _is_valid_type(
+                                    o_k):  # If this isn't a built-in type, we know it has inner complexity so we recurse
+                                snapshot_k = await class_snapshot(o_k, recurse, current_depth, max_depth,
+                                                                  types_blacklist, edge_cases)
+
+                            if not _is_valid_type(o_v):
+                                snapshot_v = await class_snapshot(o_v, recurse, current_depth, max_depth,
+                                                                  types_blacklist, edge_cases)
+
+                            output_dict[snapshot_k] = snapshot_v
+
+                        snapshot_data[name] = output_dict
+                        continue
+
+                    else:
+                        output_iterable = []  # Iterable output handling, checks the types inside the iterable
+                        for o in output:
+                            if _is_valid_type(o):
+                                output_iterable.append(o)
+                                continue
+
+                            o_snapshot = await class_snapshot(o, recurse, current_depth, max_depth, types_blacklist,
+                                                              edge_cases)
+                            output_iterable.append(o_snapshot)
+
+                    snapshot_data[name] = type(output)(
+                        output_iterable)  # Mirror the output type of the iterable so it's preserved in the snapshot
+
+                else:
+                    snapshot_data[name] = await class_snapshot(output, recurse, current_depth, max_depth,
+                                                               types_blacklist, edge_cases)
+
+        return snapshot_data
