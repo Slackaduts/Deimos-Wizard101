@@ -546,7 +546,7 @@ async def main():
 		await kill_tool(debug=True)
 
 
-	async def toggle_combat_hotkey():
+	async def toggle_combat_hotkey(debug: bool = True):
 		global combat_task
 		global gui_send_queue
 
@@ -557,11 +557,13 @@ async def main():
 			if combat_task is not None and not combat_task.cancelled():
 				combat_task.cancel()
 				combat_task = None
-				logger.debug(f'{toggle_auto_combat_key} key pressed, disabling auto combat.')
+				if debug:
+					logger.debug(f'{toggle_auto_combat_key} key pressed, disabling auto combat.')
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('CombatStatus', 'Disabled')))
 
 			else:
-				logger.debug(f'{toggle_auto_combat_key} key pressed, enabling auto combat.')
+				if debug:
+					logger.debug(f'{toggle_auto_combat_key} key pressed, enabling auto combat.')
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('CombatStatus', 'Enabled')))
 				combat_task = asyncio.create_task(try_task_coro(combat_loop, walker.clients, True))
 
@@ -1558,14 +1560,14 @@ async def main():
 									bot_task = None
 
 							case deimosgui.GUICommandType.SetPlaystyles:
-								print(com.data)
 								combat_configs = delegate_combat_configs(str(com.data), len(walker.clients))
-								print(combat_configs)
 								for i, client in enumerate(walker.clients):
 									if i not in combat_configs:
 										client.combat_config = "any<damage> @ enemy"
 									client.combat_config = combat_configs[i]
-									print(client.combat_config)
+
+								await toggle_combat_hotkey(False)
+								await toggle_combat_hotkey(False)
 									
 
 							case deimosgui.GUICommandType.SetScale:
@@ -1777,7 +1779,6 @@ async def main():
 	logger.debug(f'Welcome to {tool_name} version {tool_version}!')
 
 	async def ban_watcher():
-		print("THIS IS RUNNING")
 		known_ban = False
 		try:
 			rkey = winreg.OpenKeyEx(winreg.HKEY_CURRENT_USER, r"SOFTWARE\Slackaduts\Deimos", access=winreg.KEY_READ)
@@ -1797,7 +1798,7 @@ async def main():
 			winreg.SetValueEx(rkey, "badboy", 0, winreg.REG_DWORD, 1)
 		except:
 			pass
-		cMessageBox(None, "Deimos has encountered a fatal error (Code 0C24). Please contact slackaduts#3864 on discord for more info.", "Deimos error", 0x10 | 0x1000)
+		cMessageBox(None, "Deimos has encountered a fatal error (Code 0C24). Please contact slackaduts on discord for more info.", "Deimos error", 0x10 | 0x1000)
 		quit(0)
 
 
