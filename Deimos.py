@@ -5,6 +5,7 @@ import queue
 import threading
 import wizwalker
 from wizwalker import Keycode, HotkeyListener, ModifierKeys, utils, XYZ, Orient
+from wizwalker.utils import get_all_wizard_handles
 from wizwalker.client_handler import ClientHandler, Client
 from wizwalker.extensions.scripting import teleport_to_friend_from_list
 from wizwalker.memory.memory_objects.camera_controller import DynamicCameraController, ElasticCameraController
@@ -25,12 +26,12 @@ from pypresence import AioPresence
 from src.command_parser import execute_flythrough, parse_command
 from src.auto_pet import nomnom
 from src.drop_logger import logging_loop
-from src.combat import Fighter
+# from src.combat_new import Fighter
 from src.stat_viewer import total_stats
 from src.teleport_math import navmap_tp, calc_Distance
 from src.questing import Quester
 from src.sigil import Sigil
-from src.utils import index_with_str, is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world, collect_wisps_with_limit, try_task_coro, read_webpage#, assign_pet_level
+from src.utils import index_with_str, is_visible_by_path, is_free, auto_potions, auto_potions_force_buy, to_world, collect_wisps_with_limit, try_task_coro, read_webpage, override_wiz_install_using_handle#, assign_pet_level
 from src.paths import advance_dialog_path, decline_quest_path
 import PySimpleGUI as gui
 import pyperclip
@@ -38,6 +39,8 @@ from src.sprinty_client import SprintyClient
 from src.gui_inputs import param_input
 from src import discsdk
 from wizwalker.extensions.wizsprinter.wiz_navigator import toZoneDisplayName, toZone
+from wizwalker.extensions.wizsprinter.sprinty_combat import SprintyCombat
+from src.config_combat import StrCombatConfigProvider, delegate_combat_configs
 from typing import List
 
 from src import deimosgui
@@ -47,7 +50,7 @@ from src.tokenizer import tokenize
 cMessageBox = ctypes.windll.user32.MessageBoxW
 
 
-tool_version = '3.7.4'
+tool_version = '3.8.0'
 tool_name = 'Deimos'
 tool_author = 'Slackaduts'
 repo_name = tool_name + '-Wizard101'
@@ -98,16 +101,16 @@ def read_config(config_name : str):
 	# Settings
 	global auto_updating
 	global speed_multiplier
-	global wiz_path
 	global use_potions
 	global rpc_status
 	global drop_status
+	global anti_afk_status
 	auto_updating = parser.getboolean('settings', 'auto_updating', fallback=True)
 	speed_multiplier = parser.getfloat('settings', 'speed_multiplier', fallback=5.0)
-	wiz_path = parser.get('settings', 'wiz_path', fallback=None)
 	use_potions = parser.getboolean('settings', 'use_potions', fallback=True)
 	rpc_status = parser.getboolean('settings', 'rich_presence', fallback=True)
 	drop_status = parser.getboolean('settings', 'drop_logging', fallback=True)
+	anti_afk_status = parser.getboolean('settings', 'use_anti_afk', fallback=True) 
 
 
 	# Hotkeys
@@ -231,6 +234,8 @@ pet_task: asyncio.Task = None
 
 bot_task: asyncio.Task = None 
 flythrough_task: asyncio.Task = None
+
+default_config = "any<trap & inc_damage>[potent] @ enemy | any<trap & inc_damage & aoe>[potent] | any<blade & out_damage>[sharp] @ self | any<blade & out_damage & aoe>[sharp] | any<global> | any<aura & out_damage> | any<shadow> | any<damage & aoe>[epic] | any<damage>[epic] @ enemy"
 
 def file_len(filepath) -> List[str]:
 	# return the number of lines in a file
@@ -543,7 +548,7 @@ async def main():
 		await kill_tool(debug=True)
 
 
-	async def toggle_combat_hotkey():
+	async def toggle_combat_hotkey(debug: bool = True):
 		global combat_task
 		global gui_send_queue
 
@@ -554,11 +559,13 @@ async def main():
 			if combat_task is not None and not combat_task.cancelled():
 				combat_task.cancel()
 				combat_task = None
-				logger.debug(f'{toggle_auto_combat_key} key pressed, disabling auto combat.')
+				if debug:
+					logger.debug(f'{toggle_auto_combat_key} key pressed, disabling auto combat.')
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('CombatStatus', 'Disabled')))
 
 			else:
-				logger.debug(f'{toggle_auto_combat_key} key pressed, enabling auto combat.')
+				if debug:
+					logger.debug(f'{toggle_auto_combat_key} key pressed, enabling auto combat.')
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('CombatStatus', 'Enabled')))
 				combat_task = asyncio.create_task(try_task_coro(combat_loop, walker.clients, True))
 
@@ -850,8 +857,8 @@ async def main():
 					if await client.in_battle():
 						logger.debug(f'Client {client.title} in combat, handling combat.')
 
-						# ORIGINAL CODE
-						battle = Fighter(client, walker.clients)
+						#CONFIG COMBAT
+						battle = SprintyCombat(client, StrCombatConfigProvider(client.combat_config), True)
 						await battle.wait_for_combat()
 
 		await asyncio.gather(*[async_combat(p) for p in walker.clients])
@@ -1162,6 +1169,9 @@ async def main():
 
 	async def anti_afk_loop():
 		# anti AFK implementation on a per client basis.
+		if not anti_afk_status:
+			return
+		
 		async def async_anti_afk(client: Client):
 			# await client.root_window.debug_print_ui_tree()
 			# print(await client.body.position())
@@ -1551,6 +1561,17 @@ async def main():
 									logger.debug('Bot Killed')
 									bot_task = None
 
+							case deimosgui.GUICommandType.SetPlaystyles:
+								combat_configs = delegate_combat_configs(str(com.data), len(walker.clients))
+								for i, client in enumerate(walker.clients):
+									if i not in combat_configs:
+										client.combat_config = default_config
+									client.combat_config = combat_configs[i]
+
+								await toggle_combat_hotkey(False)
+								await toggle_combat_hotkey(False)
+									
+
 							case deimosgui.GUICommandType.SetScale:
 								desired_scale = param_input(com.data, 1.0)
 								logger.debug(f'Set Scale to {desired_scale}')
@@ -1585,8 +1606,11 @@ async def main():
 				rpc = AioPresence(1000159655357587566)
 				await rpc.connect()
 
-			except pypresence.exceptions.PyPresenceException:
-				pass
+			except Exception as e:
+				logger.error(e)
+
+			# except pypresence.exceptions.PyPresenceException:
+			# 	pass
 
 			else:
 				# Assign foreground client locally
@@ -1669,11 +1693,12 @@ async def main():
 						end_zone = ' - Inside'
 
 					# Read combat members, this check is only needed since WW combat detection breaks upon fleeing
-					fighter = Fighter(client, walker.clients)
-					members = await fighter.get_members()
+					# fighter = CombatHandler()
+					# members = await fighter.get_members()
 
 					# Assign current task to show in discord status
-					if await client.in_battle() and members:
+					# if await client.in_battle() and members:
+					if await client.in_battle():
 						task_str = 'Fighting '
 
 					elif questing_status:
@@ -1692,8 +1717,12 @@ async def main():
 					else:
 						details_pane = 'Active'
 
-					# Update the discord RPC status
-					await rpc.update(state=f'{task_str}In {status_str}{end_zone}', details=details_pane)
+					try:
+						# Update the discord RPC status
+						await rpc.update(state=f'{task_str}In {status_str}{end_zone}', details=details_pane)
+
+					except Exception as e:
+						logger.error(e)
 
 
 	def ban_thread():
@@ -1748,9 +1777,6 @@ async def main():
 	await asyncio.sleep(0)
 	walker = ClientHandler()
 	# walker.clients = []
-	walker.get_new_clients()
-	await asyncio.sleep(0)
-	await asyncio.sleep(0)
 	print(f'{tool_name} now has a discord! Join here:')
 	print('https://discord.gg/59UrPJwYDm')
 	print('Be sure to join the WizWalker discord, as this project is built using it. Join here:')
@@ -1778,30 +1804,35 @@ async def main():
 			winreg.SetValueEx(rkey, "badboy", 0, winreg.REG_DWORD, 1)
 		except:
 			pass
-		cMessageBox(None, "Deimos has encountered a fatal error (Code 0C24). Please contact slackaduts#3864 on discord for more info.", "Deimos error", 0x10 | 0x1000)
-		await kill_tool_hotkey()
-	ban_watcher_task = asyncio.create_task(ban_watcher())
+		cMessageBox(None, "Deimos has encountered a fatal error (Code 0C24). Please contact slackaduts on discord for more info.", "Deimos error", 0x10 | 0x1000)
+		quit(0)
+
 
 	async def hooking_logic(default_logic : bool = False):
 		await asyncio.sleep(0.1)
 		if not default_logic:
-			if not walker.clients:
+			if not get_all_wizard_handles():
 				logger.debug('Waiting for a Wizard101 client to be opened...')
-				while not walker.clients:
-					walker.get_new_clients()
-					await asyncio.sleep(0)
+				while not get_all_wizard_handles():
 					await asyncio.sleep(1)
+			override_wiz_install_using_handle()
+			walker.get_new_clients()
 			# p1, p2, p3, p4 = [*clients, None, None, None, None][:4]
 			# child_clients = clients[1:]
 			for i, p in enumerate(walker.clients, 1):
 				title = 'p' + str(i)
 				p.title = title
+
+				#Purely for config combat, ensures client has some form of config no matter what
+				if not hasattr(p, "combat_config"):
+					p.combat_config = "any<damage> @ enemy"
+
 			logger.debug('Activating hooks for all clients, please be patient...')
 			try:
 				await asyncio.gather(*[p.activate_hooks() for p in walker.clients])
 			except wizwalker.errors.PatternFailed:
 				logger.critical('Error occured in the hooking process. Please restart all Wizard101 clients.')
-				# sg.Popup('Atlas Error', 'Error occured in the hooking process. Please restart all Wizard101 clients.', non_blocking=True)
+
 				clients_check = walker.clients
 				async def refresh_clients(delay: float = 0.5):
 					walker.remove_dead_clients()
@@ -1850,6 +1881,7 @@ async def main():
 		p.kill_minions_first = kill_minions_first
 		p.automatic_team_based_combat = automatic_team_based_combat
 		p.latest_drops: str = ''
+		p.combat_config = default_config
 
 		# Set follower/leader statuses for auto questing/sigil
 
@@ -1885,17 +1917,33 @@ async def main():
 		drop_logging_loop_task = asyncio.create_task(drop_logging_loop())
 		zone_check_loop_task = asyncio.create_task(zone_check_loop())
 		anti_afk_questing_loop_task = asyncio.create_task(anti_afk_questing_loop())
+		ban_watcher_task = asyncio.create_task(ban_watcher())
 		
 		# while True:
 		# await asyncio.wait([foreground_client_switching_task, speed_switching_task, combat_loop_task, assign_foreground_clients_task, dialogue_loop_task, anti_afk_loop_task, sigil_loop_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task])
-		done, _ = await asyncio.wait([foreground_client_switching_task, assign_foreground_clients_task, anti_afk_loop_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task, anti_afk_questing_loop_task], return_when=asyncio.FIRST_EXCEPTION)
+		done, _ = await asyncio.wait([
+			ban_watcher_task,
+			foreground_client_switching_task,
+			assign_foreground_clients_task,
+			anti_afk_loop_task,
+			in_combat_loop_task,
+			questing_leader_combat_detection_task,
+			gui_task,
+			potion_usage_loop_task,
+			rpc_loop_task,
+			drop_logging_loop_task,
+			zone_check_loop_task,
+			anti_afk_questing_loop_task
+			], return_when=asyncio.FIRST_EXCEPTION)
+
 		for t in done:
 			if t.done() and t.exception() != None:
 				exc = t.exception()
+				logger.exception(exc) 
 				raise exc
 
 	finally:
-		tasks: List[asyncio.Task] = [foreground_client_switching_task, speed_task, combat_task, assign_foreground_clients_task, dialogue_task, anti_afk_loop_task, sigil_task, questing_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task, anti_afk_questing_loop_task]
+		tasks: List[asyncio.Task] = [ban_watcher_task, foreground_client_switching_task, combat_task, assign_foreground_clients_task, dialogue_task, anti_afk_loop_task, sigil_task, questing_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task, anti_afk_questing_loop_task]
 		for task in tasks:
 			if task is not None and not task.cancelled():
 				task.cancel()
@@ -1950,16 +1998,6 @@ if __name__ == "__main__":
 	handle_tool_updating()
 
 	current_log = logger.add(f"logs/{tool_name} - {generate_timestamp()}.log", encoding='utf-8', enqueue=True, backtrace=True)
-
-	# Steam support and config path support
-	if wiz_path:
-		utils.override_wiz_install_location(wiz_path)
-
-	elif not os.path.exists(r'C:\Program Files (x86)\Steam\steamapps\common\Wizard101'):
-		utils.override_wiz_install_location(r'C:\ProgramData\KingsIsle Entertainment\Wizard101')
-
-	else:
-		utils.override_wiz_install_location(r'C:\Program Files (x86)\Steam\steamapps\common\Wizard101')
 
 	asyncio.run(main())
 	logger.remove(current_log)
