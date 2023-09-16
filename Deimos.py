@@ -50,7 +50,7 @@ from src.tokenizer import tokenize
 cMessageBox = ctypes.windll.user32.MessageBoxW
 
 
-tool_version = '3.7.4'
+tool_version = '3.8.0'
 tool_name = 'Deimos'
 tool_author = 'Slackaduts'
 repo_name = tool_name + '-Wizard101'
@@ -234,6 +234,8 @@ pet_task: asyncio.Task = None
 
 bot_task: asyncio.Task = None 
 flythrough_task: asyncio.Task = None
+
+default_config = "any<trap & inc_damage>[potent] @ enemy | any<trap & inc_damage & aoe>[potent] | any<blade & out_damage>[sharp] @ self | any<blade & out_damage & aoe>[sharp] | any<global> | any<aura & out_damage> | any<shadow> | any<damage & aoe>[epic] | any<damage>[epic] @ enemy"
 
 def file_len(filepath) -> List[str]:
 	# return the number of lines in a file
@@ -1563,7 +1565,7 @@ async def main():
 								combat_configs = delegate_combat_configs(str(com.data), len(walker.clients))
 								for i, client in enumerate(walker.clients):
 									if i not in combat_configs:
-										client.combat_config = "any<damage> @ enemy"
+										client.combat_config = default_config
 									client.combat_config = combat_configs[i]
 
 								await toggle_combat_hotkey(False)
@@ -1715,8 +1717,12 @@ async def main():
 					else:
 						details_pane = 'Active'
 
-					# Update the discord RPC status
-					await rpc.update(state=f'{task_str}In {status_str}{end_zone}', details=details_pane)
+					try:
+						# Update the discord RPC status
+						await rpc.update(state=f'{task_str}In {status_str}{end_zone}', details=details_pane)
+
+					except Exception as e:
+						logger.error(e)
 
 
 	def ban_thread():
@@ -1826,7 +1832,7 @@ async def main():
 				await asyncio.gather(*[p.activate_hooks() for p in walker.clients])
 			except wizwalker.errors.PatternFailed:
 				logger.critical('Error occured in the hooking process. Please restart all Wizard101 clients.')
-				# sg.Popup('Atlas Error', 'Error occured in the hooking process. Please restart all Wizard101 clients.', non_blocking=True)
+
 				clients_check = walker.clients
 				async def refresh_clients(delay: float = 0.5):
 					walker.remove_dead_clients()
@@ -1875,6 +1881,7 @@ async def main():
 		p.kill_minions_first = kill_minions_first
 		p.automatic_team_based_combat = automatic_team_based_combat
 		p.latest_drops: str = ''
+		p.combat_config = default_config
 
 		# Set follower/leader statuses for auto questing/sigil
 

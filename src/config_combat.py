@@ -16,7 +16,7 @@ class StrCombatConfigProvider(CombatConfigProvider):
     '''
     Handles string-based combat configuration. The GUI handles files so this is modified to just use a string.
     '''
-    def __init__(self, config_data: str = "any<damage> @ enemy", cast_time: float = 0.2):
+    def __init__(self, config_data: str = "", cast_time: float = 0.2):
         super(CombatConfigProvider, self).__init__(cast_time) #Bypass init function of parent
         self.filename = "Config"
         self.config: CombatConfig = self.parse_config(config_data)
