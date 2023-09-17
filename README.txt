@@ -1,5 +1,3 @@
-Please don't pester me if there's a bug. I have some people as dedicated testers to help weed out some user error issues, they usually catch most bugs.
-
 Tutorial:
 To run, be sure all your wiz clients are ordered correctly (p2 should be below and to the right of p1, etc), and all logged into the desired wizard. 
 Run the Deimos.exe by double clicking it. Pay attention to the blue text on the window that shows up, as it will tell you when the program is ready after lauching.

@@ -17,7 +17,7 @@ from src.dance_game_hook import attempt_deactivate_dance_hook
 from src.paths import *
 from src.sprinty_client import SprintyClient
 import typing
-from typing import List, Optional, Coroutine, Union, get_type_hints
+from typing import List, Optional, Coroutine, Union, get_type_hints, Any, Iterable
 from enum import Enum
 
 import os
@@ -1251,7 +1251,28 @@ def assign_pet_level(destinationLevel):
                 wizard_city_dance_game_path[index] = selected_track
 
 
-async def class_snapshot(instance, recurse: bool = True, current_depth = 0, max_depth = 25, types_blacklist = (inspect._empty, Window, wizwalker.memory.DynamicWindow)):
+def required_params(signature: inspect.Signature) -> int:
+    '''Counts the number of params required for a function, based off of its function signature.'''
+    req_params = 0
+
+    for param in signature.parameters.values():
+        if param.default is inspect.Parameter.empty:
+            req_params += 1
+
+    return req_params
+
+
+async def conditional_await(func, args: dict = {}) -> Any:
+    '''Awaits any function that returns something if async, runs normally if sync.'''
+    if inspect.iscoroutinefunction(func):
+        return await func(**args)
+
+    else:
+        return func(**args)
+
+
+
+async def class_snapshot(instance, recurse: bool = True, current_depth: int = 0, max_depth: int = 25, types_blacklist = (inspect._empty, Window, wizwalker.memory.DynamicWindow), edge_cases: dict = {}):
     '''Recursively calls every function in a class, async or not. Assembles a dict containing the outputs for these, referenced by function name. Only does functions that have no arguments.'''
     snapshot_data = {}
 
@@ -1263,7 +1284,7 @@ async def class_snapshot(instance, recurse: bool = True, current_depth = 0, max_
 
     current_depth += 1 #Tick our current depth
 
-    valid_types = (int, float, bool, str, Enum) #valid built-in types
+    valid_types = (int, float, bool, str, Enum, type(None)) #valid built-in types
     iter_types = (list, dict, set, tuple) #types we can iterate through in a useful manner, as strings are iterable
 
     def _is_valid_type(obj, types = valid_types):
@@ -1279,12 +1300,21 @@ async def class_snapshot(instance, recurse: bool = True, current_depth = 0, max_
 
     for name, func in inspect.getmembers(instance, predicate=inspect.ismethod):
         signature = inspect.signature(func)
-        if not name.startswith('__') and not len(signature.parameters) and not _is_return_type_blacklisted(func): # Skip built-in methods and only consider functions without arguments
-            if inspect.iscoroutinefunction(func):  # Check if the function is async
-                output = await func()
+        if name in edge_cases:
+            edge_case_args = edge_cases[name]
+            is_func_compat = True
 
-            else:
-                output = func()
+        else:
+            edge_case_args = {}
+            is_func_compat = (not name.startswith('__') and not len(signature.parameters) and not _is_return_type_blacklisted(func))
+
+        if is_func_compat: # Skip built-in methods and only consider functions without arguments
+            try:
+                output = await conditional_await(func, edge_case_args)
+
+            except Exception as e: #This is sussy, but some functions will inevitably error and we want to continue regardless. - slack
+                snapshot_data[name] = None
+                continue
 
             if issubclass(type(output), Enum): #Use only the value of the enum
                 output = output.value
@@ -1300,10 +1330,10 @@ async def class_snapshot(instance, recurse: bool = True, current_depth = 0, max_
                         snapshot_v = o_v
 
                         if not _is_valid_type(o_k): #If this isn't a built-in type, we know it has inner complexity so we recurse
-                            snapshot_k = await class_snapshot(o_k, recurse, current_depth, max_depth, types_blacklist)
+                            snapshot_k = await class_snapshot(o_k, recurse, current_depth, max_depth, types_blacklist, edge_cases)
 
                         if not _is_valid_type(o_v):
-                            snapshot_v = await class_snapshot(o_v, recurse, current_depth, max_depth, types_blacklist)
+                            snapshot_v = await class_snapshot(o_v, recurse, current_depth, max_depth, types_blacklist, edge_cases)
 
                         output_dict[snapshot_k] = snapshot_v
 
@@ -1317,15 +1347,23 @@ async def class_snapshot(instance, recurse: bool = True, current_depth = 0, max_
                             output_iterable.append(o)
                             continue
 
-                        o_snapshot = await class_snapshot(o, recurse, current_depth, max_depth, types_blacklist)
+                        o_snapshot = await class_snapshot(o, recurse, current_depth, max_depth, types_blacklist, edge_cases)
                         output_iterable.append(o_snapshot)
 
                 snapshot_data[name] = type(output)(output_iterable) #Mirror the output type of the iterable so it's preserved in the snapshot
 
             else:
-                snapshot_data[name] = await class_snapshot(output, recurse, current_depth, max_depth, types_blacklist)
+                snapshot_data[name] = await class_snapshot(output, recurse, current_depth, max_depth, types_blacklist, edge_cases)
 
     return snapshot_data
+
+
+async def class_snapshot_iterable(instances: Iterable, recurse: bool = True, current_depth: int = 0, max_depth: int = 25, types_blacklist = (inspect._empty, Window, wizwalker.memory.DynamicWindow), edge_cases: dict = {}):
+    snapshots = []
+    for inst in instances:
+        snapshots.append(await class_snapshot(inst, recurse, current_depth, max_depth, types_blacklist, edge_cases))
+
+    return snapshots
 
 
 def override_wiz_install_using_handle(max_size = 100):
