@@ -4,6 +4,9 @@ from pymem.exception import MemoryReadError
 from wizwalker import HookAlreadyActivated, HookNotActive, HookNotReady, Client
 from wizwalker.memory import HookHandler, SimpleHook
 
+from loguru import logger
+import traceback
+
 _dance_moves_transtable = str.maketrans("abcd", "WDSA")
 
 # Thanks to peechez for this class
@@ -35,7 +38,8 @@ async def activate_dance_game_moves_hook(
     hook = DanceGameMovesHook(self)
     await hook.hook()
 
-    self._active_hooks.append(hook)
+    self._active_hooks[DanceGameMovesHook] = hook
+    #self._active_hooks.append(hook)
     self._base_addrs["dance_game_moves"] = hook.dance_game_moves
 
     if wait_for_ready:
@@ -50,7 +54,8 @@ async def deactivate_dance_game_moves_hook(self):
         raise HookNotActive("DanceGameMovesHook")
 
     hook = self._get_hook_by_type(DanceGameMovesHook)
-    self._active_hooks.remove(hook)
+    #self._active_hooks.remove(hook)
+    del self._active_hooks[DanceGameMovesHook]
     await hook.unhook()
 
     del self._base_addrs["dance_game_moves"]
@@ -64,6 +69,8 @@ async def attempt_activate_dance_hook(client: Client, sleep_time: float = 0.1):
         try:
             await client.hook_handler.activate_dance_game_moves_hook()
         except:
+            logger.debug("failed to activate dance hook")
+            logger.debug(traceback.print_exc())
             pass
 
         client.dance_hook_status = True
