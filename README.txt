@@ -1,14 +1,14 @@
 Tutorial:
-To run, be sure all your wiz clients are ordered correctly (p2 should be below and to the right of p1, etc), and all logged into the desired wizard. 
-Run the Deimos.exe by double clicking it. Pay attention to the blue text on the window that shows up, as it will tell you when the program is ready after lauching.
+To run, be sure all your Wizard101 clients are ordered correctly (p2 should be below and to the right of p1, etc), and all logged into the desired wizard. 
+Run the Deimos.exe by double clicking it. Pay attention to the blue text on the window that shows up, as it will tell you when the program is ready after launching.
 
 From here, it's very self explanatory. Look in Deimos-config.ini to see what hotkeys are mapped. Refer to the discord server's reference channel for proper key names, they are case sensitive.
 
-To remap keys, simply replace the key's name with the desired key in the config. Save your changes, then kill (with the kill hotkey) and relaunch the tool.
+To Remap keys, simply replace the key's name with the desired key in the config. Save your changes, then kill (with the kill hotkey) and relaunch the tool.
 
 This tool gets updated when I have free time from college, and my personal project(s). Don't pester me for when updates are coming.
 
-You can also close Deimos by closing out the GUI, just never close out the CMD window.
+You can also close Deimos by closing out the GUI, just never close out the Command window.
 
 What hotkeys exist:
   -X Press to all clients (X key by default)
