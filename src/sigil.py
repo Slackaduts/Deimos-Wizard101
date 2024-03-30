@@ -109,7 +109,8 @@ class Sigil():
 				await asyncio.sleep(0.1)
 
 			# Automatically use and buy potions if needed
-			await auto_potions(self.client)
+			if self.client.use_potions:
+				await auto_potions(self.client, buy = self.client.buy_potions)
 
 			# Join sigil and wait for the zone to change either via team up or sigil countdown
 			await self.join_sigil()
@@ -198,8 +199,9 @@ class Sigil():
 				await asyncio.sleep(0.1)
 
 			# Automatically use and buy potions if needed
-			for client in self.clients:
-				await auto_potions(client, mark=True)
+			if self.client.use_potions:
+				for client in self.clients:
+					await auto_potions(client, mark=True, buy = self.client.buy_potions)
 
 			# await asyncio.gather(*[auto_potions(p) for p in self.clients])
 

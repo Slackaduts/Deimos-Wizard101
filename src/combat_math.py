@@ -65,10 +65,13 @@ async def base_damage_calculation_from_id(client: Client, members: List[CombatMe
 
     # Caster-specific objects
     caster_stats = await caster.get_stats()
+    # Charms use FIFO (queue behavior) in game, but the first applied blades show up at the bottom of this list.
     caster_effects: List[DynamicSpellEffect] = await get_total_effects(caster_id, members)
+    caster_effects.reverse()
 
     # Target-specific objects
     target_stats = await target.get_stats()
+    # Traps/Shields use LIFO (stack behavior) in game.
     target_effects: List[DynamicSpellEffect] = await get_total_effects(target_id, members)
 
     # Global effects
@@ -120,49 +123,31 @@ async def base_damage_calculation_from_id(client: Client, members: List[CombatMe
         else:
             target_effects.remove(effect)
 
-    damage_type_index = school_list_ids[damage_type]
+    initial_damage_type = damage_type
+    initial_damage_type_index = school_list_ids[damage_type]
 
     # Relevant caster stats for the damage type
-    caster_damage = caster_damages[damage_type_index]
-    caster_flat_damages = caster_flat_damages[damage_type_index]
-    caster_crit = caster_crits[damage_type_index]
-    caster_pierce = caster_pierces[damage_type_index]
+    caster_damage = caster_damages[initial_damage_type_index]
+    caster_flat_damages = caster_flat_damages[initial_damage_type_index]
+    caster_crit = caster_crits[initial_damage_type_index]
+    caster_pierce = caster_pierces[initial_damage_type_index]
 
-    # Relevant target stats for the daamge type
-    target_resist = target_resistances[damage_type_index]
-    target_flat_resist = target_flat_resistances[damage_type_index]
-    target_block = target_blocks[damage_type_index]
-
-    # Curve damage/resist stats
+    # Curve damage stats
     curved_caster_damage = await curve_damage(client, caster, caster_damage)
-    curved_target_resist = await curve_resist(client, target, target_resist)
-
     curved_caster_damage += 1
 
     # Applying curved damage and flat damage
     damage *= curved_caster_damage
     damage += caster_flat_damages
 
-    # calculates critical multiplier and chance
-    if caster_crit > 0:
-        if caster_level > 100:
-            caster_level = 100
-
-        crit_damage_multiplier = (2 - ((target_block)/((caster_crit / 3) + target_block)))
-        client_school_critical = (0.03 * caster_level * caster_crit)
-        mob_block = (3 * caster_crit + target_block)
-        crit_chance = client_school_critical / mob_block
-
-        # applying the crit multiplier if the chance is above a certain threshold
-        if (crit_chance >= 0.85 and force_crit is None) or force_crit:
-            damage *= crit_damage_multiplier
-
-
     # outgoing hanging effects (caster)
+    seen_caster_effect_template_ids = set()
     if caster_effects:
         for i, effect in enumerate(caster_effects):
             # only consider effects that matches the school or are universal
-            if caster_effect_atrs[i][2] == damage_type or caster_effect_atrs[i][2] == 80289:
+            if caster_effect_atrs[i][3] not in seen_caster_effect_template_ids \
+                    and (caster_effect_atrs[i][2] == damage_type or caster_effect_atrs[i][2] == 80289):
+                seen_caster_effect_template_ids.add(caster_effect_atrs[i][3])
                 match caster_effect_atrs[i][1]:
                     case SpellEffects.modify_outgoing_damage:
                         damage *= (caster_effect_atrs[i][0] / 100) + 1
@@ -174,16 +159,18 @@ async def base_damage_calculation_from_id(client: Client, members: List[CombatMe
                         caster_pierce += caster_effect_atrs[i][0]
 
                     case SpellEffects.modify_outgoing_damage_type:
-                        if damage_type in opposite_school_ids:
-                            damage_type = opposite_school_ids[caster_effect_atrs[i][2]]
+                        damage_type = caster_effect_atrs[i][0]
 
                     case _:
                         pass
 
     # incoming hanging effects (target)
+    seen_target_effect_template_ids = set()
     if target_effects:
         for i, effect in enumerate(target_effects):
-            if target_effect_atrs[i][2] == damage_type or target_effect_atrs[i][2] == 80289:
+            if target_effect_atrs[i][2] not in seen_target_effect_template_ids \
+                    and (target_effect_atrs[i][2] == damage_type or target_effect_atrs[i][2] == 80289):
+                seen_target_effect_template_ids.add(target_effect_atrs[i][3])
                 match target_effect_atrs[i][1]:
                     # traps/shields, and pierce handling
                     case SpellEffects.modify_incoming_damage:
@@ -209,13 +196,39 @@ async def base_damage_calculation_from_id(client: Client, members: List[CombatMe
                     case SpellEffects.modify_incoming_armor_piercing:
                         caster_pierce += target_effect_atrs[i][0]
 
-                    # prism handling
+                    # prism handling (final damage type is the effect param)
                     case SpellEffects.modify_incoming_damage_type:
-                        if damage_type in opposite_school_ids:
-                            damage_type = opposite_school_ids[target_effect_atrs[i][0]]
+                        damage_type = target_effect_atrs[i][0]
 
                     case _:
                         pass
+
+    final_damage_type = damage_type
+    final_damage_type_index = school_list_ids[final_damage_type]
+
+    # Relevant target stats for the final damage type
+    target_resist = target_resistances[final_damage_type_index]
+    target_flat_resist = target_flat_resistances[final_damage_type_index]
+    target_block = target_blocks[final_damage_type_index]
+
+    # Curve the resist stat.
+    curved_target_resist = await curve_resist(client, target, target_resist)
+
+    # calculates critical multiplier and chance
+    # This assumes that caster crit uses the initial damage school, but target block applies to the final damage school.
+    if caster_crit > 0:
+        if caster_level > 100:
+            caster_level = 100
+
+        crit_damage_multiplier = (2 - (target_block / ((caster_crit / 3) + target_block)))
+        client_school_critical = (0.03 * caster_level * caster_crit)
+        mob_block = (3 * caster_crit + target_block)
+        crit_chance = client_school_critical / mob_block
+
+        # applying the crit multiplier if the chance is above a certain threshold
+        # TODO: Express both the crit & non-crit values, along with the crit percentage.
+        if (crit_chance >= 0.85 and force_crit is None) or force_crit:
+            damage *= crit_damage_multiplier
 
     # Apply flat resist
     damage -= target_flat_resist

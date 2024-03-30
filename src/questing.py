@@ -1326,7 +1326,8 @@ class Quester():
             if await is_potion_needed(self.client) and await self.client.stats.current_mana() > 1 and await self.client.stats.current_hitpoints() > 1:
                 await collect_wisps(self.client)
 
-            await auto_potions(self.client, True, buy=True)
+            if self.client.use_potions:
+                await auto_potions(self.client, True, buy=self.client.buy_potions)
 
             quest_xyz = await self.client.quest_position.position()
 

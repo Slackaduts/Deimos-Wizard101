@@ -50,7 +50,7 @@ from src.tokenizer import tokenize
 cMessageBox = ctypes.windll.user32.MessageBoxW
 
 
-tool_version = '3.8.0'
+tool_version = '3.8.1'
 tool_name = 'Deimos'
 tool_author = 'Slackaduts'
 repo_name = tool_name + '-Wizard101'
@@ -203,6 +203,19 @@ while True:
 	time.sleep(0.1)
 
 	read_config(f'{tool_name}-config.ini')
+	break
+
+while True:
+	if hasattr(sys, '_MEIPASS'):
+		folder_path = os.path.join(sys._MEIPASS, 'wizwalker/extensions/wizsprinter/traversalData')
+		if not os.path.exists(folder_path):
+			os.makedirs(folder_path)
+		download_file('https://raw.githubusercontent.com/notfaj/wizsprinter/main/wizwalker/extensions/wizsprinter/traversalData/displayZones.txt', os.path.join(folder_path, 'displayZones.txt'))
+		download_file('https://raw.githubusercontent.com/notfaj/wizsprinter/main/wizwalker/extensions/wizsprinter/traversalData/gates_list.txt', os.path.join(folder_path, 'gates_list.txt'))
+		download_file('https://raw.githubusercontent.com/notfaj/wizsprinter/main/wizwalker/extensions/wizsprinter/traversalData/interactiveTeleporters.txt', os.path.join(folder_path, 'interactiveTeleporters.txt'))
+		download_file('https://raw.githubusercontent.com/notfaj/wizsprinter/main/wizwalker/extensions/wizsprinter/traversalData/objectLocations.txt', os.path.join(folder_path, 'objectLocations.txt'))
+		download_file('https://raw.githubusercontent.com/notfaj/wizsprinter/main/wizwalker/extensions/wizsprinter/traversalData/uniqueObjectLocations.txt', os.path.join(folder_path, 'uniqueObjectLocations.txt'))
+		download_file('https://raw.githubusercontent.com/notfaj/wizsprinter/main/wizwalker/extensions/wizsprinter/traversalData/zoneMap.txt', os.path.join(folder_path, 'zoneMap.txt'))
 	break
 
 
@@ -444,8 +457,9 @@ async def friend_teleport_sync(clients : list[wizwalker.Client], debug: bool):
 		async with p.mouse_handler:
 			try:
 				await teleport_to_friend_from_list(client=p, icon_list=1, icon_index=50)
-			except:
-				asyncio.sleep(0)
+			except Exception as e:
+				logger.error(e)
+				await asyncio.sleep(0)
 
 
 
@@ -1880,8 +1894,12 @@ async def main():
 		p.discard_duplicate_cards = discard_duplicate_cards
 		p.kill_minions_first = kill_minions_first
 		p.automatic_team_based_combat = automatic_team_based_combat
-		p.latest_drops: str = ''
+		p.latest_drops = ''
 		p.combat_config = default_config
+
+		p.use_potions = use_potions
+		p.buy_potions = buy_potions
+		p.client_to_follow = client_to_follow
 
 		# Set follower/leader statuses for auto questing/sigil
 
