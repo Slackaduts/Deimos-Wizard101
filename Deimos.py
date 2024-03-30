@@ -50,7 +50,7 @@ from src.tokenizer import tokenize
 cMessageBox = ctypes.windll.user32.MessageBoxW
 
 
-tool_version = '3.8.0'
+tool_version = '3.8.1'
 tool_name = 'Deimos'
 tool_author = 'Slackaduts'
 repo_name = tool_name + '-Wizard101'
@@ -457,8 +457,9 @@ async def friend_teleport_sync(clients : list[wizwalker.Client], debug: bool):
 		async with p.mouse_handler:
 			try:
 				await teleport_to_friend_from_list(client=p, icon_list=1, icon_index=50)
-			except:
-				asyncio.sleep(0)
+			except Exception as e:
+				logger.error(e)
+				await asyncio.sleep(0)
 
 
 
@@ -1893,8 +1894,12 @@ async def main():
 		p.discard_duplicate_cards = discard_duplicate_cards
 		p.kill_minions_first = kill_minions_first
 		p.automatic_team_based_combat = automatic_team_based_combat
-		p.latest_drops: str = ''
+		p.latest_drops = ''
 		p.combat_config = default_config
+
+		p.use_potions = use_potions
+		p.buy_potions = buy_potions
+		p.client_to_follow = client_to_follow
 
 		# Set follower/leader statuses for auto questing/sigil
 
