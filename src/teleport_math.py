@@ -277,13 +277,13 @@ async def navmap_tp(client: Client, xyz: XYZ = None, leader_client: Client = Non
             new_path.append(neighbor)
             queue.append(new_path)
 
+    # finish it off or fall back on spiral
     if found_path == None:
         # no viable navmap-based path found, use spiral
         await fallback_spiral_tp(client, target_xyz)
         return
-
-    # Walk the created path in case we are far away
-    if found_path != None and await is_free(client) and await client.zone_name() == starting_zone and not check_sigma(found_path[-1], target_xyz):
+    elif await is_free(client) and await client.zone_name() == starting_zone and not check_sigma(found_path[-1], target_xyz):
+        # Walk the created path in case we are far away
         for v in reversed(found_path):
             await client.goto(v.x, v.y)
 
