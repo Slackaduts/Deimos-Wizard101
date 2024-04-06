@@ -9,7 +9,7 @@ from wizwalker.memory import HookHandler, SimpleHook
 
 from src.dance_game_hook import attempt_activate_dance_hook, attempt_deactivate_dance_hook
 from src.paths import *
-from src.teleport_math import navmap_tp_leader_quest
+from src.teleport_math import navmap_tp
 from src.utils import navigate_to_ravenwood, click_window_by_path, is_visible_by_path, navigate_to_commons_from_ravenwood, post_keys, get_window_from_path, safe_wait_for_zone_change, LoadingScreenNotFound, FriendBusyOrInstanceClosed, get_popup_title
 
 _dance_moves_transtable = str.maketrans("abcd", "WDSA")
@@ -17,7 +17,7 @@ _dance_moves_transtable = str.maketrans("abcd", "WDSA")
 async def navigate_to_pavilion_from_commons(cl: Client):
     # Teleport to pet pavilion door
     pavilion_XYZ = XYZ(8426.3779296875, -2165.6982421875, -27.913818359375)
-    await navmap_tp_leader_quest(cl, pavilion_XYZ)
+    await navmap_tp(cl, pavilion_XYZ)
     await cl.wait_for_zone_change(name='WizardCity/WC_Hub')
     await asyncio.sleep(2.0)
 

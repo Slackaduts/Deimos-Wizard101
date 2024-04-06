@@ -96,6 +96,22 @@ def parse_nav_data(file_data: Union[bytes, TypedBytes]):
         edges.append((start, stop))
     return vertices, edges
 
+def get_neighbors(vertex: XYZ, vertices: list[XYZ], edges: list[(int, int)]):
+    vert_idx = -1
+    for v in vertices:
+        vert_idx += 1
+        if v == vertex:
+            break
+    if vert_idx == -1:
+        # no matching index found, return empty
+        return []
+
+    result = []
+    for edge in edges:
+        if edge[0] == vert_idx:
+            result.append(vertices[edge[1]])
+    return result
+
 
 def calc_PointOn3DLine(xyz_1 : XYZ, xyz_2 : XYZ, additional_distance):
     # extends a point on the line created by 2 XYZs by additional_distance. xyz_1 is the origin.
@@ -112,21 +128,6 @@ def calc_PointOn3DLine(xyz_1 : XYZ, xyz_2 : XYZ, additional_distance):
 def calc_multiplerPointOn3DLine(xyz_1 : XYZ, xyz_2 : XYZ, multiplier : float):
     # extends a point on the line created by 2 XYZs by a multiplier. xyz_1 is the origin.
     return XYZ(x=((xyz_2.x - xyz_1.x) * multiplier) + xyz_1.x, y=((xyz_2.y - xyz_1.y) * multiplier) + xyz_1.y, z=((xyz_2.z - xyz_1.z) * multiplier) + xyz_1.z)
-
-
-def calc_MidPoint(xyz_1 : XYZ, xyz_2 : XYZ, distance_multiplier : float = 0.5):
-    # calculates the midpoint of 2 XYZs. 
-    distance = math.sqrt((pow(xyz_1.x - xyz_2.x, 2.0)) + (pow(xyz_1.y - xyz_2.y, 2.0)) + (pow(xyz_1.z - xyz_2.z, 2.0)))
-    n = distance_multiplier
-    return XYZ(x=((xyz_2.x - xyz_1.x) * n) + xyz_1.x, y=((xyz_2.y - xyz_1.y) * n) + xyz_1.y, z=((xyz_2.z - xyz_1.z) * n) + xyz_1.z)
-
-
-def calc_AveragePoint(xyz_list : list[XYZ]):
-    # calculates the "midpoint" of a list of XYZs. 
-    x_list = [x.x for x in xyz_list]
-    y_list = [y.y for y in xyz_list]
-    z_list = [z.z for z in xyz_list]
-    return XYZ(x=(sum(x_list) / len(x_list)), y=(sum(y_list) / len(y_list)), z=(sum(z_list) / len(z_list)))
 
 
 def rotate_point(origin_xyz : XYZ, point_xyz : XYZ, theta):
@@ -147,33 +148,14 @@ def are_xyzs_within_threshold(xyz_1 : XYZ, xyz_2 : XYZ, threshold : int = 200):
     return all(threshold_check)
 
 
-def calc_Distance(xyz_1 : XYZ, xyz_2 : XYZ):
-    # calculates the distance between 2 XYZs
-    return math.sqrt((pow(xyz_1.x - xyz_2.x, 2.0)) + (pow(xyz_1.y - xyz_2.y, 2.0)) + (pow(xyz_1.z - xyz_2.z, 2.0)))
-
-
 def calc_squareDistance(xyz_1 : XYZ, xyz_2 : XYZ):
     # calculates the distance between 2 XYZs, but doesn't square root the answer to be much more efficient. Useful for comparing distances, not much else.
     return (pow(xyz_1.x - xyz_2.x, 2.0)) + (pow(xyz_1.y - xyz_2.y, 2.0)) + (pow(xyz_1.z - xyz_2.z, 2.0))
 
 
-async def calc_up_XYZ(client: Client, xyz : XYZ = None, speed_constant : int = 580, speed_adjusted : bool = True):
-    # handles optional xyz param, will default to using the position of the client
-    if not xyz:
-        client_xyz = await client.body.position()
-    else:
-        client_xyz = xyz
-
-    # handles speed adjustment param
-    if speed_adjusted:	
-        additional_speed = await client.client_object.speed_multiplier()
-    else:
-        additional_speed = 0
-
-    # adjusts speed constant based on speed multiplier, and adds it to the Z value
-    new_z = client_xyz.z + (speed_constant * ((additional_speed / 100) + 1))
-
-    return XYZ(x=client_xyz.x, y=client_xyz.y, z=new_z)
+def calc_Distance(xyz_1 : XYZ, xyz_2 : XYZ):
+    # calculates the distance between 2 XYZs
+    return math.sqrt(calc_squareDistance(xyz_1, xyz_2))
 
 
 async def calc_FrontalVector(client: Client, xyz : XYZ = None, yaw : float = None, speed_constant : int = 580, speed_adjusted : bool = True, length_adjusted : bool = True):
@@ -196,12 +178,12 @@ async def calc_FrontalVector(client: Client, xyz : XYZ = None, yaw : float = Non
     # adjust the speed constant based on the speed multiplier
     additional_distance = speed_constant * ((current_speed / 100) + 1)
 
-    # calculate point "in front" of XYZ/client using yaw 
+    # calculate point "in front" of XYZ/client using yaw
     frontal_x = (xyz.x - (additional_distance * math.sin(yaw)))
     frontal_y = (xyz.y - (additional_distance * math.cos(yaw)))
     frontal_xyz = XYZ(x=frontal_x, y=frontal_y, z=xyz.z)
 
-    # make a length adjustment since diagonal movements 
+    # make a length adjustment since diagonal movements
     if length_adjusted:
         distance = calc_Distance(xyz, frontal_xyz)
         final_xyz = calc_PointOn3DLine(xyz_1=xyz, xyz_2=frontal_xyz, additional_distance=(additional_distance - distance))
@@ -211,351 +193,99 @@ async def calc_FrontalVector(client: Client, xyz : XYZ = None, yaw : float = Non
     return final_xyz
 
 
-async def teleport_move_adjust(client: Client, xyz : XYZ, delay : float = 0.7, pet_mode: bool = False):
-    # teleports the client to a given XYZ, and jitters afterward to actually update the position
-    npc_check = await is_visible_by_path(client, npc_range_path)
-    popup_str = None
-    if npc_check:
-        popup_str = await get_popup_title(client)
-    if await is_free(client):
-        try:
-            if not pet_mode:
-                await client.teleport(xyz, wait_on_inuse= True, purge_on_after_unuser_fixer= True)
-            else:
-                await client.pet_teleport(xyz, wait_on_inuse= True, purge_on_after_unuser_fixer= True)
-
-                await asyncio.sleep(0.3)
-                if not await is_visible_by_path(client, npc_range_path):
-                    if popup_str and popup_str != await get_popup_title(client):
-                        await client.send_key(Keycode.A, 0.05)
-                        await client.send_key(Keycode.D, 0.05)
-
-        except ValueError:
-            pass
-
-    await asyncio.sleep(delay)
-
-
-async def is_teleport_valid(client: Client, destination_xyz : XYZ, origin_xyz : XYZ):
-    # checks if a client actually teleported to its destination.
-    original_zone_name = await client.zone_name()
-    await teleport_move_adjust(destination_xyz)
-
-    # we know the teleport didn't succeed if we are very close to where we were, and the zone name hasn't changed
-    if are_xyzs_within_threshold(await client.body.position(), origin_xyz, 50) and await client.zone_name() == original_zone_name:
-        return False
-    else:
-        return True
-
-
-async def auto_adjusting_teleport(client: Client, quest_position: XYZ = None, leader_client: Client = None):
-    # DEPRECATED: Uses brute forcing XYZs in an alternating spiral pattern to find usable coords to port to. VERY slow.
-    original_zone_name = await client.zone_name()
-    original_position = await client.body.position()
-    if not quest_position:
-        if leader_client:
-            quest_position = await leader_client.quest_position.position()
-        else:
-            quest_position = await client.quest_position.position()
-
-    adjusted_position = quest_position
-    mod_amount = 50
-    current_angle = 0
-    await teleport_move_adjust(client, quest_position)
-    while are_xyzs_within_threshold((await client.body.position()), original_position, 50) and await client.zone_name() == original_zone_name:
-        if not are_xyzs_within_threshold(original_position, quest_position, 1):
-            adjusted_position = calc_PointOn3DLine(original_position, quest_position, mod_amount)
-            rotated_position = rotate_point(quest_position, adjusted_position, current_angle)
-            await teleport_move_adjust(client, rotated_position)
-            mod_amount += 100
-            current_angle += 92
-        else:
-            # await client.goto(original_position.x, original_position.y)
-            break
-
-
+# TODO: This has 2 duplicates
 async def load_wad(path: str):
     if path is not None:
         return Wad.from_game_data(path.replace("/", "-"))
 
 
-async def get_navmap_data(client: Client, zone: str = None) -> list[XYZ]:
-    if not zone:
-        zone = await client.zone_name()
+async def fallback_spiral_tp(client: Client, xyz: XYZ):
+    raise NotImplementedError()
 
-    wad = await load_wad(zone)
-    nav_data = await wad.get_file("zone.nav")
-    vertices = []
+async def navmap_tp(client: Client, xyz: XYZ = None, leader_client: Client = None):
+    # TODO: What is leader_client meant to be for?
+    if not await is_free(client):
+        return
+
+    starting_zone = await client.zone_name() # for loading the correct wad and to walk to target as a last resort
+    starting_xyz = await client.body.position()
+    target_xyz = xyz if xyz is not None else await client.quest_position.position()
+
+    def check_sigma(a: XYZ, b: XYZ, sigma=20.0):
+        # check if a distance is more or less zero
+        return calc_Distance(a, b) <= sigma
+
+    async def check_success():
+        # Check if the teleport succeeded. For this we want to have moved away from the starting position.
+        await asyncio.sleep(0.1) # make sure we got useful information
+        return not check_sigma(await client.body.position(), starting_xyz)
+
+    async def finished_tp():
+        return check_success() or not await is_free(client) or await client.zone_name() != starting_zone
+
+    if check_sigma(starting_xyz, target_xyz):
+        return # save some work
+
+    await client.teleport(target_xyz)
+    if await finished_tp():
+        return # trivial tp, no point using a more complex method if this one works
+
     try:
-        vertices, _ = parse_nav_data(nav_data)
+        # attempt to use the nav data
+        wad = await load_wad(starting_zone)
+        nav_file = await wad.get_file("zone.nav")
+        vertices, edges = parse_nav_data(nav_file)
     except:
-        raise Exception('Zone did not have valid navmap data')
+        # Unable to load nav data. Fall back to primitive spiral pattern
+        await fallback_spiral_tp(client, target_xyz)
+        return
 
-    return vertices
+    # continuation of nav data tp, don't want to swallow potential exceptions in this section
+    closest_vertex = vertices[0]
+    lowest_distance = calc_Distance(closest_vertex, target_xyz)
+    for vertex in range(1, len(vertices)):
+        vert_dist = calc_Distance(vertex, target_xyz)
+        if vert_dist < lowest_distance:
+            closest_vertex = vertex
+            lowest_distance = vert_dist
 
+    await client.teleport(closest_vertex)
+    if await check_success():
+        # second trivial case, the closest vertex worked.
+        if await is_free(client) and await client.zone_name() == starting_zone:
+            # make sure we get all the way there
+            await client.goto(target_xyz.x, target_xyz.y)
+        return
 
-async def split_walk(client: Client, xyz: XYZ = None, segments: int = 5, original_zone: str = None, leader_client: Client = None):
-    if not original_zone:
-        original_zone = await client.zone_name()
-
-    if not xyz:
-        if leader_client:
-            xyz = await leader_client.quest_position.position()
-        else:
-            xyz = await client.quest_position.position()
-
-    # walks to desired XYZ, only if the zone hasn't changed and if the param is enabled.
-
-    current_pos = await client.body.position()
-    points_on_line = [calc_multiplerPointOn3DLine(xyz_1=current_pos, xyz_2=xyz, multiplier=((i + 1) / segments)) for i in range(segments - 2)]
-    points_on_line.append(xyz)
-    for point_xyz in points_on_line:
-        # print('for loop for split walking')
-        if not await is_free(client) or await client.zone_name() != original_zone or are_xyzs_within_threshold(xyz_1=await client.body.position(), xyz_2=xyz, threshold=100):
+    # breadth first search until a vertex works, build path on the way so we can walk in case we are far away
+    max_search_dist = 1000.0
+    queue = [[closest_vertex]]
+    found_path = None
+    visited = set()
+    while len(queue) > 0:
+        path = queue.pop(0)
+        v = path[-1]
+        visited.add(v)
+        await client.teleport(v)
+        if await finished_tp():
+            found_path = path
             break
+        for neighbor in get_neighbors(v, vertices, edges):
+            if neighbor in visited or not check_sigma(neighbor, target_xyz, sigma=max_search_dist):
+                continue
+            new_path = list(path)
+            new_path.append(neighbor)
+            queue.append(new_path)
 
-        try:
-            await client.goto(point_xyz.x, point_xyz.y)
-        except:
-            pass
-        await asyncio.sleep(0)
+    if found_path == None:
+        # no viable navmap-based path found, use spiral
+        await fallback_spiral_tp(client, target_xyz)
+        return
 
-
-async def navmap_tp_leader_quest(client: Client, xyz: XYZ = None, minimum_distance_increment: int = 250, walk_after=True, pet_mode: bool = False, leader_client: Client = None):
-    if await is_free(client):
-        original_zone_name = await client.zone_name()
-        if leader_client:
-            original_quest_xyz = await leader_client.quest_position.position()
-            original_quest_objective = await get_quest_name(leader_client)
-        else:
-            original_quest_xyz = xyz
-            original_quest_objective = await get_quest_name(client)
-
-        original_position = await client.body.position()
-        if xyz:
-            quest_pos = xyz
-        else:
-            quest_pos = await client.quest_position.position()
-
-        minimum_vertex_distance = minimum_distance_increment
-        await teleport_move_adjust(client, quest_pos, pet_mode=pet_mode)
-        while not await is_free(client) or client.entity_detect_combat_status:
-            await asyncio.sleep(0.1)
-        current_zone = await client.zone_name()
-        navmap_errored = False
-        try:
-            wad = await load_wad(current_zone)
-            nav_data = await wad.get_file("zone.nav")
-            vertices = []
-            vertices, _ = parse_nav_data(nav_data)
-        except:
-            await auto_adjusting_teleport(client, xyz)
-
-            if walk_after:
-                navmap_errored = True
-                if leader_client:
-                    await split_walk(client, quest_pos, original_zone=original_zone_name, leader_client=leader_client)
-                else:
-                    await split_walk(client, quest_pos, original_zone=original_zone_name)
-        squared_distances = [calc_squareDistance(quest_pos, n) for n in vertices]
-        sorted_distances = sorted(squared_distances)
-        while not navmap_errored:
-        # while are_xyzs_within_threshold(xyz_1=(await client.body.position()), xyz_2=original_position, threshold=100) and await client.zone_name() == original_zone_name and not await client.is_loading():
-            current_pos = await client.body.position()
-            if await client.zone_name() == original_zone_name and await is_free(client) and not client.entity_detect_combat_status:
-                if are_xyzs_within_threshold(xyz_1=current_pos, xyz_2=original_position, threshold=100):
-                    pass
-                else:
-                    break
-            else:
-                break
-            # set minimum distance between 2 chosen vertices
-            minimum_vertex_distance += minimum_distance_increment
-            for s in sorted_distances:
-                current_index = sorted_distances.index(s)
-                if current_index + 1 < len(sorted_distances):
-                    # this is REALLY inefficient but I'll fix it later maybe
-                    # selection of the 2 closest vertices that satisfy the criteria
-                    vertex = vertices[int(squared_distances.index(sorted_distances[current_index]))]
-                    next_vertex = vertices[int(squared_distances.index(sorted_distances[current_index + 1]))]
-                    between_vertices = calc_Distance(vertex, next_vertex)
-                    quest_to_vertex = calc_Distance(quest_pos, next_vertex)
-                    if between_vertices >= quest_to_vertex or between_vertices < minimum_vertex_distance:
-                        pass
-                    elif between_vertices < quest_to_vertex and between_vertices >= minimum_vertex_distance:
-                        adjusted_pos = calc_AveragePoint([vertex, next_vertex, quest_pos, quest_pos])
-                        final_adjusted_pos = XYZ(x=adjusted_pos.x, y=adjusted_pos.y, z=max([quest_pos.z, adjusted_pos.z]))
-                        if await client.zone_name() == original_zone_name and await is_free(client) and not client.entity_detect_combat_status:
-                            await teleport_move_adjust(client, final_adjusted_pos, pet_mode=pet_mode)
-                        elif not await is_free(client) or client.entity_detect_combat_status:
-                            break
-                        break
-                    else:
-                        pass
-                else:
-                    break
-
-        if walk_after:
-            if leader_client:
-                await split_walk(client, quest_pos, original_zone=original_zone_name, leader_client=leader_client)
-            else:
-                await split_walk(client, quest_pos, original_zone=original_zone_name)
-        await asyncio.sleep(0.3)
-
-        current_pos = await client.body.position()
-
-        # auto quest with leader needs to keep control of its follower clients, so use leader's quest objective instead of follower's
-        if leader_client:
-            current_quest_xyz = await leader_client.quest_position.position()
-            current_quest_objective = await get_quest_name(leader_client)
-        else:
-            current_quest_xyz = await client.quest_position.position()
-            current_quest_objective = await get_quest_name(client)
-
-        current_zone = await client.zone_name()
-        original_stats = [original_quest_objective, original_zone_name]
-        current_stats = [current_quest_objective, current_zone]
-
-        if all([await is_free(client), not client.entity_detect_combat_status, not await is_visible_by_path(client, npc_range_path), are_xyzs_within_threshold(original_quest_xyz, current_quest_xyz, 50), current_stats == original_stats]):
-            if leader_client:
-                await auto_adjusting_teleport(client, leader_client=leader_client)
-            else:
-                await auto_adjusting_teleport(client)
-
-            if walk_after:
-                if leader_client:
-                    await split_walk(client, quest_pos, original_zone=original_zone_name, leader_client=leader_client)
-                else:
-                    await split_walk(client, quest_pos, original_zone=original_zone_name)
-
-
-async def navmap_tp(client: Client, xyz: XYZ = None, minimum_distance_increment: int = 250, walk_after=True, pet_mode: bool = False, leader_client: Client = None):
-    if await is_free(client):
-        original_zone_name = await client.zone_name()
-        if leader_client:
-            original_quest_xyz = await leader_client.quest_position.position()
-            original_quest_objective = await get_quest_name(leader_client)
-        else:
-            original_quest_xyz = await client.quest_position.position()
-            original_quest_objective = await get_quest_name(client)
-
-        original_position = await client.body.position()
-        if xyz:
-            quest_pos = xyz
-        else:
-            quest_pos = await client.quest_position.position()
-
-        minimum_vertex_distance = minimum_distance_increment
-        await teleport_move_adjust(client, quest_pos, pet_mode=pet_mode)
-        while not await is_free(client):
-            await asyncio.sleep(0.1)
-        current_zone = await client.zone_name()
-        navmap_errored = False
-        try:
-            wad = await load_wad(current_zone)
-            nav_data = await wad.get_file("zone.nav")
-            vertices = []
-            vertices, _ = parse_nav_data(nav_data)
-        except:
-            if leader_client:
-                await auto_adjusting_teleport(client, original_quest_xyz)
-            else:
-                await auto_adjusting_teleport(client)
-
-            if walk_after:
-                navmap_errored = True
-                if leader_client:
-                    await split_walk(client, quest_pos, original_zone=original_zone_name, leader_client=leader_client)
-                else:
-                    await split_walk(client, quest_pos, original_zone=original_zone_name)
-        squared_distances = [calc_squareDistance(quest_pos, n) for n in vertices]
-        sorted_distances = sorted(squared_distances)
-        while not navmap_errored:
-        # while are_xyzs_within_threshold(xyz_1=(await client.body.position()), xyz_2=original_position, threshold=100) and await client.zone_name() == original_zone_name and not await client.is_loading():
-            current_pos = await client.body.position()
-            if await client.zone_name() == original_zone_name and await is_free(client):
-                if are_xyzs_within_threshold(xyz_1=current_pos, xyz_2=original_position, threshold=100):
-                    pass
-                else:
-                    break
-            else:
-                break
-            # set minimum distance between 2 chosen vertices
-            minimum_vertex_distance += minimum_distance_increment
-            for s in sorted_distances:
-                current_index = sorted_distances.index(s)
-                if current_index + 1 < len(sorted_distances):
-                    # this is REALLY inefficient but I'll fix it later maybe
-                    # selection of the 2 closest vertices that satisfy the criteria
-                    vertex = vertices[int(squared_distances.index(sorted_distances[current_index]))]
-                    next_vertex = vertices[int(squared_distances.index(sorted_distances[current_index + 1]))]
-                    between_vertices = calc_Distance(vertex, next_vertex)
-                    quest_to_vertex = calc_Distance(quest_pos, next_vertex)
-                    if between_vertices >= quest_to_vertex or between_vertices < minimum_vertex_distance:
-                        pass
-                    elif between_vertices < quest_to_vertex and between_vertices >= minimum_vertex_distance:
-                        adjusted_pos = calc_AveragePoint([vertex, next_vertex, quest_pos, quest_pos])
-                        final_adjusted_pos = XYZ(x=adjusted_pos.x, y=adjusted_pos.y, z=max([quest_pos.z, adjusted_pos.z]))
-                        if await client.zone_name() == original_zone_name and await is_free(client):
-                            await teleport_move_adjust(client, final_adjusted_pos, pet_mode=pet_mode)
-                        elif not await is_free(client):
-                            break
-                        break
-                    else:
-                        pass
-                else:
-                    break
-
-        if walk_after:
-            if leader_client:
-                await split_walk(client, quest_pos, original_zone=original_zone_name, leader_client=leader_client)
-            else:
-                await split_walk(client, quest_pos, original_zone=original_zone_name)
-        await asyncio.sleep(0.3)
-
-        current_pos = await client.body.position()
-
-        # auto quest with leader needs to keep control of its follower clients, so use leader's quest objective instead of follower's
-        if leader_client:
-            current_quest_xyz = await leader_client.quest_position.position()
-            current_quest_objective = await get_quest_name(leader_client)
-        else:
-            current_quest_xyz = await client.quest_position.position()
-            current_quest_objective = await get_quest_name(client)
-
-        current_zone = await client.zone_name()
-        original_stats = [original_quest_objective, original_zone_name]
-        current_stats = [current_quest_objective, current_zone]
-
-        if all([await is_free(client), not await is_visible_by_path(client, npc_range_path), are_xyzs_within_threshold(original_quest_xyz, current_quest_xyz, 50), current_stats == original_stats]):
-            if leader_client:
-                await auto_adjusting_teleport(client, leader_client=leader_client)
-            else:
-                await auto_adjusting_teleport(client)
-
-            if walk_after:
-                if leader_client:
-                    await split_walk(client, quest_pos, original_zone=original_zone_name, leader_client=leader_client)
-                else:
-                    await split_walk(client, quest_pos, original_zone=original_zone_name)
-
-
-def align_points(input_points: list[XYZ], map_points: list[XYZ]) -> list[XYZ]:
-    # Aligns a list of inputs points to their closest neighbors in a list of map points.
-    aligned_points = []
-    for pos in input_points:
-        minimum_distance = calc_Distance(pos, map_points[0])
-        closest_map_point = map_points[0]
-
-        for map_pos in map_points:
-            distance = calc_Distance(pos, map_points)
-            if distance < minimum_distance:
-                minimum_distance = distance
-                closest_map_point = map_pos
-
-        aligned_points.append(closest_map_point)
-
-    return aligned_points
+    # Walk the created path in case we are far away
+    if found_path != None and await client.zone_name() == starting_zone and not check_sigma(found_path[-1], target_xyz):
+        for v in reversed(found_path):
+            await client.goto(v.x, v.y)
 
 
 def calc_chunks(points: list[XYZ], origin: XYZ = XYZ(x=0.0, y=0.0, z=0.0), entity_distance: float = 3147.0) -> list[XYZ]:
@@ -611,16 +341,6 @@ def calc_chunks(points: list[XYZ], origin: XYZ = XYZ(x=0.0, y=0.0, z=0.0), entit
     return chunk_points
 
 
-async def collision_tp(client, xyz):
-    pass
-
-
-def calc_angle(p1 : XYZ, p2 : XYZ, p3 : XYZ = None):
-    if not p3:
-        p3 = XYZ(x=p1.x, y=p2.y, z=p1.z)
-    return math.degrees(math.atan2(p3.y - p1.y, p3.x - p1.x) - math.atan2(p2.y - p1.y, p2.x - p1.x))
-
-
 def calculate_yaw(xyz_1: XYZ, xyz_2: XYZ) -> float:
     # Calculates the yaw between 2 points.
     dx = xyz_1.x - xyz_2.x
@@ -636,18 +356,3 @@ def calculate_pitch(xyz_1: XYZ, xyz_2: XYZ) -> float:
     z = xyz_2.z - xyz_1.z
 
     return -math.atan2(z, math.sqrt(x ** 2 + y ** 2))
-
-
-async def get_degree_orientation(client: Client) -> Orient:
-    # Returns a Orient for the client body
-    p, r, y = await client.body.orientation()
-    return Orient(math.degrees(p), math.degrees(r), math.degrees(y))
-
-
-def calc_frontal_XYZ(xyz: XYZ, orientation: Orient, distance: float) -> XYZ:
-    # Simpler version of calc_FrontalVector that is meant for just pure math stuff. This should honestly be used instead but I lack the time to spend redoing old stuff. -slack
-    x = distance * math.cos(orientation.yaw) * math.sin(orientation.pitch)
-    y = distance * math.sin(orientation.yaw) * math.sin(orientation.pitch)
-    z = distance * math.cos(orientation.pitch)
-
-    return XYZ(xyz.x + x, xyz.y + y, xyz.z + z)
