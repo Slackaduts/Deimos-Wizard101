@@ -283,7 +283,7 @@ async def navmap_tp(client: Client, xyz: XYZ = None, leader_client: Client = Non
         return
 
     # Walk the created path in case we are far away
-    if found_path != None and await client.zone_name() == starting_zone and not check_sigma(found_path[-1], target_xyz):
+    if found_path != None and await is_free(client) and await client.zone_name() == starting_zone and not check_sigma(found_path[-1], target_xyz):
         for v in reversed(found_path):
             await client.goto(v.x, v.y)
 
