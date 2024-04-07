@@ -217,7 +217,7 @@ async def navmap_tp(client: Client, xyz: XYZ = None, leader_client: Client = Non
 
     async def check_success():
         # Check if the teleport succeeded. For this we want to have moved away from the starting position.
-        await asyncio.sleep(0.1) # make sure we got useful information
+        await asyncio.sleep(0.7) # make sure we got useful information
         return not check_sigma(await client.body.position(), starting_xyz)
 
     async def finished_tp():
