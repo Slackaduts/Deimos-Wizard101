@@ -211,7 +211,7 @@ async def navmap_tp(client: Client, xyz: XYZ = None, leader_client: Client = Non
     starting_xyz = await client.body.position()
     target_xyz = xyz if xyz is not None else await client.quest_position.position()
 
-    def check_sigma(a: XYZ, b: XYZ, sigma=20.0):
+    def check_sigma(a: XYZ, b: XYZ, sigma=5.0):
         # check if a distance is more or less zero
         return calc_Distance(a, b) <= sigma
 
