@@ -221,7 +221,7 @@ async def navmap_tp(client: Client, xyz: XYZ = None, leader_client: Client = Non
         return not check_sigma(await client.body.position(), starting_xyz)
 
     async def finished_tp():
-        return check_success() or not await is_free(client) or await client.zone_name() != starting_zone
+        return await check_success() or not await is_free(client) or await client.zone_name() != starting_zone
 
     if check_sigma(starting_xyz, target_xyz):
         return # save some work
@@ -243,7 +243,8 @@ async def navmap_tp(client: Client, xyz: XYZ = None, leader_client: Client = Non
     # continuation of nav data tp, don't want to swallow potential exceptions in this section
     closest_vertex = vertices[0]
     lowest_distance = calc_Distance(closest_vertex, target_xyz)
-    for vertex in range(1, len(vertices)):
+    for i in range(1, len(vertices)):
+        vertex = vertices[i]
         vert_dist = calc_Distance(vertex, target_xyz)
         if vert_dist < lowest_distance:
             closest_vertex = vertex
@@ -284,7 +285,7 @@ async def navmap_tp(client: Client, xyz: XYZ = None, leader_client: Client = Non
         return
     elif await is_free(client) and await client.zone_name() == starting_zone and not check_sigma(found_path[-1], target_xyz):
         # Walk the created path in case we are far away
-        for v in reversed(found_path):
+        for v in reversed(found_path[0:-1]):
             await client.goto(v.x, v.y)
 
 
