@@ -308,11 +308,11 @@ def calc_chunks(points: list[XYZ], entity_distance: float = 3147.0) -> list[XYZ]
     while True:
         # move the center of the rectangle to next rectangle
         current_point.x += side_length
-        if current_point.x > max_pos.x:
+        if current_point.x - half_side_length > max_pos.x:
             # next row
             current_point.x = min_pos.x
             current_point.y += side_length
-            if current_point.y > max_pos.y:
+            if current_point.y - half_side_length > max_pos.y:
                 # scanned until the end
                 break
 
