@@ -297,19 +297,22 @@ def calc_chunks(points: list[XYZ], entity_distance: float = 3147.0) -> list[XYZ]
     max_pos.x -= half_side_length
     max_pos.y -= half_side_length
 
-    # must copy because current_point's fields are written to
-    current_point = copy(min_pos)
-    chunk_points = [min_pos] # current_point handled here as starting point
+    def point_in_rect(top_left: XYZ, bottom_right: XYZ, point: XYZ) -> bool:
+        return point.x >= top_left.x and point.x < bottom_right.x and point.y >= top_left.y and point.y < bottom_right.y
+
+    # place the first square outside the area, it is adjusted at the start of the loop anyways
+    current_point = XYZ(min_pos.x - square_side_length, min_pos.y - square_side_length)
+    chunk_points = []
     leftover_points = set(points)
     # Turning the given points into a grid would be more efficient than this algorithm
     while True:
         # move the center of the rectangle to next rectangle
         current_point.x += square_side_length
-        if current_point.x + half_side_length > max_pos.x:
+        if current_point.x > max_pos.x:
             # next row
             current_point.x = min_pos.x + half_side_length
             current_point.y += square_side_length
-            if current_point.y + half_side_length > max_pos.y:
+            if current_point.y > max_pos.y:
                 # scanned until the end
                 break
 
@@ -318,7 +321,7 @@ def calc_chunks(points: list[XYZ], entity_distance: float = 3147.0) -> list[XYZ]
         square_bottom_right = XYZ(current_point.x + half_side_length, current_point.y + half_side_length, 0)
         contained_points = set([])
         for p in leftover_points:
-            if p.x >= square_top_left.x and p.x < square_bottom_right.x and p.y >= square_top_left.y and p.y < square_bottom_right.y:
+            if point_in_rect(square_top_left, square_bottom_right, p):
                 contained_points.add(p)
         # a point cannot be in multiple squares at once
         leftover_points = leftover_points - contained_points
