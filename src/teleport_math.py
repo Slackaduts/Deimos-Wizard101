@@ -301,7 +301,7 @@ def calc_chunks(points: list[XYZ], entity_distance: float = 3147.0) -> list[XYZ]
         return point.x >= top_left.x and point.x < bottom_right.x and point.y >= top_left.y and point.y < bottom_right.y
 
     # place the first square outside the area, it is adjusted at the start of the loop anyways
-    current_point = XYZ(min_pos.x - side_length, min_pos.y)
+    current_point = XYZ(min_pos.x - side_length, min_pos.y, 0)
     chunk_points = []
     leftover_points = set(points)
     # Turning the given points into a grid would be more efficient than this algorithm

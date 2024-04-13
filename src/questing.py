@@ -76,7 +76,7 @@ class Quester():
         nav_data = await wad.get_file("zone.nav")
         vertices, _ = parse_nav_data(nav_data)
 
-        full = calc_chunks(vertices, entity_distance=1500)
+        full = calc_chunks(vertices)
         return full
 
     async def get_collect_quest_object_name(self) -> str:
