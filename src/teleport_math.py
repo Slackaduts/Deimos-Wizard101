@@ -316,16 +316,14 @@ def calc_chunks(points: list[XYZ], entity_distance: float = 3147.0) -> list[XYZ]
         # filter squares that do not contain any points
         square_top_left = XYZ(current_point.x - half_side_length, current_point.y - half_side_length, 0)
         square_bottom_right = XYZ(current_point.x + half_side_length, current_point.y + half_side_length, 0)
-        has_points = False
-        contained_points = set(leftover_points)
+        contained_points = set([])
         for p in leftover_points:
             if p.x >= square_top_left.x and p.x < square_bottom_right.x and p.y >= square_top_left.y and p.y < square_bottom_right.y:
                 contained_points.add(p)
-                has_points = True
         # a point cannot be in multiple squares at once
         leftover_points = leftover_points - contained_points
 
-        if has_points:
+        if len(contained_points) > 0:
             chunk_points.append(copy(current_point))
 
     print(f'chunks:{len(chunk_points)}')
