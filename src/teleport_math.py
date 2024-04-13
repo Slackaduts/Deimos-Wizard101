@@ -300,6 +300,7 @@ def calc_chunks(points: list[XYZ], entity_distance: float = 3147.0) -> list[XYZ]
     # must copy because current_point's fields are written to
     current_point = copy(min_pos)
     chunk_points = [min_pos] # current_point handled here as starting point
+    leftover_points = set(points)
     # Turning the given points into a grid would be more efficient than this algorithm
     while True:
         # move the center of the rectangle to next rectangle
@@ -313,15 +314,16 @@ def calc_chunks(points: list[XYZ], entity_distance: float = 3147.0) -> list[XYZ]
                 break
 
         # filter squares that do not contain any points
-        leftover_points = set(points)
         square_top_left = XYZ(current_point.x - half_side_length, current_point.y - half_side_length, 0)
         square_bottom_right = XYZ(current_point.x + half_side_length, current_point.y + half_side_length, 0)
         has_points = False
+        contained_points = set(leftover_points)
         for p in leftover_points:
             if p.x >= square_top_left.x and p.x < square_bottom_right.x and p.y >= square_top_left.y and p.y < square_bottom_right.y:
-                leftover_points.remove(p) # a point cannot be in multiple squares at once
+                contained_points.add(p)
                 has_points = True
-                break
+        # a point cannot be in multiple squares at once
+        leftover_points = leftover_points - contained_points
 
         if has_points:
             chunk_points.append(copy(current_point))
