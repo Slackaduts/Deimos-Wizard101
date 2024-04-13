@@ -655,8 +655,7 @@ class Quester():
         chunk_cords = await self.get_zone_chunks()  # list of cords that load in chunk
         for points in chunk_cords:  # loops through the points
             points = XYZ(points.x, points.y, points.z - 550)  # sets cord to underground to avoid pull / detection
-            await client.teleport(points, move_after=False, wait_on_inuse=True)  # teleports under the area
-            await client.teleport(points, wait_on_inuse=True)  # updates cords in wizard101 server
+            await client.teleport(points)  # teleports under the area
 
             entities = await self.client.get_base_entity_list()  # gets the entity list of the map
             for e in entities:

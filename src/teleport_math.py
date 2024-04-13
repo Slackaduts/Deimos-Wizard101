@@ -250,43 +250,42 @@ async def navmap_tp(client: Client, xyz: XYZ = None, leader_client: Client = Non
             closest_vertex = vertex
             lowest_distance = vert_dist
 
-    await client.teleport(closest_vertex)
-    if await check_success():
-        # second trivial case, the closest vertex worked.
-        if await is_free(client) and await client.zone_name() == starting_zone:
-            # make sure we get all the way there
-            await client.goto(target_xyz.x, target_xyz.y)
-        return
-
-    # breadth first search until a vertex works, build path on the way so we can walk in case we are far away
-    max_search_dist = 1000.0
+    max_depth = 3
     queue = [[closest_vertex]]
-    found_path = None
     visited = set()
     while len(queue) > 0:
-        path = queue.pop(0)
+        path = queue.pop()
         v = path[-1]
         visited.add(v)
-        await client.teleport(v)
-        if await finished_tp():
-            found_path = path
-            break
         for neighbor in get_neighbors(v, vertices, edges):
-            if neighbor in visited or not check_sigma(neighbor, target_xyz, sigma=max_search_dist):
+            if neighbor in visited or len(path) + 1 > max_depth:
                 continue
             new_path = list(path)
             new_path.append(neighbor)
             queue.append(new_path)
 
-    # finish it off or fall back on spiral
-    if found_path == None:
-        # no viable navmap-based path found, use spiral
-        await fallback_spiral_tp(client, target_xyz)
+    # average position of the vertices
+    avg_xyz = XYZ(0, 0, 0)
+    for v in visited:
+        avg_xyz.x += v.x
+        avg_xyz.y += v.y
+        avg_xyz.z += v.z
+    avg_xyz = XYZ(avg_xyz.x / len(visited), avg_xyz.y / len(visited), avg_xyz.z / len(visited))
+    # vector from average xyz to target
+    av = XYZ(target_xyz.x - avg_xyz.x, target_xyz.y - avg_xyz.y, avg_xyz.z - target_xyz.z)
+    # midpoint of line from average point to target
+    ap2 = XYZ(avg_xyz.x + av.x / 2, avg_xyz.y + av.y / 2, avg_xyz.z + av.z / 2)
+    await client.teleport(ap2)
+    if await check_success():
+        if await is_free(client) and await client.zone_name() == starting_zone:
+            await client.goto(target_xyz.x, target_xyz.y)
         return
-    elif await is_free(client) and await client.zone_name() == starting_zone and not check_sigma(found_path[-1], target_xyz):
-        # Walk the created path in case we are far away
-        for v in reversed(found_path[0:-1]):
-            await client.goto(v.x, v.y)
+    await client.teleport(avg_xyz) # average point
+    if await check_success():
+        if await is_free(client) and await client.zone_name() == starting_zone:
+            await client.goto(target_xyz.x, target_xyz.y)
+        return
+    await fallback_spiral_tp(client, target_xyz)
 
 
 def calc_chunks(points: list[XYZ], origin: XYZ = XYZ(x=0.0, y=0.0, z=0.0), entity_distance: float = 3147.0) -> list[XYZ]:
