@@ -126,23 +126,6 @@ def calc_PointOn3DLine(xyz_1 : XYZ, xyz_2 : XYZ, additional_distance):
         return XYZ(x=((xyz_2.x - xyz_1.x) * n) + xyz_1.x, y=((xyz_2.y - xyz_1.y) * n) + xyz_1.y, z=((xyz_2.z - xyz_1.z) * n) + xyz_1.z)
 
 
-def calc_multiplerPointOn3DLine(xyz_1 : XYZ, xyz_2 : XYZ, multiplier : float):
-    # extends a point on the line created by 2 XYZs by a multiplier. xyz_1 is the origin.
-    return XYZ(x=((xyz_2.x - xyz_1.x) * multiplier) + xyz_1.x, y=((xyz_2.y - xyz_1.y) * multiplier) + xyz_1.y, z=((xyz_2.z - xyz_1.z) * multiplier) + xyz_1.z)
-
-
-def rotate_point(origin_xyz : XYZ, point_xyz : XYZ, theta):
-    # rotates point_xyz about origin_xyz, by theta degrees counterclockwise. This doesn't take the Z into account, so don't use this for anything that needs the Z to rotate.
-    radians = math.radians(theta)
-    cos = math.cos(radians)
-    sin = math.sin(radians)
-    y_diff = point_xyz.y - origin_xyz.y
-    x_diff = point_xyz.x - origin_xyz.x
-    x = cos * x_diff - sin * y_diff + origin_xyz.x
-    y = sin * x_diff + cos * y_diff + origin_xyz.y
-    return XYZ(x=x, y=y, z=point_xyz.z)
-
-
 def are_xyzs_within_threshold(xyz_1 : XYZ, xyz_2 : XYZ, threshold : int = 200):
     # checks if 2 xyz's are within a rough distance threshold of each other. Not actual distance checking, but precision isn't needed for this, this exists to eliminate tiny variations in XYZ when being sent back from a failed port.
     threshold_check = [abs(abs(xyz_1.x) - abs(xyz_2.x)) < threshold, abs(abs(xyz_1.y) - abs(xyz_2.y)) < threshold, abs(abs(xyz_1.z) - abs(xyz_2.z)) < threshold]
