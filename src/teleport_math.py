@@ -288,8 +288,8 @@ def calc_chunks(points: list[XYZ], entity_distance: float = 3147.0) -> list[XYZ]
             max_pos.y = point.y
 
     # we use an inscribed square for chunking so corners are correctly included, using circles makes dealing with them way more annnoying
-    square_side_length = math.sqrt(2) * entity_distance
-    half_side_length = square_side_length / 2
+    side_length = math.sqrt(2) * entity_distance
+    half_side_length = side_length / 2
 
     # start half a side length into the base square
     min_pos.x += half_side_length
@@ -301,17 +301,17 @@ def calc_chunks(points: list[XYZ], entity_distance: float = 3147.0) -> list[XYZ]
         return point.x >= top_left.x and point.x < bottom_right.x and point.y >= top_left.y and point.y < bottom_right.y
 
     # place the first square outside the area, it is adjusted at the start of the loop anyways
-    current_point = XYZ(min_pos.x - square_side_length, min_pos.y)
+    current_point = XYZ(min_pos.x - side_length, min_pos.y)
     chunk_points = []
     leftover_points = set(points)
     # Turning the given points into a grid would be more efficient than this algorithm
     while True:
         # move the center of the rectangle to next rectangle
-        current_point.x += square_side_length
+        current_point.x += side_length
         if current_point.x > max_pos.x:
             # next row
             current_point.x = min_pos.x
-            current_point.y += square_side_length
+            current_point.y += side_length
             if current_point.y > max_pos.y:
                 # scanned until the end
                 break
