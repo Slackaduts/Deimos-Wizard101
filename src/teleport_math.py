@@ -8,6 +8,7 @@ from typing import Tuple, Union
 from src.utils import is_free, get_quest_name, is_visible_by_path, get_popup_title
 from src.paths import npc_range_path
 from enum import auto, IntEnum
+from copy import copy
 
 type_format_dict = {
 "char": "<c",
@@ -288,54 +289,61 @@ async def navmap_tp(client: Client, xyz: XYZ = None, leader_client: Client = Non
     await fallback_spiral_tp(client, target_xyz)
 
 
-def calc_chunks(points: list[XYZ], origin: XYZ = XYZ(x=0.0, y=0.0, z=0.0), entity_distance: float = 3147.0) -> list[XYZ]:
+def calc_chunks(points: list[XYZ], entity_distance: float = 3147.0) -> list[XYZ]:
     # Returns a list of center points of "chunks" of the map, as defined by the input points.
-    x1 = origin
-    y1 = origin
-    x2 = origin
-    y2 = origin
+    min_pos = XYZ(0, 0, 0)
+    max_pos = XYZ(0, 0, 0)
 
-    for xyz in points:
-        if xyz.x < x1.x:
-            x1 = xyz
-        if xyz.y < y1.y:
-            y1 = xyz
-        if xyz.x > x2.x:
-            x2 = xyz
-        if xyz.y > y2.y:
-            y2 = xyz
+    # find the extremes, they act as corners
+    for point in points:
+        if point.x < min_pos.x:
+            min_pos.x = point.x
+        if point.y < min_pos.y:
+            min_pos.y = point.x
 
-    least_point = XYZ(x1.x, y1.y, origin.z)
-    most_point = XYZ(x2.x, y2.y, origin.z)
+        if point.x > max_pos.x:
+            max_pos.x = point.x
+        if point.y > max_pos.y:
+            max_pos.y = point.y
 
-    max_radius = max([calc_Distance(origin, least_point), calc_Distance(origin, most_point)])
-    max_radius -= entity_distance
+    # we use an inscribed square for chunking so corners are correctly included, using circles makes dealing with them way more annnoying
+    square_side_length = math.sqrt(2) * entity_distance
+    half_side_length = square_side_length / 2
 
-    entity_diameter = entity_distance * 2
+    # start half a side length into the base square
+    min_pos.x += half_side_length
+    min_pos.y += half_side_length
+    max_pos.x -= half_side_length
+    max_pos.y -= half_side_length
 
-    current_radius = entity_diameter
+    # must copy because current_point's fields are written to
+    current_point = copy(min_pos)
+    chunk_points = [min_pos] # current_point handled here as starting point
+    # Turning the given points into a grid would be more efficient than this algorithm
+    while True:
+        # move the center of the rectangle to next rectangle
+        current_point.x += square_side_length
+        if current_point.x + half_side_length > max_pos.x:
+            # next row
+            current_point.x = min_pos.x + half_side_length
+            current_point.y += square_side_length
+            if current_point.y + half_side_length > max_pos.y:
+                # scanned until the end
+                break
 
-    chunk_points = [origin]
+        # filter squares that do not contain any points
+        leftover_points = set(points)
+        square_top_left = XYZ(current_point.x - half_side_length, current_point.y - half_side_length, 0)
+        square_bottom_right = XYZ(current_point.x + half_side_length, current_point.y + half_side_length, 0)
+        has_points = False
+        for p in leftover_points:
+            if p.x >= square_top_left.x and p.x < square_bottom_right.x and p.y >= square_top_left.y and p.y < square_bottom_right.y:
+                leftover_points.remove(p) # a point cannot be in multiple squares at once
+                has_points = True
+                break
 
-    iterations = math.ceil(max_radius / current_radius)
-    print(f'Iterations: {iterations}')
-    for _ in range(iterations):
-        circumference = (2.0 * math.pi) * current_radius
-        sides = math.ceil(circumference / entity_diameter)
-        print(f'Sides: {sides}')
-        angle_increment = 360 / sides
-
-        frontal_y = origin.y - current_radius
-        frontal_xyz = XYZ(origin.x, frontal_y, origin.z)
-
-        for s in range(sides):
-            if s != 0:
-                angle = angle_increment * s
-                rotated_pos = rotate_point(origin, frontal_xyz, angle)
-                if calc_squareDistance(rotated_pos, origin) <= calc_squareDistance(most_point, origin):
-                    chunk_points.append(rotated_pos)
-
-        current_radius += entity_diameter
+        if has_points:
+            chunk_points.append(copy(current_point))
 
     print(f'chunks:{len(chunk_points)}')
     return chunk_points
