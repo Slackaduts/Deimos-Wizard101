@@ -897,24 +897,10 @@ async def main():
 	async def questing_loop():
 		# Auto questing on a per client basis.
 		async def async_questing(client: Client):
-			client.character_level = await client.stats.reference_level()
-
+			quester = Quester(client, walker.clients)
 			while True:
 				await asyncio.sleep(1)
-
-				if client in walker.clients and questing_status:
-					if questing_leader_pid is not None and len(walker.clients) > 1:
-						if client.process_id == questing_leader_pid:
-							# if follow leader is off, quest on all clients, passing through only the leader
-							logger.debug(f'Client {client.title} - Handling questing for all clients.')
-							questing = Quester(client, walker.clients, questing_leader_pid)
-							await questing.auto_quest_leader(questing_friend_tp, gear_switching_in_solo_zones, hitter_client, ignore_pet_level_up, only_play_dance_game)
-					else:
-						# if follow leader is off, quest on all clients, passing through only the leader
-						logger.debug(f'Client {client.title} - Handling questing.')
-						questing = Quester(client, walker.clients, None)
-						await questing.auto_quest(ignore_pet_level_up, only_play_dance_game)
-
+				await quester.step()
 		await asyncio.gather(*[async_questing(p) for p in walker.clients])
 
 	async def anti_afk_questing_loop():

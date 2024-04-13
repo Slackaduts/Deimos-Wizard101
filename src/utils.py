@@ -52,12 +52,9 @@ async def is_visible_by_path(client: Client, path: list[str]):
     # checks visibility of a window from the path
     root = client.root_window
     windows = await get_window_from_path(root, path)
-    if windows == False:
+    if not windows:
         return False
-    elif await windows.is_visible():
-        return True
-    else:
-        return False
+    return await windows.is_visible()
 
 
 async def read_control_checkbox_text(checkbox: Window) -> str:
@@ -161,7 +158,7 @@ async def new_portals_cycle( client: Client, location: str):
                 currentPage = pageCount.split('/', 1)[0]
                 maxPage = pageCount.split('/', 1)[1]
                 break
-            
+
         spiralGateName = location
 
         isChildFound = False
@@ -609,7 +606,7 @@ async def safe_wait_for_zone_change(self: Client, name: Optional[str] = None, *,
         if await is_visible_by_path(self, friend_is_busy_and_dungeon_reset_path):
             async with self.mouse_handler:
                 await click_window_by_path(self, friend_is_busy_and_dungeon_reset_path)
-    
+
             raise FriendBusyOrInstanceClosed
 
         if timeout is not None:
@@ -727,7 +724,7 @@ async def logout_and_in(client: Client):
 
 async def is_free(client: Client):
     # Returns True if not in combat, loading screen, or in dialogue.
-    return not any([await client.is_loading(), await client.in_battle(), await is_visible_by_path(client, advance_dialog_path)])
+    return not any([await client.is_loading(), await client.in_battle(), await is_visible_by_path(client, dialog_main)])
 
 
 async def get_quest_name(client: Client):
@@ -966,7 +963,7 @@ async def teleport_to_friend_from_list(
 async def check_for_multiple_friends_in_list(client: Client, friend_names: list[str]):
 
     async with client.mouse_handler:
-        
+
         # if some form of friend list or friend popup is already open, close it
         # This fails consistently, even when the friends list is actually open.  Detecting whether the friends list is open is also horrifically inconsistent so just brute force it
         for i in range(5):
@@ -1278,7 +1275,7 @@ async def class_snapshot(instance, recurse: bool = True, current_depth: int = 0,
 
     if current_depth >= max_depth: #If we have reached or exceeded max depth, return an empty dict
         return snapshot_data
-    
+
     if not recurse and current_depth: #If we have any depth and we are not recursing, return an empty dict
         return snapshot_data
 

@@ -189,18 +189,24 @@ async def navmap_tp(client: Client, xyz: XYZ = None, leader_client: Client = Non
     if not await is_free(client):
         return
 
+    client_obj = client.client_object
+    async def fetch_obj_pos():
+        body = await client_obj.actor_body()
+        assert body is not None
+        return await body.position()
+
     starting_zone = await client.zone_name() # for loading the correct wad and to walk to target as a last resort
-    starting_xyz = await client.body.position()
+    starting_xyz = await fetch_obj_pos()
     target_xyz = xyz if xyz is not None else await client.quest_position.position()
 
-    def check_sigma(a: XYZ, b: XYZ, sigma=5.0):
+    def check_sigma(a: XYZ, b: XYZ, sigma=1.0):
         # check if a distance is more or less zero
         return calc_Distance(a, b) <= sigma
 
     async def check_success():
         # Check if the teleport succeeded. For this we want to have moved away from the starting position.
         await asyncio.sleep(0.7) # make sure we got useful information
-        return not check_sigma(await client.body.position(), starting_xyz)
+        return not check_sigma(await fetch_obj_pos(), starting_xyz)
 
     async def finished_tp():
         return await check_success() or not await is_free(client) or await client.zone_name() != starting_zone
@@ -210,6 +216,8 @@ async def navmap_tp(client: Client, xyz: XYZ = None, leader_client: Client = Non
 
     await client.teleport(target_xyz)
     if await finished_tp():
+        if await is_free(client) and await client.zone_name() == starting_zone:
+            await client.goto(target_xyz.x, target_xyz.y)
         return # trivial tp, no point using a more complex method if this one works
 
     try:

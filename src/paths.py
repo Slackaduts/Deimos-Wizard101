@@ -27,6 +27,7 @@ play_button_path = ['WorldView', 'mainWindow', 'btnPlay']
 dungeon_warning_path = ['MessageBoxModalWindow', 'messageBoxBG', 'messageBoxLayout', 'AdjustmentWindow', 'Layout', 'centerButton']
 
 # Dialogue Paths
+dialog_main = ['WorldView', 'wndDialogMain']
 advance_dialog_path = ['WorldView', 'wndDialogMain', 'btnRight']
 decline_quest_path = ['WorldView', 'wndDialogMain', 'btnLeft']
 dialog_text_path = ['WorldView', 'wndDialogMain', 'txtArea', 'txtMessage']
