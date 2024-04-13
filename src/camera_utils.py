@@ -4,7 +4,7 @@ from time import perf_counter
 from typing import List
 from wizwalker import XYZ, Orient, Client
 from wizwalker.memory.memory_objects.camera_controller import CameraController
-from src.teleport_math import calculate_yaw, calculate_pitch, calc_multiplerPointOn3DLine, rotate_point
+from src.teleport_math import calculate_yaw, calculate_pitch
 from src.sprinty_client import SprintyClient
 
 

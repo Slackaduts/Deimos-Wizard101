@@ -41,7 +41,7 @@ class Quester():
             title = await title_text_path.maybe_text()
         except:
             title = ""
-            
+
         return title
 
     async def read_popup(self, p: Client) -> str:
@@ -68,7 +68,7 @@ class Quester():
             mob_pos = await mob.location()
             if math.dist(mob_pos, position) < safe_distance:
                 return False
-        
+
         return True
 
     async def get_zone_chunks(self) -> list[XYZ]:
@@ -76,7 +76,7 @@ class Quester():
         nav_data = await wad.get_file("zone.nav")
         vertices, _ = parse_nav_data(nav_data)
 
-        full = calc_chunks(vertices, entity_distance=1500)
+        full = calc_chunks(vertices)
         return full
 
     async def get_collect_quest_object_name(self) -> str:
@@ -395,20 +395,20 @@ class Quester():
                 if piece in d_location:
                     self.d_location = d_location
                     return d_location
-                
+
     async def new_world_doors(self, client: Client) -> bool:
         if "Streamportal" in await self.read_spiral_door_title(client):
             location = await self.find_quest_zone_area_name(client, streamportal_locations)
             await new_portals_cycle(client, location)
             return True
-            
+
         elif "Nanavator" in await self.read_spiral_door_title(client):
             location = await self.find_quest_zone_area_name(client, nanavator_locations)
             await new_portals_cycle(client, location)
             return True
-        
+
         return False
-            
+
     async def handle_spiral_navigation(self):
         if await self.new_world_doors(self.current_leader_client):
             for c in self.clients:
@@ -418,10 +418,10 @@ class Quester():
         else:
             # Handles spiral door navigation
             await spiral_door_with_quest(self.current_leader_client)
-            
+
             await asyncio.sleep(1)
             leader_world = (await self.current_leader_client.zone_name()).split('/', 1)[0]
-            
+
             # Follower clients use separate spiral door navigation than leader (since they may not have the same quest)
             for c in self.clients:
                 if c.process_id != self.current_leader_pid:
@@ -655,8 +655,7 @@ class Quester():
         chunk_cords = await self.get_zone_chunks()  # list of cords that load in chunk
         for points in chunk_cords:  # loops through the points
             points = XYZ(points.x, points.y, points.z - 550)  # sets cord to underground to avoid pull / detection
-            await client.teleport(points, move_after=False, wait_on_inuse=True)  # teleports under the area
-            await client.teleport(points, wait_on_inuse=True)  # updates cords in wizard101 server
+            await client.teleport(points)  # teleports under the area
 
             entities = await self.client.get_base_entity_list()  # gets the entity list of the map
             for e in entities:
@@ -664,7 +663,7 @@ class Quester():
                     object_template = await e.object_template()  # gets entity template
                     display_name_code = await object_template.display_name()  # gets display name code
                     display_name = await self.client.cache_handler.get_langcode_name(display_name_code)  # uses display name code to get display name text
-                    
+
                     match = fuzz.token_sort_ratio(display_name.lower(), quest_item_list.lower())  # fuzzywuzzy check if display name matches quest item.
                     print(display_name + ' : ' + str(match))
 
@@ -900,7 +899,7 @@ class Quester():
                 # leader client collided and got sent back
                 if distance < 20:
                     logger.debug('client ' + proxy_leader_client.title + ' collided on initial teleport')
-                    await navmap_tp_leader_quest(client=proxy_leader_client, xyz=leader_client_objective_xyz, leader_client=self.current_leader_client)
+                    await navmap_tp(client=proxy_leader_client, xyz=leader_client_objective_xyz, leader_client=self.current_leader_client)
 
                 await asyncio.sleep(1.0)
                 while await proxy_leader_client.is_loading():
@@ -913,7 +912,7 @@ class Quester():
                 if await proxy_leader_client.zone_name() != zone_before_teleport or detected_dungeon:
                     logger.debug('leader zone changed or interactible reached - syncing all clients')
                     try:
-                        await asyncio.gather(*[navmap_tp_leader_quest(client=c, xyz=leader_client_objective_xyz, leader_client=self.current_leader_client) for c in followup_teleport_clients])
+                        await asyncio.gather(*[navmap_tp(client=c, xyz=leader_client_objective_xyz, leader_client=self.current_leader_client) for c in followup_teleport_clients])
                     except:
                         print(traceback.print_exc())
 
@@ -942,7 +941,7 @@ class Quester():
             # if we aren't doing a mob / boss fight, we have no need to stagger teleports
             # furthermore staggered teleports can break certain quests in dungeons for certain clients
             else:
-                await asyncio.gather(*[navmap_tp_leader_quest(p, leader_client_objective_xyz, leader_client=self.current_leader_client) for p in self.clients])
+                await asyncio.gather(*[navmap_tp(p, leader_client_objective_xyz, leader_client=self.current_leader_client) for p in self.clients])
 
     async def handle_normal_quests(self, follower_clients: list[Client], questing_friend_tp: bool):
         # Handles chest reroll menu, will always cancel
@@ -983,7 +982,7 @@ class Quester():
                         await asyncio.gather(*[p.send_key(Keycode.X, 0.1) for p in self.clients])
                         logger.debug('Talking to NPC')
                         await self.handle_npc_talking_quests(self.current_leader_client, self.clients)
-                        
+
                     elif 'magic raft' in msg or 'to ride' in msg or 'to teleport' in msg:
                         await self.current_leader_client.send_key(Keycode.X, 0.1)
                         await asyncio.sleep(1.0)

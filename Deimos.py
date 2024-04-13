@@ -110,7 +110,7 @@ def read_config(config_name : str):
 	use_potions = parser.getboolean('settings', 'use_potions', fallback=True)
 	rpc_status = parser.getboolean('settings', 'rich_presence', fallback=True)
 	drop_status = parser.getboolean('settings', 'drop_logging', fallback=True)
-	anti_afk_status = parser.getboolean('settings', 'use_anti_afk', fallback=True) 
+	anti_afk_status = parser.getboolean('settings', 'use_anti_afk', fallback=True)
 
 
 	# Hotkeys
@@ -245,7 +245,7 @@ tp_task: asyncio.Task = None
 speed_task: asyncio.Task = None
 pet_task: asyncio.Task = None
 
-bot_task: asyncio.Task = None 
+bot_task: asyncio.Task = None
 flythrough_task: asyncio.Task = None
 
 default_config = "any<trap & inc_damage>[potent] @ enemy | any<trap & inc_damage & aoe>[potent] | any<blade & out_damage>[sharp] @ self | any<blade & out_damage & aoe>[sharp] | any<global> | any<aura & out_damage> | any<shadow> | any<damage & aoe>[epic] | any<damage>[epic] @ enemy"
@@ -738,12 +738,12 @@ async def main():
 	# 	if side_quest_status is not None:
 	# 		if side_quest_status:
 	# 			logger.debug('Disabling side quests.')
-	# 			gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Side QuestsStatus', 'Disabled')))		
+	# 			gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Side QuestsStatus', 'Disabled')))
 
 	# 		else:
 	# 			logger.debug('Enabling side quests.')
 	# 			gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Side QuestsStatus', 'Enabled')))
-			
+
 	# 		side_quest_status = not side_quest_status
 	# 	else:
 	# 		logger.debug('This config variable has not yet been initialized, enabling the option now.')
@@ -994,7 +994,6 @@ async def main():
 	async def is_duel_circle_joinable(p: Client):
 		sprinter = SprintyClient(p)
 		await asyncio.sleep(7)
-		just_entered_combat = False
 
 		distance, duel_circle_xyz = await nearest_duel_circle_distance_and_xyz(sprinter)
 		# if after 7 seconds we are not in a battle position, we either teleported while invincible or teleported to a non-joinable fight
@@ -1027,8 +1026,6 @@ async def main():
 					other_clients.append(c)
 
 			safe_distance = 620
-			just_left_combat = False
-			just_entered_combat = False
 			while True:
 				await asyncio.sleep(.5)
 
@@ -1185,7 +1182,7 @@ async def main():
 		# anti AFK implementation on a per client basis.
 		if not anti_afk_status:
 			return
-		
+
 		async def async_anti_afk(client: Client):
 			# await client.root_window.debug_print_ui_tree()
 			# print(await client.body.position())
@@ -1198,8 +1195,7 @@ async def main():
 					await asyncio.sleep(350)
 					client_xyz_2 = await client.body.position()
 					distance_moved = calc_Distance(client_xyz, client_xyz_2)
-					if distance_moved < 5.0 and not await client.in_battle() and not client.feeding_pet_status and not client.entity_detect_combat_status:
-
+					if distance_moved < 5.0 and not await client.in_battle() and not client.feeding_pet_status and not client.entity_detect_combat_status and not sigil_status:
 						logger.debug(f"Client {client.title} - AFK client detected, moving slightly.")
 						await client.send_key(key=Keycode.A)
 						await asyncio.sleep(0.1)
@@ -1437,7 +1433,7 @@ async def main():
 							# 	else:
 							# 		logger.debug(f'Setting Auto Pet World to {com.data[1]}')
 							# 		assign_pet_level(com.data[1])
-										
+
 
 							case deimosgui.GUICommandType.SetCamPosition:
 								if foreground_client:
@@ -1584,7 +1580,7 @@ async def main():
 
 								await toggle_combat_hotkey(False)
 								await toggle_combat_hotkey(False)
-									
+
 
 							case deimosgui.GUICommandType.SetScale:
 								desired_scale = param_input(com.data, 1.0)
@@ -1751,7 +1747,7 @@ async def main():
 			try:
 				banlistcontents = requests.get(f"https://raw.githubusercontent.com/{tool_author}/{tool_name.lower()}-bans/main/{tool_name}Bans.txt").content.decode()
 				banlist = set([x.split(" ")[0].strip() for x in banlistcontents.splitlines()])
-				
+
 				handle = discsdk.connect()
 				discsdk.send(handle, shake)
 				resp = discsdk.recv(handle)
@@ -1936,7 +1932,7 @@ async def main():
 		zone_check_loop_task = asyncio.create_task(zone_check_loop())
 		anti_afk_questing_loop_task = asyncio.create_task(anti_afk_questing_loop())
 		ban_watcher_task = asyncio.create_task(ban_watcher())
-		
+
 		# while True:
 		# await asyncio.wait([foreground_client_switching_task, speed_switching_task, combat_loop_task, assign_foreground_clients_task, dialogue_loop_task, anti_afk_loop_task, sigil_loop_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task])
 		done, _ = await asyncio.wait([
@@ -1957,7 +1953,7 @@ async def main():
 		for t in done:
 			if t.done() and t.exception() != None:
 				exc = t.exception()
-				logger.exception(exc) 
+				logger.exception(exc)
 				raise exc
 
 	finally:
