@@ -5,9 +5,7 @@ import math
 import struct
 from io import BytesIO
 from typing import Tuple, Union
-from src.utils import is_free, get_quest_name, is_visible_by_path, get_popup_title
-from src.paths import npc_range_path
-from enum import auto, IntEnum
+from src.utils import is_free
 from copy import copy
 
 type_format_dict = {
@@ -236,13 +234,13 @@ async def navmap_tp(client: Client, xyz: XYZ = None, leader_client: Client = Non
 
     max_depth = 3
     queue = [[closest_vertex]]
-    visited = set()
+    relevant = set()
     while len(queue) > 0:
         path = queue.pop()
         v = path[-1]
-        visited.add(v)
+        relevant.add(v)
         for neighbor in get_neighbors(v, vertices, edges):
-            if neighbor in visited or len(path) + 1 > max_depth:
+            if neighbor in relevant or len(path) + 1 > max_depth:
                 continue
             new_path = list(path)
             new_path.append(neighbor)
@@ -250,11 +248,11 @@ async def navmap_tp(client: Client, xyz: XYZ = None, leader_client: Client = Non
 
     # average position of the vertices
     avg_xyz = XYZ(0, 0, 0)
-    for v in visited:
+    for v in relevant:
         avg_xyz.x += v.x
         avg_xyz.y += v.y
         avg_xyz.z += v.z
-    avg_xyz = XYZ(avg_xyz.x / len(visited), avg_xyz.y / len(visited), avg_xyz.z / len(visited))
+    avg_xyz = XYZ(avg_xyz.x / len(relevant), avg_xyz.y / len(relevant), avg_xyz.z / len(relevant))
     # vector from average xyz to target
     av = XYZ(target_xyz.x - avg_xyz.x, target_xyz.y - avg_xyz.y, avg_xyz.z - target_xyz.z)
     # midpoint of line from average point to target
