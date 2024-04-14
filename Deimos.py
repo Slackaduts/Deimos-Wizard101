@@ -919,7 +919,7 @@ async def main():
 							await client.send_key(key=Keycode.ESC)
 						else:
 							await client.send_key(key=Keycode.SPACEBAR)
-				await asyncio.sleep(0.1)
+				await asyncio.sleep(0.3)
 
 		await asyncio.gather(*[async_dialogue(p) for p in walker.clients])
 
@@ -929,7 +929,7 @@ async def main():
 		async def async_questing(client: Client):
 			quester = Quester(client)
 			while True:
-				await asyncio.sleep(0.5)
+				await asyncio.sleep(0.05)
 				await quester.step()
 		await asyncio.gather(*[async_questing(p) for p in walker.clients])
 

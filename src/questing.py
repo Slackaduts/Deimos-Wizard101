@@ -30,6 +30,7 @@ class Quester:
     def __init__(self, client: Client):
         self.client = client
         self.current_context: Optional[QuestCtx] = None
+        self.last_block_time = time.time() - 3.0
 
     async def _create_context(self):
         logger.debug("refreshing quest context")
@@ -75,10 +76,14 @@ class Quester:
         if not popup_window or not await popup_window.is_visible():
             return
         await self.client.send_key(Keycode.X, 0.1)
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(2.0)
 
     async def _step_impl(self, ctx: Optional[QuestCtx] = None):
         if await self._is_blocked():
+            self.last_block_time = time.time()
+            await asyncio.sleep(0.5)
+            return
+        if time.time() - self.last_block_time < 5.0:
             return
 
         if ctx is not None:
