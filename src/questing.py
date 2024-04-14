@@ -12,6 +12,11 @@ from src.utils import *
 from src.paths import quest_name_path, npc_range_path
 
 
+class QuestKind(Enum):
+    collect = auto()
+    unknown = auto()
+
+
 class TeleportResult(Enum):
     same_zone = auto()
     new_zone = auto()
@@ -26,11 +31,39 @@ class QuestCtx:
         self.quest_xyz: Optional[XYZ] = None
 
 
+class TimedBarrier:
+    def __init__(self, cooldown = 5.0):
+        self._tickets: list[int] = []
+        self._next_id = 0
+        self._cooldown_start = time.time()
+        self._cooldown = cooldown
+
+    def fetch(self) -> int:
+        result = self._next_id
+        self._next_id += 1
+        self._tickets.append(result)
+        return result
+
+    def submit(self, ticket: int):
+        self._tickets.remove(ticket)
+        if len(self._tickets) == 0:
+            self._cooldown_start = time.time()
+
+    def block_cooldown(self):
+        self._cooldown_start = time.time()
+
+    def is_blocked(self):
+        return len(self._tickets) == 0 and time.time() - self._cooldown_start < self._cooldown
+
+    def is_free(self):
+        return not self.is_blocked()
+
+
 class Quester:
     def __init__(self, client: Client):
         self.client = client
         self.current_context: Optional[QuestCtx] = None
-        self.last_block_time = time.time() - 3.0
+        self.barrier = TimedBarrier()
 
     async def _create_context(self):
         logger.debug("refreshing quest context")
@@ -40,6 +73,14 @@ class Quester:
         ctx.clean_text = self.clean_quest_text(ctx.full_text)
         ctx.quest_xyz = await self.client.quest_position.position()
         self.current_context = ctx
+
+    def identify_quest_kind(self, quest_text: str) -> QuestKind:
+        ## Attempts to identify a quest kind, returns unknown if it is unable to do so.
+        if quest_text.startswith("collect"):
+            return QuestKind.collect
+        logger.error(f"Unable to identify a special quest kind for quest: `{quest_text}`\nUsing fallback method.")
+        return QuestKind.unknown
+
 
     def clean_quest_text(self, quest_text: str) -> str:
         ## Cleans quest text for use in other functions with uniform structure.
@@ -81,9 +122,10 @@ class Quester:
     async def _step_impl(self, ctx: Optional[QuestCtx] = None):
         if await self._is_blocked():
             self.last_block_time = time.time()
+            self.barrier.block_cooldown()
             await asyncio.sleep(0.5)
             return
-        if time.time() - self.last_block_time < 5.0:
+        if self.barrier.is_blocked():
             return
 
         if ctx is not None:
