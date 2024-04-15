@@ -3,7 +3,7 @@ from typing import Optional
 
 
 class TimedBarrier:
-    def __init__(self, cooldown = 5.0):
+    def __init__(self, cooldown: float = 5.0):
         self._tickets: list[int] = []
         self._next_id = 0
         self._cooldown_start = time.time()
@@ -15,7 +15,7 @@ class TimedBarrier:
         self._tickets.append(result)
         return result
 
-    def submit(self, ticket: int, skip_cooldown=False):
+    def submit(self, ticket: int, skip_cooldown: bool = False):
         self._tickets.remove(ticket)
         if not skip_cooldown:
             # For tasks that are unambiguously done. Another task may still add cooldown.
