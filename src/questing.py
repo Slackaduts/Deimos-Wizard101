@@ -105,8 +105,6 @@ class Quester:
             return (await w.name()).startswith("wndQuestInfo")
         # TODO: Handle multiple pages. For this we can rely on the empty slots not having any children
         for child in await quest_list_window.get_windows_with_predicate(_pred):
-            #if not await child.maybe_checked():
-            #    continue # Only the active quest is checked
             qinfo_window = await get_window_from_path(child, ["questInfoWindow", "wndQuestInfo"])
             if not qinfo_window:
                 # empty slot
