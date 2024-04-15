@@ -36,6 +36,7 @@ decline_quest_path = ['WorldView', 'wndDialogMain', 'btnLeft']
 dialog_text_path = ['WorldView', 'wndDialogMain', 'txtArea', 'txtMessage']
 
 # Quest Objective Path
+quester_helper_hud_path = ["WorldView", "windowHUD", "QuestHelperHud"]
 quest_name_path = ["WorldView", "windowHUD", "QuestHelperHud", "ElementWindow", "", "txtGoalName"]
 
 # NPC Range Popup Paths

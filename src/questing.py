@@ -25,6 +25,10 @@ class TeleportResult(Enum):
     same_zone = auto()
     new_zone = auto()
 
+class BotStepResult(Enum):
+    step = auto()
+    loop = auto()
+
 
 class QuestCtx:
     ## The new leader mechanism. Multiple clients may share one quest context so they perform the same actions together.
@@ -38,18 +42,22 @@ class QuestCtx:
 
 
 class BotCtx:
-    def __init__(self, client: Client, bot: QuestBot):
+    def __init__(self, client: Client, bot: QuestBot, quester: "Quester"):
         self.client = client
         self.bot = bot
+        self.quester = quester
         self.line_idx = 0
         self.code_lines = [x.strip() for x in self.bot.get_code().splitlines() if len(x.strip()) > 0]
 
-    async def step(self):
+    async def step(self) -> BotStepResult:
+        result = BotStepResult.step
         instruction_line = self.code_lines[self.line_idx]
         self.line_idx += 1
         if self.line_idx >= len(self.code_lines):
             self.line_idx = 0
-        await parse_command([self.client], instruction_line)
+            result = BotStepResult.loop
+        await parse_command([self.client], instruction_line, quest_tp_impl=self.quester._start_ctx_tp)
+        return result
 
 class Quester:
     def __init__(self, client: Client, bot_manager: QuestBotManager):
@@ -67,17 +75,20 @@ class Quester:
         logger.debug("Refreshing quest context")
         ctx = QuestCtx()
         ctx.owner = self.client
-        ctx.full_name = await self.fetch_quest_name()
-        ctx.clean_name = self.clean_quest_text(ctx.full_name)
         ctx.full_text = await self.fetch_quest_text()
         ctx.clean_text = self.clean_quest_text(ctx.full_text)
+        ctx.full_name = await self.fetch_quest_name()
+        ctx.clean_name = self.clean_quest_text(ctx.full_name)
+        if self.prev_context is None or self.prev_context.clean_name != ctx.clean_name or self.prev_context.clean_text != ctx.clean_text:
+            logger.debug(f'Quest: "{ctx.full_name}"')
+            logger.debug(f'Goal: "{self.strip_quest_text(ctx.full_text)}"')
         ctx.quest_xyz = await self.client.quest_position.position()
         self.prev_context = self.current_context if self.current_context is not None else ctx
         self.current_context = ctx
 
     def _create_bot_context(self, bot: QuestBotInfo):
         logger.debug(f'Loading a bot for: "{bot.quest_name}" - "{bot.goal_name}"')
-        ctx = BotCtx(self.client, bot.load_bot())
+        ctx = BotCtx(self.client, bot.load_bot(), self)
         self.current_bot = ctx
 
     def identify_quest_kind(self, quest_text: str) -> QuestKind:
@@ -87,38 +98,28 @@ class Quester:
         logger.error(f"Unable to identify a special quest kind for quest: `{quest_text}`\nUsing fallback method.")
         return QuestKind.unknown
 
+    def strip_quest_text(self, quest_text: str) -> str:
+        clean_text = regex.sub(r"<\/?([^>])+>|\([^)]*\)", "", quest_text).strip()
+        return clean_text
+
     def clean_quest_text(self, quest_text: str) -> str:
         ## Cleans quest text for use in other functions with uniform structure.
-        clean_text = regex.sub(r"<\/?([^>])+>", "", quest_text)
-        lower_clean = clean_text.lower().strip()
-        return lower_clean
+        # this regex strips out xml tags and text in parentehes
+        return self.strip_quest_text(quest_text).lower()
 
     async def fetch_quest_name(self) -> str:
-        # TODO: Come up with a way to read this without quest book using wizwalker.
-        if not await is_visible_by_path(self.client, quest_buttons_parent_path):
-            await self.client.send_key(Keycode.Q, 0.1)
-            await wait_for_visible_by_path(self.client, quest_buttons_parent_path)
-            await asyncio.sleep(3)
-        quest_list_window = await get_window_from_path(self.client.root_window, quest_buttons_parent_path)
-
-        async def _pred(w: Window):
-            return (await w.name()).startswith("wndQuestInfo")
-        # TODO: Handle multiple pages. For this we can rely on the empty slots not having any children
-        for child in await quest_list_window.get_windows_with_predicate(_pred):
-            qinfo_window = await get_window_from_path(child, ["questInfoWindow", "wndQuestInfo"])
-            if not qinfo_window:
-                # empty slot
+        character_registry = await self.client.character_registry()
+        current_id = await character_registry.active_quest_id()
+        quest_manager = await self.client.quest_manager()
+        quests = await quest_manager.quest_data()
+        for quest_id, quest_data in quests.items():
+            if quest_id != current_id:
                 continue
-            imgactivequest_window = await qinfo_window.get_child_by_name("imgActiveQuest")
-            if not await imgactivequest_window.is_visible():
-                # we only want the active quest
-                continue
-            txtname_window = await qinfo_window.get_child_by_name("txtName")
-            quest_name = await txtname_window.maybe_text()
-            await self.client.send_key(Keycode.Q, 0.1)
-            return quest_name
-        # TODO: Handle quests where quest helper is not allowed
-        raise RuntimeError("Unable to find an active quest")
+            lang_key = await quest_data.name_lang_key()
+            if lang_key == "Quest Finder":
+                return lang_key
+            return await self.client.cache_handler.get_langcode_name(lang_key)
+        assert False, "Unreachable"
 
     async def fetch_quest_text(self):
         ## Grabs the text instructions of a quest
@@ -133,18 +134,19 @@ class Quester:
         ## Inversion of is_free
         return not await is_free(self.client)
 
-    def _start_ctx_tp(self):
+    def _start_ctx_tp(self, xyz: Optional[XYZ] = None):
         ## Uses the current context to perform a navmap tp
         async def _impl(self: Quester):
             assert self.current_context is not None
             assert self.current_context.quest_xyz is not None
+            quest_xyz = xyz if xyz is not None else self.current_context.quest_xyz
             ticket = self.barrier.fetch()
             if self._teleport_result.filled():
                 raise RuntimeError("Tried teleporting while previous teleport result hasn't been consumed.")
             skip_cooldown = False
             try:
                 starting_zone_name = await self.client.zone_name()
-                await navmap_tp(self.client, xyz=self.current_context.quest_xyz)
+                await navmap_tp(self.client, xyz=quest_xyz)
                 if await self.client.is_loading() or await self.client.zone_name() != starting_zone_name:
                     self._teleport_result.write(TeleportResult.new_zone)
                 else:
@@ -187,11 +189,17 @@ class Quester:
             await self._create_context()
 
         if self.current_bot is not None:
+            if self._teleport_result.filled():
+                self._teleport_result.consume()
+                assert self._teleport_task is not None
+                self._watchdog.unregister(self._teleport_task)
+                self._teleport_task = None
             if self._goal_changed():
                 # the goal changed, so we must unload the bot
                 self.current_bot = None
             else:
-                await self.current_bot.step()
+                if await self.current_bot.step() == BotStepResult.loop:
+                    self.barrier.block_cooldown()
                 return
 
         assert self.current_context is not None and self.prev_context is not None

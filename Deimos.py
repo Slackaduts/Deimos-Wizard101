@@ -902,7 +902,7 @@ async def main():
 					assert hasattr(client, "quester")
 					client.quester.barrier.submit(current_ticket)
 					current_ticket = None
-				await asyncio.sleep(0.3)
+				await asyncio.sleep(0.1)
 
 		await asyncio.gather(*[async_dialogue(p) for p in walker.clients])
 
