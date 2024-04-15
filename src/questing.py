@@ -10,6 +10,8 @@ import regex
 from src.teleport_math import *
 from src.utils import *
 from src.paths import quest_name_path, npc_range_path
+from src.task_watcher import TaskWatcher
+from src.barriers import *
 
 
 class QuestKind(Enum):
@@ -31,39 +33,14 @@ class QuestCtx:
         self.quest_xyz: Optional[XYZ] = None
 
 
-class TimedBarrier:
-    def __init__(self, cooldown = 5.0):
-        self._tickets: list[int] = []
-        self._next_id = 0
-        self._cooldown_start = time.time()
-        self._cooldown = cooldown
-
-    def fetch(self) -> int:
-        result = self._next_id
-        self._next_id += 1
-        self._tickets.append(result)
-        return result
-
-    def submit(self, ticket: int):
-        self._tickets.remove(ticket)
-        if len(self._tickets) == 0:
-            self._cooldown_start = time.time()
-
-    def block_cooldown(self):
-        self._cooldown_start = time.time()
-
-    def is_blocked(self):
-        return len(self._tickets) == 0 and time.time() - self._cooldown_start < self._cooldown
-
-    def is_free(self):
-        return not self.is_blocked()
-
-
 class Quester:
     def __init__(self, client: Client):
         self.client = client
         self.current_context: Optional[QuestCtx] = None
         self.barrier = TimedBarrier()
+        self._teleport_result = SingleWriteValue[TeleportResult]()
+        self._watchdog = TaskWatcher()
+        self._teleport_task: Optional[asyncio.Task] = None
 
     async def _create_context(self):
         logger.debug("refreshing quest context")
@@ -101,16 +78,23 @@ class Quester:
         ## Inversion of is_free
         return not await is_free(self.client)
 
-    async def _ctx_tp(self) -> TeleportResult:
+    def _start_ctx_tp(self):
         ## Uses the current context to perform a navmap tp
-        assert self.current_context is not None
-        assert self.current_context.quest_xyz is not None
-        starting_zone_name = await self.client.zone_name()
-        await navmap_tp(self.client, xyz=self.current_context.quest_xyz)
-        await asyncio.sleep(2.0)
-        if await self.client.is_loading() or await self.client.zone_name() != starting_zone_name:
-            return TeleportResult.new_zone
-        return TeleportResult.same_zone
+        async def _impl(self: Quester):
+            assert self.current_context is not None
+            assert self.current_context.quest_xyz is not None
+            ticket = self.barrier.fetch()
+            if self._teleport_result.filled():
+                raise RuntimeError("Tried teleporting while previous teleport result hasn't been consumed.")
+            try:
+                starting_zone_name = await self.client.zone_name()
+                await navmap_tp(self.client, xyz=self.current_context.quest_xyz)
+                if await self.client.is_loading() or await self.client.zone_name() != starting_zone_name:
+                    self._teleport_result.write(TeleportResult.new_zone)
+                self._teleport_result.write(TeleportResult.same_zone)
+            finally:
+                self.barrier.submit(ticket)
+        self._teleport_task = self._watchdog.new_task(_impl(self))
 
     async def _handle_interact(self):
         popup_window = await get_window_from_path(self.client.root_window, popup_title_path)
@@ -141,21 +125,28 @@ class Quester:
             # There is no context and we didn't receive one. Make a new one
             await self._create_context()
 
-        # Very generic handler. Should be able to deal with around 90% of scenarios, other 10% are done by bots.
-        if await self._ctx_tp() == TeleportResult.same_zone:
-            logger.debug("Zone did not change.")
-            try:
-                await asyncio.wait_for(wait_for_visible_by_path(self.client, npc_range_path), timeout=5.0)
-            except TimeoutError:
-                # either gonna be combat or a very slow zone transfer, do nothing.
-                pass
+        if self._teleport_result.filled():
+            # a teleport has happened and it has information for us
+            tp_result = self._teleport_result.consume()
+            assert self._teleport_task is not None
+            self._watchdog.unregister(self._teleport_task)
+            if tp_result == TeleportResult.same_zone:
+                logger.debug("Zone did not change.")
+                try:
+                    await asyncio.wait_for(wait_for_visible_by_path(self.client, npc_range_path), timeout=5.0)
+                except TimeoutError:
+                    # either gonna be combat or a very slow zone transfer, do nothing.
+                    pass
+                else:
+                    # it did not time out, there should be an interactible here.
+                    logger.debug("Dialog found after tp.")
+                    await self._handle_interact()
             else:
-                # it did not time out, there should be an interactible here.
-                logger.debug("Dialog found after tp.")
-                await self._handle_interact()
+                # Zone transfer. Empty branch here for documentation purposes.
+                logger.debug("Detected a zone change.")
         else:
-            # Zone transfer. Empty branch here for documentation purposes.
-            logger.debug("Detected a zone change.")
+            # begin a teleport, forces a block and waits for ticket
+            self._start_ctx_tp()
 
 
     async def step(self, ctx: Optional[QuestCtx] = None):
