@@ -86,14 +86,17 @@ class Quester:
             ticket = self.barrier.fetch()
             if self._teleport_result.filled():
                 raise RuntimeError("Tried teleporting while previous teleport result hasn't been consumed.")
+            skip_cooldown = False
             try:
                 starting_zone_name = await self.client.zone_name()
                 await navmap_tp(self.client, xyz=self.current_context.quest_xyz)
                 if await self.client.is_loading() or await self.client.zone_name() != starting_zone_name:
                     self._teleport_result.write(TeleportResult.new_zone)
-                self._teleport_result.write(TeleportResult.same_zone)
+                else:
+                    self._teleport_result.write(TeleportResult.same_zone)
+                    skip_cooldown = True
             finally:
-                self.barrier.submit(ticket)
+                self.barrier.submit(ticket, skip_cooldown=skip_cooldown)
         self._teleport_task = self._watchdog.new_task(_impl(self))
 
     async def _handle_interact(self):
@@ -101,11 +104,10 @@ class Quester:
         if not popup_window or not await popup_window.is_visible():
             return
         await self.client.send_key(Keycode.X, 0.1)
-        await asyncio.sleep(2.0)
+        self.barrier.block_cooldown()
 
     async def _step_impl(self, ctx: Optional[QuestCtx] = None):
         if await self._is_blocked():
-            self.last_block_time = time.time()
             self.barrier.block_cooldown()
             await asyncio.sleep(0.5)
             return
@@ -130,6 +132,7 @@ class Quester:
             tp_result = self._teleport_result.consume()
             assert self._teleport_task is not None
             self._watchdog.unregister(self._teleport_task)
+            self._teleport_task = None
             if tp_result == TeleportResult.same_zone:
                 logger.debug("Zone did not change.")
                 try:

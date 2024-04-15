@@ -15,16 +15,17 @@ class TimedBarrier:
         self._tickets.append(result)
         return result
 
-    def submit(self, ticket: int):
+    def submit(self, ticket: int, skip_cooldown=False):
         self._tickets.remove(ticket)
-        if len(self._tickets) == 0:
+        if not skip_cooldown:
+            # For tasks that are unambiguously done. Another task may still add cooldown.
             self._cooldown_start = time.time()
 
     def block_cooldown(self):
         self._cooldown_start = time.time()
 
     def is_blocked(self):
-        return len(self._tickets) == 0 and time.time() - self._cooldown_start < self._cooldown
+        return len(self._tickets) > 0 or time.time() - self._cooldown_start < self._cooldown
 
     def is_free(self):
         return not self.is_blocked()

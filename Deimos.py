@@ -594,7 +594,7 @@ async def main():
 		if not freecam_status:
 			if dialogue_task is not None and not dialogue_task.cancelled():
 				side_quest_status = False
-				watchdog.register(dialogue_task)
+				watchdog.unregister(dialogue_task)
 				dialogue_task = None
 				logger.debug(f'{toggle_auto_dialogue_key} key pressed, disabling auto dialogue.')
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('DialogueStatus', 'Disabled')))
@@ -894,10 +894,11 @@ async def main():
 							await client.send_key(key=Keycode.ESC)
 						else:
 							await client.send_key(key=Keycode.SPACEBAR)
-					else:
-						if current_ticket is not None:
-							assert hasattr(client, "quester")
-							client.quester.barrer.submit(current_ticket)
+				# TODO: This can lead to a deadlock if dialogue_loop is cancelled
+				if current_ticket is not None:
+					assert hasattr(client, "quester")
+					client.quester.barrier.submit(current_ticket)
+					current_ticket = None
 				await asyncio.sleep(0.3)
 
 		await asyncio.gather(*[async_dialogue(p) for p in walker.clients])
@@ -1767,13 +1768,17 @@ async def main():
 		async def async_zone_check(client: Client):
 			while True:
 				await asyncio.sleep(0.25)
-				zone_name = await client.zone_name()
-				if zone_name and '/' in zone_name:
-					split_zone_name = zone_name.split('/')
+				try:
+					zone_name = await client.zone_name()
+				except wizwalker.errors.MemoryReadError:
+					logger.debug("Failed to read the current zone name. Please report a bug if this happens often.")
+				else:
+					if zone_name and '/' in zone_name:
+						split_zone_name = zone_name.split('/')
 
-					if any([i in split_zone_name[0] for i in zone_blacklist]):
-						logger.critical(f'Client {client.title} entered area with known anticheat, killing {tool_name}.')
-						await kill_tool(False)
+						if any([i in split_zone_name[0] for i in zone_blacklist]):
+							logger.critical(f'Client {client.title} entered area with known anticheat, killing {tool_name}.')
+							await kill_tool(False)
 
 		await asyncio.gather(*[async_zone_check(p) for p in walker.clients])
 
