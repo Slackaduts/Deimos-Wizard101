@@ -117,6 +117,7 @@ class Quester:
                 continue
             txtname_window = await qinfo_window.get_child_by_name("txtName")
             quest_name = await txtname_window.maybe_text()
+            await self.client.send_key(Keycode.Q, 0.1)
             return quest_name
         # TODO: Handle quests where quest helper is not allowed
         raise RuntimeError("Unable to find an active quest")
@@ -202,6 +203,7 @@ class Quester:
             if self.current_bot is None:
                 bot_info = self.bot_manager.fetch_bot_info(self.current_context.clean_name, self.current_context.clean_text)
                 self._create_bot_context(bot_info)
+                self.barrier.block_cooldown()
                 return
 
         if self._teleport_result.filled():
