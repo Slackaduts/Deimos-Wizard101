@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import Path
 import traceback
 import requests
 import queue
@@ -23,6 +24,7 @@ import statistics
 import re
 import pypresence
 from pypresence import AioPresence
+from src.questbots import QuestBotManager
 from src.command_parser import execute_flythrough, parse_command
 from src.auto_pet import nomnom
 from src.drop_logger import logging_loop
@@ -238,6 +240,7 @@ sigil_leader_pid: int = None
 questing_leader_pid: int = None
 
 
+quest_bot_manager = QuestBotManager(Path("questbots"))
 watchdog = TaskWatcher()
 
 questing_task: asyncio.Task = None
@@ -907,7 +910,7 @@ async def main():
 	async def questing_loop():
 		# Auto questing on a per client basis.
 		async def async_questing(client: Client):
-			quester = client.quester if hasattr(client, "quester") else Quester(client)
+			quester = client.quester if hasattr(client, "quester") else Quester(client, bot_manager=quest_bot_manager)
 			client.quester = quester
 			while True:
 				await asyncio.sleep(0.05)
