@@ -37,4 +37,4 @@ class TaskWatcher:
                 await asyncio.sleep(0.01)
         if self._running:
             return
-        return asyncio.create_task(__loop())
+        return asyncio.create_task(__loop(self))
