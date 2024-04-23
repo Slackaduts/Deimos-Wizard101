@@ -1588,9 +1588,6 @@ async def main():
 
 							case deimosgui.GUICommandType.KillBot:
 								if bot_task is not None and not bot_task.cancelled():
-									# if 'matched_drop_logging_loop_task' in globals() and not matched_drop_logging_loop_task.cancelled():
-									# 	matched_drop_logging_loop_task.cancel()
-									# await asyncio.sleep(0)
 									bot_task.cancel()
 									logger.debug('Bot Killed')
 									bot_task = None
