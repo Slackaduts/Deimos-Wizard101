@@ -113,7 +113,7 @@ async def logging_loop(client: Client, toSearch=[]):
             
             elif new_drops:
                 # If custom drop logging is provided
-                if toSearch:
+                if len(toSearch) > 0:
                      new_drops_set = set(new_drops)
                      toSearch_set = set(toSearch)
                      new_drops_set = new_drops_set.intersection(toSearch_set)
