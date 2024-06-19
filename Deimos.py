@@ -1768,7 +1768,7 @@ async def main():
 
 
 	async def zone_check_loop():
-		zone_blacklist = ['WizardCity-TreasureTower-WC_TT', 'Raids', 'Battlegrounds']
+		zone_blacklist = ['WizardCity-TreasureTower-WC_TT', 'Raids', 'Battlegrounds', 'WizardCity-WC_Duel_Arena_New', 'WizardCity-KT_Duel_Arena', 'WizardCity-MB_Arena', 'WizardCity-MS_Arena', 'WizardCity-DS_Arena', 'WizardCity-CL_Arena', 'WizardCity-ZF_Arena', 'WizardCity-AV_Arena', 'WizardCity-AZ_Arena', 'WizardCity-PA_Arena', 'WizardCity-GH_Arena', 'WizardCity-LM_Arena']
 
 		async def async_zone_check(client: Client):
 			while True:
