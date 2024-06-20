@@ -110,7 +110,7 @@ async def wait_for_coro(coro: Coroutine, wait_for_not: bool = False, interval: f
 #     return result
 
 
-async def parse_command(clients: List[Client], command_str: str):
+async def parse_command(clients: List[Client], command_str: str, quest_tp_impl = None):
     # Executes a single raw command string for the bot creator.
     all_clients = clients.copy()
     command_str = command_str.replace(', ', ',')
@@ -157,18 +157,22 @@ async def parse_command(clients: List[Client], command_str: str):
 
             if 'mass' not in client_str:
                 # Allows for specific clients to be used via a : seperator. Example: p1:p3:p4   , except p2
-                if ':' in client_str:
-                    split_clients = client_str.split(':')
-                    provided_clients = [client_from_titles(all_clients.copy(), title) for title in split_clients]
-                else:
-                    provided_clients = [client_from_titles(all_clients, client_str)]
-
-                if is_numeric(client_str[1]):
-                    if exclude:
-                        # Sets client list equal to all clients except specified ones
-                        clients = [client for client in all_clients.copy() if client not in provided_clients]
+                try:
+                    if ':' in client_str:
+                        split_clients = client_str.split(':')
+                        provided_clients = [client_from_titles(all_clients.copy(), title) for title in split_clients]
                     else:
-                        clients = provided_clients
+                        provided_clients = [client_from_titles(all_clients, client_str)]
+
+                    if is_numeric(client_str[1]):
+                        if exclude:
+                            # Sets client list equal to all clients except specified ones
+                            clients = [client for client in all_clients.copy() if client not in provided_clients]
+                        else:
+                            clients = provided_clients
+                except IndexError:
+                    clients = all_clients
+                    split_command = [""] + split_command
 
             match split_command[1].lower():
 
@@ -196,7 +200,10 @@ async def parse_command(clients: List[Client], command_str: str):
                                     client_xyzs, _ = await parse_location(split_command, client=client)
                                     xyzs.append(client_xyzs[0])
 
-                                await asyncio.gather(*[client.teleport(xyz) for client, xyz in zip(clients, xyzs)])
+                                if quest_tp_impl is not None:
+                                    quest_tp_impl(xyzs[0])
+                                else:
+                                    await asyncio.gather(*[client.teleport(xyz) for client, xyz in zip(clients, xyzs)])
 
                 case 'walkto' | 'goto':
                     # Walks in a straight line to a given XYZ (Z agnostic)
@@ -289,7 +296,7 @@ async def parse_command(clients: List[Client], command_str: str):
                     async def command_parser_click_mouse_handler(client):
                         async with client.mouse_handler:
                             await client.mouse_handler.click(int(split_command[2], int(split_command[3])))
-                        
+
                     await asyncio.gather(*[command_parser_click_mouse_handler(client) for client in clients])
 
 
@@ -312,15 +319,15 @@ async def parse_command(clients: List[Client], command_str: str):
                         # uses fish icon
                         async def teleport_to_friend_from_list_fish_icon_mouse_handler(client):
                             await teleport_to_friend_from_list(client, icon_list=2, icon_index=0)
-                            
+
                         await asyncio.gather(*[teleport_to_friend_from_list_fish_icon_mouse_handler(client) for client in clients])
-                        
+
                     else:
                         # uses provided wizard name
                         async def teleport_to_friend_from_list_wizard_name_mouse_handler(client):
                             async with client.mouse_handler:
                                 await teleport_to_friend_from_list(client, name=' '.join(split_command[2:]))
-                            
+
                         await asyncio.gather(*[teleport_to_friend_from_list_wizard_name_mouse_handler(client) for client in clients])
 
 
@@ -376,7 +383,7 @@ async def parse_camera_command(camera: CameraController, command_str: str):
     split_command = tokenize(command_str)
 
     if not split_command:
-        return 
+        return
 
     origin_pos = await camera.position()
     origin_orientation = await camera.orientation()

@@ -189,27 +189,41 @@ async def navmap_tp(client: Client, xyz: XYZ = None, leader_client: Client = Non
     if not await is_free(client):
         return
 
+    client_obj = client.client_object
+    async def fetch_obj_pos():
+        body = await client_obj.actor_body()
+        assert body is not None
+        return await body.position()
+
     starting_zone = await client.zone_name() # for loading the correct wad and to walk to target as a last resort
-    starting_xyz = await client.body.position()
+    starting_xyz = await fetch_obj_pos()
     target_xyz = xyz if xyz is not None else await client.quest_position.position()
 
-    def check_sigma(a: XYZ, b: XYZ, sigma=5.0):
+    def check_sigma(a: XYZ, b: XYZ, sigma=1.0):
         # check if a distance is more or less zero
         return calc_Distance(a, b) <= sigma
 
     async def check_success():
         # Check if the teleport succeeded. For this we want to have moved away from the starting position.
-        await asyncio.sleep(0.7) # make sure we got useful information
-        return not check_sigma(await client.body.position(), starting_xyz)
+        # TODO: Come up with something for this.
+        await client.send_key(Keycode.A, 0.1)
+        await client.send_key(Keycode.D, 0.1)
+        await asyncio.sleep(1.5) # make sure we got useful information
+        return not check_sigma(await fetch_obj_pos(), starting_xyz, 20.0)
 
     async def finished_tp():
         return await check_success() or not await is_free(client) or await client.zone_name() != starting_zone
+
+    async def should_walk():
+        return await is_free(client) and await client.zone_name() == starting_zone
 
     if check_sigma(starting_xyz, target_xyz):
         return # save some work
 
     await client.teleport(target_xyz)
     if await finished_tp():
+        if await should_walk():
+            await client.goto(target_xyz.x, target_xyz.y)
         return # trivial tp, no point using a more complex method if this one works
 
     try:
@@ -259,12 +273,12 @@ async def navmap_tp(client: Client, xyz: XYZ = None, leader_client: Client = Non
     ap2 = XYZ(avg_xyz.x + av.x / 2, avg_xyz.y + av.y / 2, avg_xyz.z + av.z / 2)
     await client.teleport(ap2)
     if await check_success():
-        if await is_free(client) and await client.zone_name() == starting_zone:
+        if await should_walk():
             await client.goto(target_xyz.x, target_xyz.y)
         return
     await client.teleport(avg_xyz) # average point
     if await check_success():
-        if await is_free(client) and await client.zone_name() == starting_zone:
+        if await should_walk():
             await client.goto(target_xyz.x, target_xyz.y)
         return
     await fallback_spiral_tp(client, target_xyz)

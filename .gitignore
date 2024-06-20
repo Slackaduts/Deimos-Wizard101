@@ -2,3 +2,4 @@
 logs/
 Deimos-Testconfig.ini
 venv
+.vscode

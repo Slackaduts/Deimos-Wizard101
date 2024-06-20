@@ -52,12 +52,9 @@ async def is_visible_by_path(client: Client, path: list[str]):
     # checks visibility of a window from the path
     root = client.root_window
     windows = await get_window_from_path(root, path)
-    if windows == False:
+    if not windows:
         return False
-    elif await windows.is_visible():
-        return True
-    else:
-        return False
+    return await windows.is_visible()
 
 
 async def read_control_checkbox_text(checkbox: Window) -> str:
@@ -161,7 +158,7 @@ async def new_portals_cycle( client: Client, location: str):
                 currentPage = pageCount.split('/', 1)[0]
                 maxPage = pageCount.split('/', 1)[1]
                 break
-            
+
         spiralGateName = location
 
         isChildFound = False
@@ -609,7 +606,7 @@ async def safe_wait_for_zone_change(self: Client, name: Optional[str] = None, *,
         if await is_visible_by_path(self, friend_is_busy_and_dungeon_reset_path):
             async with self.mouse_handler:
                 await click_window_by_path(self, friend_is_busy_and_dungeon_reset_path)
-    
+
             raise FriendBusyOrInstanceClosed
 
         if timeout is not None:
@@ -727,7 +724,12 @@ async def logout_and_in(client: Client):
 
 async def is_free(client: Client):
     # Returns True if not in combat, loading screen, or in dialogue.
-    return not any([await client.is_loading(), await client.in_battle(), await is_visible_by_path(client, advance_dialog_path)])
+    return not any([
+        await client.is_loading(),
+        await client.in_battle(),
+        await is_visible_by_path(client, dialog_main),
+        await is_visible_by_path(client, npc_services_base_path)
+    ])
 
 
 async def get_quest_name(client: Client):
@@ -740,38 +742,6 @@ async def get_quest_name(client: Client):
     quest_objective = quest_objective.replace('<center>', '')
     quest_objective = quest_objective.replace('</center>', '')
     return quest_objective
-
-
-# quest_number - 0-3
-# opens book, selects quest, and then closes book
-async def select_quest_from_questbook(client: Client, quest_book_sort: list[str], quest_number: int):
-
-    while not await is_visible_by_path(client, quest_book_sort):
-        await client.send_key(Keycode.Q)
-        await asyncio.sleep(.5)
-
-    if await is_visible_by_path(client, quest_book_sort):
-        await click_window_by_path(client, quest_book_sort)
-
-    await asyncio.sleep(.5)
-
-    quest_number_path = quest_buttons_parent_path[:]
-    quest_number_path.append('wndQuestInfo' + str(quest_number))
-    quest_number_path.append('questInfoWindow')
-    quest_number_path.append('wndQuestInfo')
-    quest_number_path.append('txtGoal')
-    print(quest_number_path)
-
-    for i in range(5):
-        if await is_visible_by_path(client, quest_number_path):
-            await click_window_by_path(client, quest_number_path)
-        await asyncio.sleep(.1)
-
-    await asyncio.sleep(.5)
-
-    while await is_visible_by_path(client, quest_book_sort):
-        await client.send_key(Keycode.Q)
-        await asyncio.sleep(.5)
 
 
 async def get_popup_title(client: Client) -> str:
@@ -790,26 +760,6 @@ async def get_popup_title(client: Client) -> str:
 
     else:
         return None
-
-
-async def is_popup_title_relevant(client: Client, quest_info: str = None) -> bool:
-    if not quest_info:
-        quest_info = await get_quest_name(client)
-
-    popup_text = await get_window_from_path(client.root_window, popup_title_path)
-    maybe_collect_item = await popup_text.maybe_text()
-    if maybe_collect_item.lower() in str(quest_info).lower():
-        return True
-    return False
-
-
-async def spiral_door_with_quest(client: Client):
-    while await is_visible_by_path(client, spiral_door_teleport_path):
-        await click_window_by_path(client, spiral_door_teleport_path, True)
-        await asyncio.sleep(0.25)
-
-    while await client.is_loading():
-        await asyncio.sleep(0.1)
 
 
 async def sync_camera(client: Client, xyz: XYZ = None, yaw: float = None):
@@ -966,7 +916,7 @@ async def teleport_to_friend_from_list(
 async def check_for_multiple_friends_in_list(client: Client, friend_names: list[str]):
 
     async with client.mouse_handler:
-        
+
         # if some form of friend list or friend popup is already open, close it
         # This fails consistently, even when the friends list is actually open.  Detecting whether the friends list is open is also horrifically inconsistent so just brute force it
         for i in range(5):
@@ -1209,7 +1159,7 @@ async def try_task_coro(coro: Coroutine, clients: List[Client], deactive_mousele
         await asyncio.gather(*[attempt_deactivate_dance_hook(p) for p in clients])
         pass
 
-    except wizwalker.errors.MemoryInvalidated | wizwalker.errors.ExceptionalTimeout:
+    except (wizwalker.errors.MemoryInvalidated, wizwalker.errors.ExceptionalTimeout):
         await try_task_coro(coro, clients, deactive_mouseless)
 
     finally:
@@ -1278,7 +1228,7 @@ async def class_snapshot(instance, recurse: bool = True, current_depth: int = 0,
 
     if current_depth >= max_depth: #If we have reached or exceeded max depth, return an empty dict
         return snapshot_data
-    
+
     if not recurse and current_depth: #If we have any depth and we are not recursing, return an empty dict
         return snapshot_data
 

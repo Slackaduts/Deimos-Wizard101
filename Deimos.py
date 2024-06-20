@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import Path
 import traceback
 import requests
 import queue
@@ -23,6 +24,7 @@ import statistics
 import re
 import pypresence
 from pypresence import AioPresence
+from src.questbots import QuestBotManager
 from src.command_parser import execute_flythrough, parse_command
 from src.auto_pet import nomnom
 from src.drop_logger import logging_loop
@@ -41,11 +43,12 @@ from src import discsdk
 from wizwalker.extensions.wizsprinter.wiz_navigator import toZoneDisplayName, toZone
 from wizwalker.extensions.wizsprinter.sprinty_combat import SprintyCombat
 from src.config_combat import StrCombatConfigProvider, delegate_combat_configs
-from typing import List
+from typing import List, Optional
 
 from src import deimosgui
 from src.deimosgui import GUIKeys
 from src.tokenizer import tokenize
+from src.task_watcher import TaskWatcher
 
 cMessageBox = ctypes.windll.user32.MessageBoxW
 
@@ -236,14 +239,16 @@ hotkeys_blocked = False
 sigil_leader_pid: int = None
 questing_leader_pid: int = None
 
+
+quest_bot_manager = QuestBotManager(Path("questbots"))
+watchdog = TaskWatcher()
+
 questing_task: asyncio.Task = None
 auto_pet_task: asyncio.Task = None
 sigil_task: asyncio.Task = None
 dialogue_task: asyncio.Task = None
 combat_task: asyncio.Task = None
-tp_task: asyncio.Task = None
 speed_task: asyncio.Task = None
-pet_task: asyncio.Task = None
 
 bot_task: asyncio.Task = None
 flythrough_task: asyncio.Task = None
@@ -540,7 +545,7 @@ async def main():
 
 		if not freecam_status:
 			if speed_task is not None and not speed_task.cancelled():
-				speed_task.cancel()
+				watchdog.unregister(speed_task)
 				speed_task = None
 				logger.debug(f'{toggle_speed_key} key pressed, disabling speed multiplier.')
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('SpeedhackStatus', 'Disabled')))
@@ -550,7 +555,7 @@ async def main():
 			else:
 				logger.debug(f'{toggle_speed_key} key pressed, enabling speed multiplier.')
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('SpeedhackStatus', 'Enabled')))
-				speed_task = asyncio.create_task(try_task_coro(speed_switching, walker.clients))
+				speed_task = watchdog.new_task(try_task_coro(speed_switching, walker.clients))
 
 
 	async def friend_teleport_sync_hotkey():
@@ -571,7 +576,7 @@ async def main():
 
 		if not freecam_status:
 			if combat_task is not None and not combat_task.cancelled():
-				combat_task.cancel()
+				watchdog.unregister(combat_task)
 				combat_task = None
 				if debug:
 					logger.debug(f'{toggle_auto_combat_key} key pressed, disabling auto combat.')
@@ -581,7 +586,7 @@ async def main():
 				if debug:
 					logger.debug(f'{toggle_auto_combat_key} key pressed, enabling auto combat.')
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('CombatStatus', 'Enabled')))
-				combat_task = asyncio.create_task(try_task_coro(combat_loop, walker.clients, True))
+				combat_task = watchdog.new_task(try_task_coro(combat_loop, walker.clients, True))
 
 
 	async def toggle_dialogue_hotkey(side_quests: bool = False):
@@ -592,7 +597,7 @@ async def main():
 		if not freecam_status:
 			if dialogue_task is not None and not dialogue_task.cancelled():
 				side_quest_status = False
-				dialogue_task.cancel()
+				watchdog.unregister(dialogue_task)
 				dialogue_task = None
 				logger.debug(f'{toggle_auto_dialogue_key} key pressed, disabling auto dialogue.')
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('DialogueStatus', 'Disabled')))
@@ -604,7 +609,7 @@ async def main():
 					side_quest_log_str += " and auto side quests functionality"
 				logger.debug(f'{toggle_auto_dialogue_key} key pressed, enabling auto dialogue{side_quest_log_str}.')
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('DialogueStatus', 'Enabled')))
-				dialogue_task = asyncio.create_task(try_task_coro(dialogue_loop, walker.clients, True))
+				dialogue_task = watchdog.new_task(try_task_coro(dialogue_loop, walker.clients, True))
 
 
 	async def toggle_dialogue_side_quests_hotkey():
@@ -626,7 +631,7 @@ async def main():
 					p.auto_pet_status = False
 
 			if sigil_task is not None and not sigil_task.cancelled():
-				sigil_task.cancel()
+				watchdog.unregister(sigil_task)
 				sigil_task = None
 				logger.debug(f'{toggle_auto_sigil_key} key pressed, disabling auto sigil.')
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('SigilStatus', 'Disabled')))
@@ -636,14 +641,14 @@ async def main():
 				if questing_task is not None and not questing_task.cancelled():
 					logger.debug(f'{toggle_auto_questing_key} key pressed, disabling auto questing.')
 					gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('QuestingStatus', 'Disabled')))
-					questing_task.cancel()
+					watchdog.unregister(questing_task)
 					for p in walker.clients:
 						p.questing_status = False
 					questing_status = False
 					questing_task = None
 
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('SigilStatus', 'Enabled')))
-				sigil_task = asyncio.create_task(try_task_coro(sigil_loop, walker.clients, True))
+				sigil_task = watchdog.new_task(try_task_coro(sigil_loop, walker.clients, True))
 
 
 
@@ -691,7 +696,7 @@ async def main():
 			if questing_task is not None and not questing_task.cancelled():
 				logger.debug(f'{toggle_auto_questing_key} key pressed, disabling auto questing.')
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('QuestingStatus', 'Disabled')))
-				questing_task.cancel()
+				watchdog.unregister(questing_task)
 				questing_task = None
 
 			else:
@@ -701,7 +706,7 @@ async def main():
 				if sigil_task is not None and not sigil_task.cancelled():
 					logger.debug(f'{toggle_auto_sigil_key} key pressed, disabling auto sigil.')
 					gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('SigilStatus', 'Disabled')))
-					sigil_task.cancel()
+					watchdog.unregister(sigil_task)
 					sigil_task = None
 					for p in walker.clients:
 						p.sigil_status = False
@@ -709,7 +714,7 @@ async def main():
 
 				logger.debug(f'{toggle_auto_questing_key} key pressed, enabling auto questing.')
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('QuestingStatus', 'Enabled')))
-				questing_task = asyncio.create_task(try_task_coro(questing_loop, walker.clients, True))
+				questing_task = watchdog.new_task(try_task_coro(questing_loop, walker.clients, True))
 
 
 	async def toggle_auto_pet_hotkey():
@@ -724,13 +729,13 @@ async def main():
 			if auto_pet_task is not None and not auto_pet_task.cancelled():
 				logger.debug(f'Disabling auto pet.')
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Auto PetStatus', 'Disabled')))
-				auto_pet_task.cancel()
+				watchdog.unregister(auto_pet_task)
 				auto_pet_task = None
 
 			else:
 				logger.debug(f'Enabling auto pet.')
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Auto PetStatus', 'Enabled')))
-				auto_pet_task = asyncio.create_task(try_task_coro(auto_pet_loop, walker.clients, True))
+				auto_pet_task = watchdog.new_task(try_task_coro(auto_pet_loop, walker.clients, True))
 
 	# async def toggle_side_quests():
 	# 	global side_quest_status
@@ -880,15 +885,23 @@ async def main():
 	async def dialogue_loop():
 		# auto advances dialogue for every client, individually and concurrently
 		async def async_dialogue(client: Client):
+			current_ticket: Optional[int] = None
 			while True:
 				if not freecam_status:
 					if await is_visible_by_path(client, advance_dialog_path):
+						if hasattr(client, "quester"):
+							current_ticket = client.quester.barrier.fetch()
 						if await is_visible_by_path(client, decline_quest_path) and not side_quest_status:
 							await client.send_key(key=Keycode.ESC)
 							await asyncio.sleep(0.1)
 							await client.send_key(key=Keycode.ESC)
 						else:
 							await client.send_key(key=Keycode.SPACEBAR)
+				# TODO: This can lead to a deadlock if dialogue_loop is cancelled
+				if current_ticket is not None:
+					assert hasattr(client, "quester")
+					client.quester.barrier.submit(current_ticket)
+					current_ticket = None
 				await asyncio.sleep(0.1)
 
 		await asyncio.gather(*[async_dialogue(p) for p in walker.clients])
@@ -897,24 +910,11 @@ async def main():
 	async def questing_loop():
 		# Auto questing on a per client basis.
 		async def async_questing(client: Client):
-			client.character_level = await client.stats.reference_level()
-
+			quester = client.quester if hasattr(client, "quester") else Quester(client, bot_manager=quest_bot_manager)
+			client.quester = quester
 			while True:
-				await asyncio.sleep(1)
-
-				if client in walker.clients and questing_status:
-					if questing_leader_pid is not None and len(walker.clients) > 1:
-						if client.process_id == questing_leader_pid:
-							# if follow leader is off, quest on all clients, passing through only the leader
-							logger.debug(f'Client {client.title} - Handling questing for all clients.')
-							questing = Quester(client, walker.clients, questing_leader_pid)
-							await questing.auto_quest_leader(questing_friend_tp, gear_switching_in_solo_zones, hitter_client, ignore_pet_level_up, only_play_dance_game)
-					else:
-						# if follow leader is off, quest on all clients, passing through only the leader
-						logger.debug(f'Client {client.title} - Handling questing.')
-						questing = Quester(client, walker.clients, None)
-						await questing.auto_quest(ignore_pet_level_up, only_play_dance_game)
-
+				await asyncio.sleep(0.05)
+				await quester.step()
 		await asyncio.gather(*[async_questing(p) for p in walker.clients])
 
 	async def anti_afk_questing_loop():
@@ -939,12 +939,12 @@ async def main():
 						# restart questing
 						if questing_task is not None and not questing_task.cancelled() and not client_in_solo_zone:
 								logger.debug(f'Questing appears to have halted - restarting.')
-								questing_task.cancel()
+								watchdog.unregister(questing_task)
 								questing_task = None
 								await asyncio.sleep(1.0)
 
 								if questing_task is None:
-									questing_task = asyncio.create_task(try_task_coro(questing_loop, walker.clients, True))
+									questing_task = watchdog.new_task(try_task_coro(questing_loop, walker.clients, True))
 
 
 		await asyncio.gather(*[async_afk_questing(p) for p in walker.clients])
@@ -1187,8 +1187,6 @@ async def main():
 			# await client.root_window.debug_print_ui_tree()
 			# print(await client.body.position())
 			while True:
-				global questing_task
-
 				await asyncio.sleep(0.1)
 				if not freecam_status:
 					client_xyz = await client.body.position()
@@ -1528,11 +1526,11 @@ async def main():
 									await foreground_client.camera_elastic()
 
 								if foreground_client:
-									flythrough_task = asyncio.create_task(_flythrough())
+									flythrough_task = watchdog.new_task(_flythrough())
 
 							case deimosgui.GUICommandType.KillFlythrough:
 								if flythrough_task is not None and not flythrough_task.cancelled():
-									flythrough_task.cancel()
+									watchdog.unregister(flythrough_task)
 									flythrough_task = None
 									await asyncio.sleep(0)
 									await foreground_client.camera_elastic()
@@ -1563,11 +1561,11 @@ async def main():
 
 										await asyncio.sleep(1)
 
-								bot_task = asyncio.create_task(try_task_coro(run_bot, walker.clients, True))
+								bot_task = watchdog.new_task(try_task_coro(run_bot, walker.clients, True))
 
 							case deimosgui.GUICommandType.KillBot:
 								if bot_task is not None and not bot_task.cancelled():
-									bot_task.cancel()
+									watchdog.unregister(bot_task)
 									logger.debug('Bot Killed')
 									bot_task = None
 
@@ -1773,13 +1771,17 @@ async def main():
 		async def async_zone_check(client: Client):
 			while True:
 				await asyncio.sleep(0.25)
-				zone_name = await client.zone_name()
-				if zone_name and '/' in zone_name:
-					split_zone_name = zone_name.split('/')
+				try:
+					zone_name = await client.zone_name()
+				except wizwalker.errors.MemoryReadError:
+					logger.debug("Failed to read the current zone name. Please report a bug if this happens often.")
+				else:
+					if zone_name and '/' in zone_name:
+						split_zone_name = zone_name.split('/')
 
-					if any([i in split_zone_name[0] for i in zone_blacklist]):
-						logger.critical(f'Client {client.title} entered area with known anticheat, killing {tool_name}.')
-						await kill_tool(False)
+						if any([i in split_zone_name[0] for i in zone_blacklist]):
+							logger.critical(f'Client {client.title} entered area with known anticheat, killing {tool_name}.')
+							await kill_tool(False)
 
 		await asyncio.gather(*[async_zone_check(p) for p in walker.clients])
 
@@ -1932,35 +1934,40 @@ async def main():
 		zone_check_loop_task = asyncio.create_task(zone_check_loop())
 		anti_afk_questing_loop_task = asyncio.create_task(anti_afk_questing_loop())
 		ban_watcher_task = asyncio.create_task(ban_watcher())
+		watchdog_task = watchdog.start_loop()
 
 		# while True:
 		# await asyncio.wait([foreground_client_switching_task, speed_switching_task, combat_loop_task, assign_foreground_clients_task, dialogue_loop_task, anti_afk_loop_task, sigil_loop_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task])
-		done, _ = await asyncio.wait([
-			ban_watcher_task,
-			foreground_client_switching_task,
-			assign_foreground_clients_task,
-			anti_afk_loop_task,
-			in_combat_loop_task,
-			questing_leader_combat_detection_task,
-			gui_task,
-			potion_usage_loop_task,
-			rpc_loop_task,
-			drop_logging_loop_task,
-			zone_check_loop_task,
-			anti_afk_questing_loop_task
-			], return_when=asyncio.FIRST_EXCEPTION)
+		done, pending = await asyncio.wait(
+			[
+				ban_watcher_task,
+				foreground_client_switching_task,
+				assign_foreground_clients_task,
+				anti_afk_loop_task,
+				in_combat_loop_task,
+				questing_leader_combat_detection_task,
+				gui_task,
+				potion_usage_loop_task,
+				rpc_loop_task,
+				drop_logging_loop_task,
+				zone_check_loop_task,
+				anti_afk_questing_loop_task,
+				watchdog_task,
+			],
+			return_when=asyncio.FIRST_EXCEPTION
+		)
 
 		for t in done:
-			if t.done() and t.exception() != None:
-				exc = t.exception()
-				logger.exception(exc)
-				raise exc
+			cur_exc = t.exception()
+			if isinstance(cur_exc, Exception) and not isinstance(cur_exc, asyncio.CancelledError):
+				logger.exception(cur_exc)
+				raise cur_exc
 
 	finally:
-		tasks: List[asyncio.Task] = [ban_watcher_task, foreground_client_switching_task, combat_task, assign_foreground_clients_task, dialogue_task, anti_afk_loop_task, sigil_task, questing_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task, anti_afk_questing_loop_task]
-		for task in tasks:
-			if task is not None and not task.cancelled():
-				task.cancel()
+		if "pending" in locals():
+			for task in pending:
+				if task is not None and not task.cancelled():
+					task.cancel()
 
 		await tool_finish()
 

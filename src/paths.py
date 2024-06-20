@@ -26,12 +26,17 @@ play_button_path = ['WorldView', 'mainWindow', 'btnPlay']
 # Dungeon Entry Paths
 dungeon_warning_path = ['MessageBoxModalWindow', 'messageBoxBG', 'messageBoxLayout', 'AdjustmentWindow', 'Layout', 'centerButton']
 
+# Npc service paths
+npc_services_base_path = ["WorldView", "NPCServicesWin"]
+
 # Dialogue Paths
+dialog_main = ['WorldView', 'wndDialogMain']
 advance_dialog_path = ['WorldView', 'wndDialogMain', 'btnRight']
 decline_quest_path = ['WorldView', 'wndDialogMain', 'btnLeft']
 dialog_text_path = ['WorldView', 'wndDialogMain', 'txtArea', 'txtMessage']
 
 # Quest Objective Path
+quester_helper_hud_path = ["WorldView", "windowHUD", "QuestHelperHud"]
 quest_name_path = ["WorldView", "windowHUD", "QuestHelperHud", "ElementWindow", "", "txtGoalName"]
 
 # NPC Range Popup Paths
