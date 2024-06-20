@@ -1,9 +1,10 @@
 fuzzywuzzy>=0.18.0
 loguru>=0.5.3
 pyperclip>=1.8.2
-git+https://github.com/andor-pierdelacabeza/PySimpleGUI-4-foss.git@foss
 requests>=2.27.1
-git+https://github.com/wizwalker/wizwalker.git@development
+git+https://github.com/Slackaduts/wizwalker.git@development
 git+https://github.com/Slackaduts/wizsprinter@combat-expansion
 pypresence>=4.2.1
 pywin32>=304
+pyyaml>=6.0.1
+./wheels/PySimpleGUI-4.60.5-py3-none-any.whl
