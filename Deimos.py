@@ -50,7 +50,7 @@ from src.tokenizer import tokenize
 cMessageBox = ctypes.windll.user32.MessageBoxW
 
 
-tool_version = '3.8.2'
+tool_version = '3.8.3'
 tool_name = 'Deimos'
 tool_author = 'Slackaduts'
 repo_name = tool_name + '-Wizard101'
@@ -1768,11 +1768,34 @@ async def main():
 
 
 	async def zone_check_loop():
-		zone_blacklist = ['WizardCity-TreasureTower-WC_TT', 'Raids', 'Battlegrounds', 'WizardCity/WC_Duel_Arena_New', 'WizardCity/KT_Duel_Arena', 'WizardCity/MB_Arena', 'WizardCity/MS_Arena', 'WizardCity/DS_Arena', 'WizardCity/CL_Arena', 'WizardCity/ZF_Arena', 'WizardCity/AV_Arena', 'WizardCity/AZ_Arena', 'WizardCity/PA_Arena', 'WizardCity/GH_Arena', 'WizardCity/LM_Arena']
+		zone_blacklist = [
+			'WizardCity-TreasureTower-WC_TT', 
+			'Raids', 
+			'Battlegrounds'
+		]
+
+		explicit_zone_blacklist = [
+			'WizardCity/WC_Duel_Arena_New', 
+			'WizardCity/KT_Duel_Arena', 
+			'WizardCity/MB_Arena', 
+			'WizardCity/MS_Arena', 
+			'WizardCity/DS_Arena', 
+			'WizardCity/CL_Arena', 
+			'WizardCity/ZF_Arena', 
+			'WizardCity/AV_Arena', 
+			'WizardCity/AZ_Arena', 
+			'WizardCity/PA_Arena', 
+			'WizardCity/GH_Arena', 
+			'WizardCity/LM_Arena'
+		]
+
 		async def async_zone_check(client: Client):
 			while True:
 				await asyncio.sleep(0.25)
 				zone_name = await client.zone_name()
+				if zone_name in explicit_zone_blacklist:
+					logger.critical(f'Client {client.title} entered area with known anticheat, killing {tool_name}.')
+					await kill_tool(False)
 				if zone_name and '/' in zone_name:
 					split_zone_name = zone_name.split('/')
 
