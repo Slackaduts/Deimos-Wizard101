@@ -180,9 +180,64 @@ async def load_wad(path: str):
     if path is not None:
         return Wad.from_game_data(path.replace("/", "-"))
 
+async def teleport_move_adjust(client: Client, xyz : XYZ, delay : float = 0.7):
+    # teleports the client to a given XYZ, and jitters afterward to actually update the position
+    if await is_free(client):
+        # print("teleport started")
+        try:
+            await client.teleport(xyz, wait_on_inuse= True, purge_on_after_unuser_fixer = True)
+        except:
+            pass
+        # print("teleport completed")
+        await asyncio.sleep(delay)
+        await client.send_key(Keycode.A, 0.05)
+        await client.send_key(Keycode.D, 0.05)
+    else:
+        print("not free didn't teleport_move_adjust")
+        await asyncio.sleep(0.5)
 
+def rotate_point(origin_xyz : XYZ, point_xyz : XYZ, theta):
+    # rotates point_xyz about origin_xyz, by theta degrees counterclockwise. This doesn't take the Z into account, so don't use this for anything that needs the Z to rotate.
+    radians = math.radians(theta)
+    cos = math.cos(radians)
+    sin = math.sin(radians)
+    y_diff = point_xyz.y - origin_xyz.y
+    x_diff = point_xyz.x - origin_xyz.x
+    x = cos * x_diff - sin * y_diff + origin_xyz.x
+    y = sin * x_diff + cos * y_diff + origin_xyz.y
+    return XYZ(x=x, y=y, z=point_xyz.z)
+
+async def auto_adjusting_teleport(client: Client, quest_position: XYZ = None):
+    # DEPRECATED: Uses brute forcing XYZs in an alternating spiral pattern to find usable coords to port to. VERY slow.
+    original_zone_name = await client.zone_name()
+    original_position = await client.body.position()
+    if not quest_position:
+        quest_position = await client.quest_position.position()
+
+    adjusted_position = quest_position
+    mod_amount = 50
+    current_angle = 0
+    if await is_free(client):
+        await teleport_move_adjust(client, quest_position)
+    else:
+        return
+    while are_xyzs_within_threshold((await client.body.position()), original_position, 50) and await client.zone_name() == original_zone_name:
+        if not await is_free(client):
+                return
+        elif not are_xyzs_within_threshold(original_position, quest_position, 1):
+            adjusted_position = calc_PointOn3DLine(original_position, quest_position, mod_amount)
+            rotated_position = rotate_point(quest_position, adjusted_position, current_angle)
+            if await is_free(client):
+                await teleport_move_adjust(client, rotated_position)
+            else:
+                return
+            mod_amount += 100
+            current_angle += 92
+        else:
+            break
+            
 async def fallback_spiral_tp(client: Client, xyz: XYZ):
-    raise NotImplementedError()
+    await auto_adjusting_teleport(client, xyz)
 
 async def navmap_tp(client: Client, xyz: XYZ = None, leader_client: Client = None):
     # TODO: What is leader_client meant to be for?
@@ -199,7 +254,7 @@ async def navmap_tp(client: Client, xyz: XYZ = None, leader_client: Client = Non
 
     async def check_success():
         # Check if the teleport succeeded. For this we want to have moved away from the starting position.
-        await asyncio.sleep(0.7) # make sure we got useful information
+        await asyncio.sleep(1) # make sure we got useful information
         return not check_sigma(await client.body.position(), starting_xyz)
 
     async def finished_tp():
