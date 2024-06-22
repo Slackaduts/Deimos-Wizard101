@@ -195,7 +195,17 @@ async def teleport_move_adjust(client: Client, xyz : XYZ, delay : float = 0.7):
     else:
         print("not free didn't teleport_move_adjust")
         await asyncio.sleep(0.5)
-    
+    def rotate_point(origin_xyz : XYZ, point_xyz : XYZ, theta):
+        # rotates point_xyz about origin_xyz, by theta degrees counterclockwise. This doesn't take the Z into account, so don't use this for anything that needs the Z to rotate.
+        radians = math.radians(theta)
+        cos = math.cos(radians)
+        sin = math.sin(radians)
+        y_diff = point_xyz.y - origin_xyz.y
+        x_diff = point_xyz.x - origin_xyz.x
+        x = cos * x_diff - sin * y_diff + origin_xyz.x
+        y = sin * x_diff + cos * y_diff + origin_xyz.y
+        return XYZ(x=x, y=y, z=point_xyz.z)
+
 async def auto_adjusting_teleport(client: Client, quest_position: XYZ = None):
     # DEPRECATED: Uses brute forcing XYZs in an alternating spiral pattern to find usable coords to port to. VERY slow.
     original_zone_name = await client.zone_name()
