@@ -180,6 +180,22 @@ async def load_wad(path: str):
     if path is not None:
         return Wad.from_game_data(path.replace("/", "-"))
 
+async def teleport_move_adjust(client: Client, xyz : XYZ, delay : float = 0.7):
+    # teleports the client to a given XYZ, and jitters afterward to actually update the position
+    if await is_free(client):
+        # print("teleport started")
+        try:
+            await client.teleport(xyz, wait_on_inuse= True, purge_on_after_unuser_fixer = True)
+        except:
+            pass
+        # print("teleport completed")
+        await asyncio.sleep(delay)
+        await client.send_key(Keycode.A, 0.05)
+        await client.send_key(Keycode.D, 0.05)
+    else:
+        print("not free didn't teleport_move_adjust")
+        await asyncio.sleep(0.5)
+    
 async def auto_adjusting_teleport(client: Client, quest_position: XYZ = None):
     # DEPRECATED: Uses brute forcing XYZs in an alternating spiral pattern to find usable coords to port to. VERY slow.
     original_zone_name = await client.zone_name()
