@@ -1,10 +1,10 @@
 fuzzywuzzy>=0.18.0
-loguru>=0.5.3
-pyperclip>=1.8.2
-requests>=2.27.1
+loguru>=0.7.2
+pyperclip>=1.9.0
+requests>=2.32.3
 git+https://github.com/wizwalker/wizwalker.git@development
-git+https://github.com/Slackaduts/wizsprinter@combat-expansion
-pypresence>=4.2.1
-pywin32>=304
+git+https://github.com/Slackaduts/wizsprinter@lib-update
+pypresence>=4.3.0
+pywin32>=306
 pyyaml>=6.0.1
 ./wheels/PySimpleGUI-4.60.5-py3-none-any.whl
