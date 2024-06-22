@@ -195,6 +195,7 @@ async def teleport_move_adjust(client: Client, xyz : XYZ, delay : float = 0.7):
     else:
         print("not free didn't teleport_move_adjust")
         await asyncio.sleep(0.5)
+
 def rotate_point(origin_xyz : XYZ, point_xyz : XYZ, theta):
     # rotates point_xyz about origin_xyz, by theta degrees counterclockwise. This doesn't take the Z into account, so don't use this for anything that needs the Z to rotate.
     radians = math.radians(theta)
