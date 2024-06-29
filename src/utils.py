@@ -419,10 +419,12 @@ async def navigate_to_commons_from_ravenwood(client: Client):
 
 
 async def navigate_to_potions(client: Client):
+    # make sure client is not loading
+    while await client.is_loading():
+      await asyncio.sleep(0.1)
     # Teleport to hilda brewer
-    Hilda_XYZ = XYZ(-4398.70654296875, 1016.1954345703125, 229.00079345703125)
-    await client.teleport(Hilda_XYZ)
-    # await client.send_key(Keycode.S, 0.1)
+    hilda = XYZ(-4398.70654296875, 1016.1954345703125, 229.00079345703125)
+    await client.teleport(hilda)
 
 
 async def buy_potions(client: Client, recall: bool = True, original_zone=None):
