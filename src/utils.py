@@ -419,9 +419,10 @@ async def navigate_to_commons_from_ravenwood(client: Client):
 
 
 async def navigate_to_potions(client: Client):
-    # Teleport to hilda brewer
-    Hilda_XYZ = XYZ(-4398.70654296875, 1016.1954345703125, 229.00079345703125)
-    await client.teleport(Hilda_XYZ)
+   # Teleport to hilda brewer
+    await asyncio.sleep(1)
+    await client.teleport(XYZ(x=-4398.70654296875, y=1016.1954345703125, z=229.00079345703125))
+    logger.debug(f'Client {client.title} - Teleported to Hilda')
     # await client.send_key(Keycode.S, 0.1)
 
 
