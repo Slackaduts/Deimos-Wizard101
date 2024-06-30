@@ -15,7 +15,7 @@ from wizwalker.extensions.scripting import teleport_to_friend_from_list
 from src.sprinty_client import SprintyClient
 from src.utils import *
 from src.paths import *
-from fuzzywuzzy import fuzz
+from thefuzz import fuzz
 
 
 class Quester():
@@ -664,7 +664,7 @@ class Quester():
                     display_name_code = await object_template.display_name()  # gets display name code
                     display_name = await self.client.cache_handler.get_langcode_name(display_name_code)  # uses display name code to get display name text
 
-                    match = fuzz.token_sort_ratio(display_name.lower(), quest_item_list.lower())  # fuzzywuzzy check if display name matches quest item.
+                    match = fuzz.token_sort_ratio(display_name.lower(), quest_item_list.lower())  # thefuzz check if display name matches quest item.
                     print(display_name + ' : ' + str(match))
 
                     if match > 80:  # if strings match greater than 80 it means that it's most likely the item
