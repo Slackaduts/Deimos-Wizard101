@@ -488,6 +488,7 @@ async def main():
 
 		for p in walker.clients:
 			p.title = 'Wizard101'
+			# Uncomment when freecam is fixed
 			if await p.game_client.is_freecam():
 				await p.camera_elastic()
 
@@ -851,6 +852,7 @@ async def main():
 			# 		client.in_combat = False
 			# 	await asyncio.sleep(0.1)
 			while True:
+				# print(await client.game_client.is_freecam())
 				if not freecam_status:
 					client.in_combat = await client.in_battle()
 				await asyncio.sleep(0.1)
