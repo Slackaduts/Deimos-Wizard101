@@ -42,7 +42,6 @@ from wizwalker.extensions.wizsprinter.wiz_navigator import toZoneDisplayName, to
 from wizwalker.extensions.wizsprinter.sprinty_combat import SprintyCombat
 from src.config_combat import StrCombatConfigProvider, delegate_combat_configs
 from typing import List
-
 from src import deimosgui
 from src.deimosgui import GUIKeys
 from src.tokenizer import tokenize
@@ -1222,6 +1221,8 @@ async def main():
 			gui_thread.daemon = True
 			gui_thread.start()
 
+			drop_logging_loop_task = asyncio.create_task(drop_logging_loop())
+
 			enemy_stats = []
 
 			while True:
@@ -1539,12 +1540,28 @@ async def main():
 									await asyncio.sleep(0)
 									await foreground_client.camera_elastic()
 
+							case deimosgui.GUICommandType.Match_Drop_List:
+								match_drop_list = com.data
+								if match_drop_list:
+									logger.debug(f'Logging These Drops Only: {match_drop_list}')
+								else:
+									logger.debug(f'Logging All Drops.')
+
+							case deimosgui.GUICommandType.Match_Drop_CheckBox:
+								match_drop_check = com.data
+								if match_drop_check == True:
+									drop_logging_loop_task.cancel()
+									await asyncio.sleep(0)
+									drop_logging_loop_task = asyncio.create_task(drop_logging_loop(match_drop_list))
+								else:
+									drop_logging_loop_task.cancel()
+									await asyncio.sleep(0)
+									drop_logging_loop_task = asyncio.create_task(drop_logging_loop(match_drop_list))
+
 							case deimosgui.GUICommandType.ExecuteBot:
 								command_data: str = com.data
-
 								async def run_bot():
 									logger.debug('Started Bot')
-
 									split_commands = command_data.split('\n')
 									web_command_strs = ['webpage', 'pull', 'embed']
 									new_commands = []
@@ -1763,11 +1780,9 @@ async def main():
 
 			time.sleep(5 * 60)
 
-
-	async def drop_logging_loop():
-		# Auto potion usage on a per client basis.
-		await asyncio.gather(*[logging_loop(p) for p in walker.clients])
-
+	async def drop_logging_loop(toSearch=[]):
+		# Run default drop logger
+		await asyncio.gather(*[logging_loop(p, toSearch) for p in walker.clients])
 
 	async def zone_check_loop():
 		zone_blacklist = [
@@ -1952,7 +1967,6 @@ async def main():
 		questing_leader_combat_detection_task = asyncio.create_task(entity_detect_combat_loop())
 		potion_usage_loop_task = asyncio.create_task(potion_usage_loop())
 		rpc_loop_task = asyncio.create_task(rpc_loop())
-		drop_logging_loop_task = asyncio.create_task(drop_logging_loop())
 		zone_check_loop_task = asyncio.create_task(zone_check_loop())
 		anti_afk_questing_loop_task = asyncio.create_task(anti_afk_questing_loop())
 		ban_watcher_task = asyncio.create_task(ban_watcher())
@@ -1969,7 +1983,6 @@ async def main():
 			gui_task,
 			potion_usage_loop_task,
 			rpc_loop_task,
-			drop_logging_loop_task,
 			zone_check_loop_task,
 			anti_afk_questing_loop_task
 			], return_when=asyncio.FIRST_EXCEPTION)
@@ -1981,7 +1994,7 @@ async def main():
 				raise exc
 
 	finally:
-		tasks: List[asyncio.Task] = [ban_watcher_task, foreground_client_switching_task, combat_task, assign_foreground_clients_task, dialogue_task, anti_afk_loop_task, sigil_task, questing_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, drop_logging_loop_task, zone_check_loop_task, anti_afk_questing_loop_task]
+		tasks: List[asyncio.Task] = [ban_watcher_task, foreground_client_switching_task, combat_task, assign_foreground_clients_task, dialogue_task, anti_afk_loop_task, sigil_task, questing_task, in_combat_loop_task, questing_leader_combat_detection_task, gui_task, potion_usage_loop_task, rpc_loop_task, zone_check_loop_task, anti_afk_questing_loop_task]
 		for task in tasks:
 			if task is not None and not task.cancelled():
 				task.cancel()
