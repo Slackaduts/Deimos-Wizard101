@@ -1,5 +1,6 @@
 from wizwalker import Client, MemoryReadError, XYZ
 from wizwalker.memory import DynamicClientObject
+from wizwalker.constants import Primitive
 from typing import *
 
 
@@ -83,7 +84,7 @@ class SprintyClient():
 				behaviors = await e.inactive_behaviors()
 				for b in behaviors:
 					if (await b.read_type_name()) == "NPCBehavior":
-						return await b.read_value_from_offset(288, "bool")
+						return await b.read_value_from_offset(288, Primitive.bool)
 				return False
 			except (ValueError, MemoryReadError):
 				return False
