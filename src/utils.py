@@ -442,33 +442,22 @@ async def buy_potions(client: Client, recall: bool = True, original_zone=None):
                 await asyncio.sleep(0.25)
 
                 await click_window_by_path(client, potion_buy_path, True)
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.25)
 
                 while await is_visible_by_path(client, potion_shop_base_path):
                     await click_window_by_path(client, potion_exit_path, True)
                     await asyncio.sleep(0.125)
 
                 current_potion_count = await client.stats.potion_charge()
-                
-                await asyncio.sleep(1)
-                if await is_potion_needed(client):
-                    await use_potion(client)
-                await asyncio.sleep(1)
-                
-                while not await is_visible_by_path(client, potion_shop_base_path):
-                    await client.send_key(Keycode.X, 0.1)
-                    await asyncio.sleep(0.8)
+                await asyncio.sleep(.5)
 
-                await click_window_by_path(client, potion_fill_all_path, True)
-                await asyncio.sleep(1)
+            if i == 0:
+                if await client.stats.potion_charge() >= 1.0:
+                    original_potion_count = await client.stats.potion_charge()
 
-                await click_window_by_path(client, potion_buy_path, True)
-                await asyncio.sleep(1)
-                while await is_visible_by_path(client, potion_shop_base_path):
-                    await click_window_by_path(client, potion_exit_path, True)
-                    await asyncio.sleep(1)
-                    
-                current_potion_count = await client.stats.potion_charge()
+                    logger.debug(f'Client {client.title} - Using potion')
+                    await click_window_by_path(client, potion_usage_path, True)
+                    await asyncio.sleep(3.0)
 
     except:
         print(traceback.print_exc())
