@@ -1,10 +1,12 @@
 import asyncio
 
-#from wizwalker import Client
+from wizwalker import Client, XYZ
 
-from tokenizer import *
-from parser import *
-from ir import *
+from .tokenizer import *
+from .parser import *
+from .ir import *
+
+from loguru import logger
 
 
 class VMError(Exception):
@@ -12,7 +14,7 @@ class VMError(Exception):
 
 
 class VM:
-    def __init__(self, clients: list):
+    def __init__(self, clients: list[Client]):
         self.clients = clients
         self.program: list[Instruction] = []
         self.running = False
@@ -46,8 +48,31 @@ class VM:
                 return await self._eval_command_expression(expression)
             case NumberExpression():
                 return expression.number
+            case XYZExpression():
+                return XYZ(
+                    await self.eval(expression.x), # type: ignore
+                    await self.eval(expression.y), # type: ignore
+                    await self.eval(expression.z), # type: ignore
+                )
             case _:
                 raise VMError(f"Unimplemented expression type: {expression}")
+
+    async def exec_deimos_call(self, instruction: Instruction):
+        assert instruction.kind == InstructionKind.deimos_call
+        assert type(instruction.data) == list
+        match instruction.data[1]:
+            case "teleport":
+                args = instruction.data[2]
+                assert type(args) == list
+                assert type(args[0]) == TeleportKind
+                match args[0]:
+                    case TeleportKind.position:
+                        pos: XYZ = await self.eval(args[1]) # type: ignore
+                        await self.clients[0].teleport(pos)  
+                    case _:
+                        raise VMError(f"Unimplemented teleport kind: {instruction}")
+            case _:
+                raise VMError(f"Unimplemented deimos call: {instruction}")
 
     async def step(self):
         if not self.running:
@@ -56,6 +81,7 @@ class VM:
         match instruction.kind:
             case InstructionKind.kill:
                 self.running = False
+                logger.debug("Bot Killed")
             case InstructionKind.sleep:
                 assert instruction.data != None
                 time = await self.eval(instruction.data)
@@ -107,9 +133,13 @@ class VM:
                         case _:
                             raise VMError(f"Unable to log: {x}")
                 s = " ".join(strs)
-                print(s)
+                logger.debug(s)
                 self._ip += 1
             case InstructionKind.label:
+                self._ip += 1
+
+            case InstructionKind.deimos_call:
+                await self.exec_deimos_call(instruction)
                 self._ip += 1
             case _:
                 raise VMError(f"Unimplemented instruction: {instruction}")
@@ -120,12 +150,3 @@ class VM:
         self.running = True
         while self.running:
             await self.step()
-
-
-async def main():
-    import pathlib
-    vm = VM([])
-    vm.load_from_text(pathlib.Path("testbot.txt").read_text())
-    await vm.run()
-
-asyncio.run(main())

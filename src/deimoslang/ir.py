@@ -1,8 +1,8 @@
 from enum import Enum, auto
 from typing import Any
 
-from tokenizer import *
-from parser import *
+from .tokenizer import *
+from .parser import *
 
 
 class CompilerError(Exception):

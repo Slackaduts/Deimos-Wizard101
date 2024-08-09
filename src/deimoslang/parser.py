@@ -1,17 +1,7 @@
 from enum import Enum, auto
 from typing import Any
 
-from tokenizer import Token, TokenKind
-
-
-class XYZ:
-    def __init__(self, x: float = 0.0, y: float = 0.0, z: float = 0.0) -> None:
-        self.x = x
-        self.y = y
-        self.z = z
-    
-    def __repr__(self) -> str:
-        return f"XYZ({self.x}, {self.y}, {self.z})"
+from .tokenizer import Token, TokenKind
 
 
 class ParserError(Exception):
@@ -128,6 +118,15 @@ class CommandExpression(Expression):
     
     def __repr__(self) -> str:
         return f"ComE({self.command})"
+    
+class XYZExpression(Expression):
+    def __init__(self, x: Expression, y: Expression, z: Expression):
+        self.x = x
+        self.y = y
+        self.z = z
+
+    def __repr__(self) -> str:
+        return f"XYZE({self.x}, {self.y}, {self.z})"
 
 
 class Stmt:
@@ -249,7 +248,7 @@ class Parser:
                     expected_toks = [TokenKind.player_num]
                     self.i += 1
                 case TokenKind.player_num:
-                    result.player_nums.append(self.tokens[self.i].literal)
+                    result.player_nums.append(int(self.tokens[self.i].literal))
                     expected_toks = [TokenKind.colon]
                     self.i += 1
                 case TokenKind.colon:
@@ -268,7 +267,7 @@ class Parser:
         tok = self.expect_consume_any([TokenKind.identifier, TokenKind.command_kill])
         return KeyExpression(tok.literal)
 
-    def parse_xyz(self) -> XYZ:
+    def parse_xyz(self) -> XYZExpression:
         self.expect_consume(TokenKind.keyword_xyz)
         vals = []
         valid_toks = [TokenKind.paren_open, TokenKind.paren_close, TokenKind.comma, TokenKind.number, TokenKind.minus]
@@ -298,7 +297,7 @@ class Parser:
             raise ParserError("Encountered unclosed XYZ")
         if len(vals) != 3:
             raise ParserError(f"Encountered invalid XYZ: {vals}")
-        return XYZ(*vals)
+        return XYZExpression(*vals)
     
     def parse_completion_optional(self) -> bool:
         if self.i < len(self.tokens) and self.tokens[self.i].kind == TokenKind.keyword_completion:

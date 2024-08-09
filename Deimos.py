@@ -46,6 +46,7 @@ from typing import List
 from src import deimosgui
 from src.deimosgui import GUIKeys
 from src.tokenizer import tokenize
+from src.deimoslang import vm
 
 cMessageBox = ctypes.windll.user32.MessageBoxW
 
@@ -1560,9 +1561,15 @@ async def main():
 											new_commands.append(command_str)
 
 									while True:
+										code = "\n".join(new_commands)
+										v = vm.VM(walker.clients)
+										v.load_from_text(code)
+										v.running = True
 										for command_str in new_commands:
-											await parse_command(walker.clients, command_str)
-
+											try:
+												await v.step()
+											except Exception as e:
+												logger.error(e)
 										await asyncio.sleep(1)
 
 								bot_task = asyncio.create_task(try_task_coro(run_bot, walker.clients, True))
