@@ -52,6 +52,7 @@ class TokenKind(Enum):
     # command expressions
     command_expr_window_visible = auto()
     command_expr_in_zone = auto()
+    command_expr_same_zone = auto()
 
     # for flythroughs
     command_webpage = auto()
@@ -260,6 +261,8 @@ def tokenize_line(l: str) -> list[str]:
                                 result.append(Token(TokenKind.command_expr_window_visible, full))
                             case "inzone":
                                 result.append(Token(TokenKind.command_expr_in_zone, full))
+                            case "samezone":
+                                result.append(Token(TokenKind.command_expr_same_zone, full))
 
                             # flythrough commands
                             case "webpage" | "pull" | "embed":

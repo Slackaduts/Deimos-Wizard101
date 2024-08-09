@@ -9,9 +9,6 @@ class CompilerError(Exception):
     pass
 
 
-class DeimosInstruction(Enum):
-    sendkey = auto()
-
 
 class InstructionKind(Enum):
     kill = auto()

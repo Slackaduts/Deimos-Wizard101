@@ -1563,13 +1563,13 @@ async def main():
 									while True:
 										code = "\n".join(new_commands)
 										v = vm.VM(walker.clients)
-										v.load_from_text(code)
-										v.running = True
-										while v.running:
-											try:
+										try:
+											v.load_from_text(code)
+											v.running = True
+											while v.running:
 												await v.step()
-											except Exception as e:
-												logger.error(e)
+										except Exception as e:
+											logger.error(e)
 										v.running = False
 										await asyncio.sleep(1)
 

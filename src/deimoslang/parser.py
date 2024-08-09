@@ -48,6 +48,7 @@ class LogKind(Enum):
 class ExprKind(Enum):
     window_visible = auto()
     in_zone = auto()
+    same_zone = auto()
 
 
 class PlayerSelector:
@@ -223,7 +224,7 @@ class Parser:
     def parse_command_expression(self) -> Expression:
         match self.tokens[self.i].kind:
             case TokenKind.player_num | TokenKind.keyword_mass | TokenKind.keyword_except \
-                | TokenKind.command_expr_window_visible | TokenKind.command_expr_in_zone:
+                | TokenKind.command_expr_window_visible | TokenKind.command_expr_in_zone | TokenKind.command_expr_same_zone:
                 return CommandExpression(self.parse_command())
             case _:
                 return self.parse_unary_expression()
@@ -315,7 +316,7 @@ class Parser:
     def parse_zone_path(self) -> list[str] | None:
         res = self.parse_zone_path_optional()
         if res is None:
-            raise ParserError("Encountered in_zone without zone path")
+            raise ParserError("Failed to parse zone path")
         return res
 
     def parse_list(self) -> list[Expression]:
@@ -432,6 +433,12 @@ class Parser:
                 result.kind = CommandKind.expr
                 self.i += 1
                 result.data = [ExprKind.in_zone, self.parse_zone_path()]
+            case TokenKind.command_expr_same_zone:
+                result.kind = CommandKind.expr
+                self.i += 1
+                a = self.expect_consume(TokenKind.player_num)
+                b = self.expect_consume(TokenKind.player_num)
+                result.data = [ExprKind.same_zone, a, b]
             case _:
                 raise ParserError(f"Unhandled command token: {self.tokens[self.i]}")
         return result

@@ -17,7 +17,7 @@ class VMError(Exception):
 
 class VM:
     def __init__(self, clients: list[Client]):
-        self.clients = clients
+        self._clients = clients
         self.program: list[Instruction] = []
         self.running = False
         self._ip = 0 # instruction pointer
@@ -32,18 +32,25 @@ class VM:
         compiler = Compiler.from_text(code)
         self.program = compiler.compile()
 
+    def player_by_num(self, num: int) -> Client:
+        i = num - 1
+        if i >= len(self._clients):
+            tail = "client is open" if len(self._clients) == 1 else "clients are open"
+            raise VMError(f"Attempted to get client {num}, but only {len(self._clients)} {tail}")
+        return self._clients[i]
+
     def _select_players(self, selector: PlayerSelector) -> list[Client]:
         if selector.mass:
-            return self.clients
+            return self._clients
         else:
             result: list[Client] = []
             if selector.inverted:
-                for i, c in enumerate(self.clients):
+                for i, c in enumerate(self._clients):
                     if i in selector.player_nums:
                         continue
                     result.append(c)
             else:
-                for i, c in enumerate(self.clients):
+                for i, c in enumerate(self._clients):
                     if i in selector.player_nums:
                         result.append(c)
             return result
@@ -69,6 +76,10 @@ class VM:
                     if expected != zone:
                         return False
                 return True
+            case ExprKind.same_zone:
+                a = self.player_by_num(expression.command.data[1].value)
+                b = self.player_by_num(expression.command.data[2].value)
+                return (await a.zone_name()) == (await b.zone_name())
             case _:
                 raise VMError(f"Unimplemented expression: {expression}")
 
@@ -112,7 +123,7 @@ class VM:
                     case TeleportKind.position:
                         for client in clients:
                             pos: XYZ = await self.eval(args[1], client) # type: ignore
-                            await self.clients[0].teleport(pos)
+                            await client.teleport(pos)
                     case _:
                         raise VMError(f"Unimplemented teleport kind: {instruction}")
             case _:
