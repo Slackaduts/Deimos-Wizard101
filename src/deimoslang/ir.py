@@ -22,7 +22,7 @@ class InstructionKind(Enum):
     jump = auto()
     jump_if = auto()
     jump_ifn = auto()
-    
+
     label = auto()
     ret = auto()
     call = auto()
@@ -48,7 +48,7 @@ class Compiler:
     def from_text(code: str) -> "Compiler":
         parser = Parser(tokenize(code))
         return Compiler(parser.parse())
-    
+
     def emit(self, kind: InstructionKind, data: Any | None = None):
         self._program.append(Instruction(kind, data))
 
@@ -68,7 +68,7 @@ class Compiler:
             case CommandKind.sendkey | CommandKind.click | CommandKind.teleport \
                 | CommandKind.goto | CommandKind.waitfor:
                 self.emit_deimos_call(com)
-            
+
             case _:
                 raise CompilerError(f"Unimplemented command: {com}")
 

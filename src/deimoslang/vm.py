@@ -68,7 +68,7 @@ class VM:
                 match args[0]:
                     case TeleportKind.position:
                         pos: XYZ = await self.eval(args[1]) # type: ignore
-                        await self.clients[0].teleport(pos)  
+                        await self.clients[0].teleport(pos)
                     case _:
                         raise VMError(f"Unimplemented teleport kind: {instruction}")
             case _:

@@ -55,7 +55,7 @@ class PlayerSelector:
         self.player_nums: list[int] = []
         self.mass = False
         self.inverted = False
-    
+
     def validate(self):
         assert not (self.mass and self.inverted), "Invalid player selector: mass + except"
         assert not (self.mass and len(self.player_nums) > 0), "Invalid player selector: mass + specified players"
@@ -93,7 +93,7 @@ class NumberExpression(Expression):
 class StringExpression(Expression):
     def __init__(self, string: str):
         self.string = string
-    
+
     def __repr__(self) -> str:
         return f"String({self.string})"
 
@@ -101,7 +101,7 @@ class UnaryExpression(Expression):
     def __init__(self, operator: Token, expr: Expression):
         self.operator = operator
         self.expr = expr
-    
+
     def __repr__(self) -> str:
         return f"Unary({self.operator.kind}, {self.expr})"
 
@@ -115,10 +115,10 @@ class KeyExpression(Expression):
 class CommandExpression(Expression):
     def __init__(self, command: Command):
         self.command = command
-    
+
     def __repr__(self) -> str:
         return f"ComE({self.command})"
-    
+
 class XYZExpression(Expression):
     def __init__(self, x: Expression, y: Expression, z: Expression):
         self.x = x
@@ -152,7 +152,7 @@ class IfStmt(Stmt):
         self.expr = expr
         self.branch_true = branch_true
         self.branch_false = branch_false
-    
+
     def __repr__(self) -> str:
         return f"IfS {self.expr} {{ {self.branch_true} }} else {{ {self.branch_false} }}"
 
@@ -160,7 +160,7 @@ class WhileStmt(Stmt):
     def __init__(self, expr: Expression, body: StmtList):
         self.expr = expr
         self.body = body
-    
+
     def __repr__(self) -> str:
         return f"WhileS {self.expr} {{ {self.body} }}"
 
@@ -171,7 +171,7 @@ class BlockDefStmt(Stmt):
 
     def __repr__(self) -> str:
         return f"BlockDefS {self.ident} {{ {self.body} }}"
-    
+
 class CallStmt(Stmt):
     def __init__(self, ident: str) -> None:
         self.ident = ident
@@ -219,7 +219,7 @@ class Parser:
             return UnaryExpression(operator, self.parse_unary_expression())
         else:
             return self.parse_atom()
-    
+
     def parse_command_expression(self) -> Expression:
         match self.tokens[self.i].kind:
             case TokenKind.player_num | TokenKind.keyword_mass | TokenKind.keyword_except \
@@ -227,7 +227,7 @@ class Parser:
                 return CommandExpression(self.parse_command())
             case _:
                 return self.parse_unary_expression()
-    
+
     def parse_expression(self) -> Expression:
         return self.parse_command_expression()
 
@@ -298,26 +298,26 @@ class Parser:
         if len(vals) != 3:
             raise ParserError(f"Encountered invalid XYZ: {vals}")
         return XYZExpression(*vals)
-    
+
     def parse_completion_optional(self) -> bool:
         if self.i < len(self.tokens) and self.tokens[self.i].kind == TokenKind.keyword_completion:
             self.i += 1
             return True
         return False
-    
+
     def parse_zone_path_optional(self) -> list[str] | None:
         if self.i < len(self.tokens) and self.tokens[self.i].kind == TokenKind.path:
             result = self.tokens[self.i]
             self.i += 1
             return result.value
         return None
-    
+
     def parse_zone_path(self) -> list[str] | None:
         res = self.parse_zone_path_optional()
         if res is None:
             raise ParserError("Encountered in_zone without zone path")
         return res
-    
+
     def parse_list(self) -> list[Expression]:
         result = []
         self.expect_consume(TokenKind.square_open)
@@ -347,7 +347,7 @@ class Parser:
     def parse_command(self) -> Command:
         result = Command()
         result.player_selector = self.parse_player_selector()
-        
+
         match self.tokens[self.i].kind:
             case TokenKind.command_kill:
                 result.kind = CommandKind.kill
@@ -423,7 +423,7 @@ class Parser:
                 self.i += 1
                 result.data = [ClickKind.window, self.parse_window_path()]
                 self.end_line()
-            
+
             case TokenKind.command_expr_window_visible:
                 result.kind = CommandKind.expr
                 self.i += 1
@@ -435,7 +435,7 @@ class Parser:
             case _:
                 raise ParserError(f"Unhandled command token: {self.tokens[self.i]}")
         return result
-    
+
     def parse_block(self) -> StmtList:
         inner = []
         self.expect_consume(TokenKind.curly_open)

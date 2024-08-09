@@ -6,7 +6,7 @@ class TokenizerError(Exception):
     pass
 
 
-class TokenKind(Enum):   
+class TokenKind(Enum):
     player_num = auto()
     string = auto()
     number = auto()
@@ -63,7 +63,7 @@ class TokenKind(Enum):
 
     colon = auto() # :
     comma = auto()
-    
+
     plus = auto()
     minus = auto()
     star = auto()
@@ -80,7 +80,7 @@ class TokenKind(Enum):
     curly_close = auto() # }
 
     identifier = auto()
-    
+
     END_LINE = auto()
     END_FILE = auto()
 
@@ -101,7 +101,7 @@ def tokenize_line(l: str) -> list[str]:
     result = []
 
     i = 0
-    
+
     while i < len(l):
         c = l[i]
         match c:
@@ -160,7 +160,7 @@ def tokenize_line(l: str) -> list[str]:
                 str_lit += l[i]
                 i += 1
                 result.append(Token(TokenKind.string, str_lit, str_lit[1:-1]))
-            
+
             case "#":
                 break
 
@@ -286,7 +286,7 @@ def tokenize(contents: str) -> list[Token]:
         toks = tokenize_line(line)
         if len(toks) == 1:
             # only end line
-            continue 
+            continue
         result.extend(toks)
     return result
 
