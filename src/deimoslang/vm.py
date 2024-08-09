@@ -6,6 +6,8 @@ from .tokenizer import *
 from .parser import *
 from .ir import *
 
+from src.utils import is_visible_by_path
+
 from loguru import logger
 
 
@@ -30,19 +32,47 @@ class VM:
         compiler = Compiler.from_text(code)
         self.program = compiler.compile()
 
+    def _select_players(self, selector: PlayerSelector) -> list[Client]:
+        if selector.mass:
+            return self.clients
+        else:
+            result: list[Client] = []
+            if selector.inverted:
+                for i, c in enumerate(self.clients):
+                    if i in selector.player_nums:
+                        continue
+                    result.append(c)
+            else:
+                for i, c in enumerate(self.clients):
+                    if i in selector.player_nums:
+                        result.append(c)
+            return result
+
     async def _eval_command_expression(self, expression: CommandExpression):
         assert expression.command.kind == CommandKind.expr
         assert type(expression.command.data) is list
         assert type(expression.command.data[0]) is ExprKind
 
         selector = expression.command.player_selector
+        assert selector is not None
+        clients = self._select_players(selector)
         match expression.command.data[0]:
             case ExprKind.window_visible:
-                return False
+                for client in clients:
+                    if not await is_visible_by_path(client, expression.command.data[1]):
+                        return False
+                return True
+            case ExprKind.in_zone:
+                for client in clients:
+                    zone = await client.zone_name()
+                    expected = "/".join(expression.command.data[1])
+                    if expected != zone:
+                        return False
+                return True
             case _:
-                pass
+                raise VMError(f"Unimplemented expression: {expression}")
 
-    async def eval(self, expression: Expression):
+    async def eval(self, expression: Expression, client: Client | None = None):
         match expression:
             case CommandExpression():
                 return await self._eval_command_expression(expression)
@@ -50,16 +80,29 @@ class VM:
                 return expression.number
             case XYZExpression():
                 return XYZ(
-                    await self.eval(expression.x), # type: ignore
-                    await self.eval(expression.y), # type: ignore
-                    await self.eval(expression.z), # type: ignore
+                    await self.eval(expression.x, client), # type: ignore
+                    await self.eval(expression.y, client), # type: ignore
+                    await self.eval(expression.z, client), # type: ignore
                 )
+            case UnaryExpression():
+                match expression.operator.kind:
+                    case TokenKind.minus:
+                        return -(await self.eval(expression.expr, client)) # type: ignore
+                    case _:
+                        raise VMError(f"Unimplemented unary expression: {expression}")
+            case StringExpression():
+                return expression.string
+            case KeyExpression():
+                return expression.key
             case _:
                 raise VMError(f"Unimplemented expression type: {expression}")
 
     async def exec_deimos_call(self, instruction: Instruction):
         assert instruction.kind == InstructionKind.deimos_call
         assert type(instruction.data) == list
+
+        selector: PlayerSelector = instruction.data[0]
+        clients = self._select_players(selector)
         match instruction.data[1]:
             case "teleport":
                 args = instruction.data[2]
@@ -67,8 +110,9 @@ class VM:
                 assert type(args[0]) == TeleportKind
                 match args[0]:
                     case TeleportKind.position:
-                        pos: XYZ = await self.eval(args[1]) # type: ignore
-                        await self.clients[0].teleport(pos)
+                        for client in clients:
+                            pos: XYZ = await self.eval(args[1], client) # type: ignore
+                            await self.clients[0].teleport(pos)
                     case _:
                         raise VMError(f"Unimplemented teleport kind: {instruction}")
             case _:
@@ -144,7 +188,7 @@ class VM:
             case _:
                 raise VMError(f"Unimplemented instruction: {instruction}")
         if self._ip >= len(self.program):
-            self._ip = 0
+            self.running = False
 
     async def run(self):
         self.running = True

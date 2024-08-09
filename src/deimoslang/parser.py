@@ -475,7 +475,7 @@ class Parser:
                 expr = self.parse_expression()
                 true_body = self.parse_block()
                 else_body = StmtList([])
-                if self.tokens[self.i].kind == TokenKind.keyword_else:
+                if self.i < len(self.tokens) and self.tokens[self.i].kind == TokenKind.keyword_else:
                     self.i += 1
                     else_body = self.parse_block()
                 return IfStmt(expr, true_body, else_body)

@@ -1565,13 +1565,18 @@ async def main():
 										v = vm.VM(walker.clients)
 										v.load_from_text(code)
 										v.running = True
-										for command_str in new_commands:
+										while v.running:
 											try:
 												await v.step()
 											except Exception as e:
 												logger.error(e)
+										v.running = False
 										await asyncio.sleep(1)
 
+								if bot_task is not None and not bot_task.cancelled():
+									bot_task.cancel()
+									logger.debug('Bot Killed')
+									bot_task = None
 								bot_task = asyncio.create_task(try_task_coro(run_bot, walker.clients, True))
 
 							case deimosgui.GUICommandType.KillBot:
