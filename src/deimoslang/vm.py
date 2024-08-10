@@ -167,6 +167,12 @@ class VM:
                                     await teleport_to_friend_from_list(client, name=name)
                             for client in clients:
                                 tg.create_task(proxy(client))
+                        case TeleportKind.client_num:
+                            num = args[-1]
+                            target_client = self.player_by_num(num)
+                            target_pos = await target_client.body.position()
+                            for client in clients:
+                                tg.create_task(client.teleport(target_pos))
                         case _:
                             raise VMError(f"Unimplemented teleport kind: {instruction}")
             case "goto":

@@ -34,6 +34,7 @@ class TeleportKind(Enum):
     entity_literal = auto()
     mob = auto()
     quest = auto()
+    client_num = auto()
 
 class WaitforKind(Enum):
     dialog = auto()
@@ -394,6 +395,8 @@ class Parser:
                     result.data = [TeleportKind.mob]
                 elif self.consume_optional(TokenKind.keyword_quest) is not None:
                     result.data = [TeleportKind.quest]
+                elif num_tok := self.consume_optional(TokenKind.player_num):
+                    result.data = [TeleportKind.client_num, num_tok.value]
                 else:
                     result.data = [TeleportKind.position, self.parse_xyz()]
                 self.end_line()
