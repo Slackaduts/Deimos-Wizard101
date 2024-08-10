@@ -247,8 +247,16 @@ class Parser:
             case _:
                 return self.parse_unary_expression()
 
+    def parse_negation_expression(self) -> Expression:
+        kinds = [TokenKind.keyword_not]
+        if self.tokens[self.i].kind in kinds:
+            operator = self.expect_consume_any(kinds)
+            return UnaryExpression(operator, self.parse_command_expression())
+        else:
+            return self.parse_command_expression()
+
     def parse_expression(self) -> Expression:
-        return self.parse_command_expression()
+        return self.parse_negation_expression()
 
     def parse_player_selector(self) -> PlayerSelector:
         result = PlayerSelector()
@@ -267,7 +275,7 @@ class Parser:
                     expected_toks = [TokenKind.player_num]
                     self.i += 1
                 case TokenKind.player_num:
-                    result.player_nums.append(int(self.tokens[self.i].literal))
+                    result.player_nums.append(int(self.tokens[self.i].value))
                     expected_toks = [TokenKind.colon]
                     self.i += 1
                 case TokenKind.colon:
@@ -516,9 +524,7 @@ class Parser:
             case TokenKind.command_expr_same_zone:
                 result.kind = CommandKind.expr
                 self.i += 1
-                a = self.expect_consume(TokenKind.player_num)
-                b = self.expect_consume(TokenKind.player_num)
-                result.data = [ExprKind.same_zone, a, b]
+                result.data = [ExprKind.same_zone]
             case _:
                 raise ParserError(f"Unhandled command token: {self.tokens[self.i]}")
         return result

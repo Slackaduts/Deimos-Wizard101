@@ -28,6 +28,7 @@ class TokenKind(Enum):
     keyword_to = auto()
     keyword_xyz = auto()
     keyword_orient = auto()
+    keyword_not = auto()
 
     command_kill = auto()
     command_sleep = auto()
@@ -204,6 +205,8 @@ def tokenize_line(l: str) -> list[str]:
                                 result.append(Token(TokenKind.keyword_xyz, full))
                             case "orient":
                                 result.append(Token(TokenKind.keyword_orient, full))
+                            case "not":
+                                result.append(Token(TokenKind.keyword_not, full))
 
                             case "kill" | "killbot" | "stop" | "stopbot" | "end" | "exit":
                                 result.append(Token(TokenKind.command_kill, full))
