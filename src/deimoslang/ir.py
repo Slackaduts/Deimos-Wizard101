@@ -63,7 +63,8 @@ class Compiler:
                 self.emit(kind, com.data[1:len(com.data)])
 
             case CommandKind.sendkey | CommandKind.click | CommandKind.teleport \
-                | CommandKind.goto | CommandKind.waitfor:
+                | CommandKind.goto | CommandKind.waitfor | CommandKind.usepotion | CommandKind.buypotions \
+                | CommandKind.relog | CommandKind.tozone:
                 self.emit_deimos_call(com)
 
             case _:

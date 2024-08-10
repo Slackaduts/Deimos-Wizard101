@@ -28,6 +28,10 @@ class CommandKind(Enum):
 
 class TeleportKind(Enum):
     position = auto()
+    friend_icon = auto()
+    friend_name = auto()
+    entity_vague = auto()
+    entity_literal = auto()
 
 class WaitforKind(Enum):
     dialog = auto()
@@ -40,6 +44,7 @@ class WaitforKind(Enum):
 
 class ClickKind(Enum):
     window = auto()
+    position = auto()
 
 class LogKind(Enum):
     window = auto()
@@ -202,6 +207,18 @@ class Parser:
 
     def expect_consume(self, kind: TokenKind) -> Token:
         return self.expect_consume_any([kind])
+
+    def consume_any_optional(self, kinds: list[TokenKind]) -> Token | None:
+        if self.i >= len(self.tokens):
+            return None
+        result = self.tokens[self.i]
+        if result.kind not in kinds:
+            return None
+        self.i += 1
+        return result
+
+    def consume_optional(self, kind: TokenKind) -> Token | None:
+        return self.consume_any_optional([kind])
 
     def parse_atom(self) -> NumberExpression | StringExpression:
         tok = self.expect_consume_any([TokenKind.number, TokenKind.string])
@@ -423,6 +440,60 @@ class Parser:
                 result.kind = CommandKind.click
                 self.i += 1
                 result.data = [ClickKind.window, self.parse_window_path()]
+                self.end_line()
+            case TokenKind.command_usepotion:
+                result.kind = CommandKind.usepotion
+                self.i += 1
+                health_arg = self.consume_optional(TokenKind.number)
+                if health_arg != None:
+                    self.skip_comma()
+                    mana_arg = self.expect_consume(TokenKind.number)
+                    result.data = [health_arg, mana_arg]
+                self.end_line()
+            case TokenKind.command_buypotions:
+                result.kind = CommandKind.buypotions
+                self.i += 1
+                if_needed_arg = self.consume_optional(TokenKind.keyword_ifneeded)
+                result.data = [if_needed_arg is not None]
+                self.end_line()
+            case TokenKind.command_relog:
+                result.kind = CommandKind.relog
+                self.i += 1
+                self.end_line()
+            case TokenKind.command_click:
+                result.kind = CommandKind.click
+                self.i += 1
+                x = self.expect_consume(TokenKind.number)
+                self.skip_comma()
+                y = self.expect_consume(TokenKind.number)
+                result.data = [ClickKind.position, x, y]
+                self.end_line()
+            case TokenKind.command_friendtp:
+                result.kind = CommandKind.teleport
+                self.i += 1
+                x = self.expect_consume_any([TokenKind.keyword_icon, TokenKind.identifier])
+                if x.kind == TokenKind.keyword_icon:
+                    result.data = [TeleportKind.friend_icon]
+                else:
+                    name_parts = [x.literal]
+                    while self.tokens[self.i].kind != TokenKind.END_LINE:
+                        name_parts.append(self.tokens[self.i].literal)
+                        self.i += 1
+                    result.data = [TeleportKind.friend_name, " ".join(name_parts)]
+                self.end_line()
+            case TokenKind.command_entitytp:
+                result.kind = CommandKind.teleport
+                self.i += 1
+                arg = self.consume_optional(TokenKind.string)
+                if arg is not None:
+                    result.data = [TeleportKind.entity_literal, arg.value]
+                else:
+                    result.data = [TeleportKind.entity_vague, self.consume_any_ident().literal]
+                self.end_line()
+            case TokenKind.command_tozone:
+                result.kind = CommandKind.tozone
+                self.i += 1
+                result.data = [self.expect_consume(TokenKind.path)]
                 self.end_line()
 
             case TokenKind.command_expr_window_visible:

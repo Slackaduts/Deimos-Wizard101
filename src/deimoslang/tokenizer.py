@@ -46,21 +46,13 @@ class TokenKind(Enum):
     command_clickwindow = auto()
     command_teleport = auto()
     command_friendtp = auto()
-    command_entity_tp = auto()
+    command_entitytp = auto()
     command_tozone = auto()
 
     # command expressions
     command_expr_window_visible = auto()
     command_expr_in_zone = auto()
     command_expr_same_zone = auto()
-
-    # for flythroughs
-    command_webpage = auto()
-    command_glideto = auto()
-    command_rotatingglideto = auto()
-    command_orbit = auto()
-    command_lookat = auto()
-    command_setorient = auto()
 
     colon = auto() # :
     comma = auto()
@@ -230,7 +222,7 @@ def tokenize_line(l: str) -> list[str]:
                             case "sendkey" | "press" | "presskey":
                                 result.append(Token(TokenKind.command_sendkey, full))
                             case "waitfordialog" | "waitfordialogue":
-                                result.append(Token(TokenKind.command_waitfor_dialog))
+                                result.append(Token(TokenKind.command_waitfor_dialog, full))
                             case "waitforbattle" | "waitforcombat":
                                 result.append(Token(TokenKind.command_waitfor_battle, full))
                             case "waitforzonechange":
@@ -252,7 +244,7 @@ def tokenize_line(l: str) -> list[str]:
                             case "friendtp" | "friendteleport":
                                 result.append(Token(TokenKind.command_friendtp, full))
                             case "entitytp" | "entityteleport":
-                                result.append(Token(TokenKind.command_entity_tp, full))
+                                result.append(Token(TokenKind.command_entitytp, full))
                             case "tozone":
                                 result.append(Token(TokenKind.command_tozone, full))
 
@@ -263,20 +255,6 @@ def tokenize_line(l: str) -> list[str]:
                                 result.append(Token(TokenKind.command_expr_in_zone, full))
                             case "samezone":
                                 result.append(Token(TokenKind.command_expr_same_zone, full))
-
-                            # flythrough commands
-                            case "webpage" | "pull" | "embed":
-                                result.append(Token(TokenKind.command_webpage, full))
-                            case "glideto":
-                                result.append(Token(TokenKind.command_glideto, full))
-                            case "rotatingglideto":
-                                result.append(Token(TokenKind.command_rotatingglideto, full))
-                            case "orbit":
-                                result.append(Token(TokenKind.command_orbit, full))
-                            case "lookat":
-                                result.append(Token(TokenKind.command_lookat, full))
-                            case "setorient":
-                                result.append(Token(TokenKind.command_setorient, full))
 
                             case _:
                                 result.append(Token(TokenKind.identifier, full))
