@@ -395,27 +395,20 @@ async def navigate_to_ravenwood(client: Client):
 
     # Navigate through bartleby if needed
     if bartleby_navigation:
-        await client.goto(-9.711, -2987.212)
-        await client.send_key(Keycode.W, 0.3)
-
-        while True:
-            try:
-                await safe_wait_for_zone_change(client, name='WizardCity/WC_Ravenwood_Teleporter', handle_hooks_if_needed=True)
-                break
-            # backup since the above method fails sometimes
-            except LoadingScreenNotFound:
-                await client.teleport(XYZ(x=18.072603225708008, y=-3250.805419921875, z=244.01708984375))
-                await client.send_key(Keycode.W, 0.5)
+        await asyncio.sleep(1)
+        current_zone = await client.zone_name()
+        await asyncio.sleep(0.25)
+        await client.teleport(XYZ(x=-15.123456001281738, y=-3244.67529296875, z=244.01925659179688))
+        await wait_for_zone_change(client, current_zone=current_zone)
 
 
 async def navigate_to_commons_from_ravenwood(client: Client):
-    # walk to ravenwood exit
-    await client.goto(-19.549846649169922, -297.7527160644531)
-    await client.goto(-5.701, -1536.491)
+    # teleport to ravenwood exit
     current_zone = await client.zone_name()
-    while not await client.is_loading():
-        await client.send_key(Keycode.W, 0.1)
+    await asyncio.sleep(1)
+    await client.teleport(XYZ(x=-0.7323388457298279, y=-2200.223388671875, z=-155.97055053710938))
     await wait_for_zone_change(client, current_zone=current_zone)
+    await asyncio.sleep(1)
 
 
 async def navigate_to_potions(client: Client):
@@ -426,7 +419,7 @@ async def navigate_to_potions(client: Client):
       #Teleports to Hilda if not already in range
     while not await client.is_in_npc_range():
       await client.teleport(hilda)
-      await asyncio.sleep(1)
+      await asyncio.sleep(2)
     # Teleport to hilda brewer
 
 
@@ -462,10 +455,9 @@ async def buy_potions(client: Client, recall: bool = True, original_zone=None):
                 if await client.stats.potion_charge() >= 1.0:
                     original_potion_count = await client.stats.potion_charge()
 
-                    while await client.stats.potion_charge() == original_potion_count:
-                        logger.debug(f'Client {client.title} - Using potion')
-                        await click_window_by_path(client, potion_usage_path, True)
-                        await asyncio.sleep(3.0)
+                    logger.debug(f'Client {client.title} - Using potion')
+                    await click_window_by_path(client, potion_usage_path, True)
+                    await asyncio.sleep(3.0)
 
     except:
         print(traceback.print_exc())
