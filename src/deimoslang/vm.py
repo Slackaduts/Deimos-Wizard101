@@ -45,7 +45,7 @@ class VM:
         compiler = Compiler.from_text(code)
         self.program = compiler.compile()
 
-    def player_by_num(self, num: int) -> Client:
+    def player_by_num(self, num: int) -> SprintyClient:
         i = num - 1
         if i >= len(self._clients):
             tail = "client is open" if len(self._clients) == 1 else "clients are open"
@@ -58,14 +58,13 @@ class VM:
         else:
             result: list[SprintyClient] = []
             if selector.inverted:
-                for i, c in enumerate(self._clients):
-                    if i in selector.player_nums:
+                for i in range(len(self._clients)):
+                    if i + 1 in selector.player_nums:
                         continue
-                    result.append(c)
+                    result.append(self.player_by_num(i + 1))
             else:
-                for i, c in enumerate(self._clients):
-                    if i in selector.player_nums:
-                        result.append(c)
+                for num in selector.player_nums:
+                    result.append(self.player_by_num(num))
             return result
 
     async def _eval_command_expression(self, expression: CommandExpression):
@@ -90,9 +89,13 @@ class VM:
                         return False
                 return True
             case ExprKind.same_zone:
-                a = self.player_by_num(expression.command.data[1].value)
-                b = self.player_by_num(expression.command.data[2].value)
-                return (await a.zone_name()) == (await b.zone_name())
+                if len(clients) == 0:
+                    return True
+                expected_zone = await clients[0].zone_name()
+                for client in clients[1:]:
+                    if await client.zone_name() != expected_zone:
+                        return False
+                return True
             case _:
                 raise VMError(f"Unimplemented expression: {expression}")
 
@@ -112,6 +115,8 @@ class VM:
                 match expression.operator.kind:
                     case TokenKind.minus:
                         return -(await self.eval(expression.expr, client)) # type: ignore
+                    case TokenKind.keyword_not:
+                        return not (await self.eval(expression.expr, client))
                     case _:
                         raise VMError(f"Unimplemented unary expression: {expression}")
             case StringExpression():
@@ -294,6 +299,7 @@ class VM:
     async def step(self):
         if not self.running:
             return
+        await asyncio.sleep(0)
         instruction = self.program[self._ip]
         match instruction.kind:
             case InstructionKind.kill:
@@ -374,6 +380,8 @@ class VM:
                 raise VMError(f"Unimplemented instruction: {instruction}")
         if self._ip >= len(self.program):
             self.stop()
+        else:
+            await asyncio.sleep(0)
 
     async def run(self):
         self.running = True
