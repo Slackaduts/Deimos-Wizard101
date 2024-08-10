@@ -32,6 +32,8 @@ class TeleportKind(Enum):
     friend_name = auto()
     entity_vague = auto()
     entity_literal = auto()
+    mob = auto()
+    quest = auto()
 
 class WaitforKind(Enum):
     dialog = auto()
@@ -387,7 +389,12 @@ class Parser:
             case TokenKind.command_teleport:
                 result.kind = CommandKind.teleport
                 self.i += 1
-                result.data = [TeleportKind.position, self.parse_xyz()]
+                if self.consume_optional(TokenKind.keyword_mob) is not None:
+                    result.data = [TeleportKind.mob]
+                elif self.consume_optional(TokenKind.keyword_quest) is not None:
+                    result.data = [TeleportKind.quest]
+                else:
+                    result.data = [TeleportKind.position, self.parse_xyz()]
                 self.end_line()
             case TokenKind.command_sleep:
                 result.kind = CommandKind.sleep

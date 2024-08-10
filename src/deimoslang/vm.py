@@ -6,7 +6,10 @@ from .tokenizer import *
 from .parser import *
 from .ir import *
 
+from wizwalker.extensions.wizsprinter import SprintyClient
+from wizwalker.extensions.wizsprinter.wiz_sprinter import upgrade_clients
 from src.utils import is_visible_by_path, is_free, wait_for_visible_by_path
+from src.command_parser import teleport_to_friend_from_list
 
 from loguru import logger
 
@@ -17,7 +20,7 @@ class VMError(Exception):
 
 class VM:
     def __init__(self, clients: list[Client]):
-        self._clients = clients
+        self._clients = upgrade_clients(clients) # guarantee it's usable
         self.program: list[Instruction] = []
         self.running = False
         self.killed = False
@@ -47,11 +50,11 @@ class VM:
             raise VMError(f"Attempted to get client {num}, but only {len(self._clients)} {tail}")
         return self._clients[i]
 
-    def _select_players(self, selector: PlayerSelector) -> list[Client]:
+    def _select_players(self, selector: PlayerSelector) -> list[SprintyClient]:
         if selector.mass:
             return self._clients
         else:
-            result: list[Client] = []
+            result: list[SprintyClient] = []
             if selector.inverted:
                 for i, c in enumerate(self._clients):
                     if i in selector.player_nums:
@@ -134,6 +137,36 @@ class VM:
                             for client in clients:
                                 pos: XYZ = await self.eval(args[1], client) # type: ignore
                                 tg.create_task(client.teleport(pos))
+                        case TeleportKind.entity_literal:
+                            name = args[-1]
+                            for client in clients:
+                                tg.create_task(client.tp_to_closest_by_name(name))
+                        case TeleportKind.entity_vague:
+                            vague = args[-1]
+                            for client in clients:
+                                tg.create_task(client.tp_to_closest_by_vague_name(vague))
+                        case TeleportKind.mob:
+                            for client in clients:
+                                tg.create_task(client.tp_to_closest_mob())
+                        case TeleportKind.quest:
+                            # TODO: "quest" could instead be treated as an XYZ expression or something
+                            for client in clients:
+                                pos = await client.quest_position.position()
+                                tg.create_task(client.teleport(pos))
+                        case TeleportKind.friend_icon:
+                            async def proxy(client: SprintyClient): # type: ignore
+                                # probably doesn't need mouseless
+                                async with client.mouse_handler:
+                                    await teleport_to_friend_from_list(client, icon_list=2, icon_index=0)
+                            for client in clients:
+                                tg.create_task(proxy(client))
+                        case TeleportKind.friend_name:
+                            name = args[-1]
+                            async def proxy(client: SprintyClient): # type: ignore
+                                async with client.mouse_handler:
+                                    await teleport_to_friend_from_list(client, name=name)
+                            for client in clients:
+                                tg.create_task(proxy(client))
                         case _:
                             raise VMError(f"Unimplemented teleport kind: {instruction}")
             case "goto":
