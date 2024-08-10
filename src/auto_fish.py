@@ -273,7 +273,7 @@ async def fish_bot(client: Client, IS_CHEST: bool, SCHOOL: str, RANK: int, ID: i
         fishing_manager = await client.game_client.fishing_manager()
         fish_caught = 0
         total = time()
-        while True:
+        while client.is_fishing:
             start = time()
             # Awaiting the function causes it to close and not awaiting causes an awaiting error but still works. Un-commenting is up to you.
             # refresh_pond(client, fishing_manager, IS_CHEST, SCHOOL, RANK, ID, SIZE_MIN, SIZE_MAX)
