@@ -61,6 +61,7 @@ class GUIKeys:
 	toggle_sigil = "togglesigil"
 	toggle_questing = "toggle_questing"
 	toggle_auto_pet = "toggleautopet"
+	toggle_auto_fish = "toggleautofish"
 	toggle_freecam = "togglefreecam"
 	toggle_camera_collision = "togglecameracollision"
 
@@ -141,7 +142,8 @@ def create_gui(gui_theme, gui_text_color, gui_button_color, tool_name, tool_vers
 		(tl('Dialogue'), GUIKeys.toggle_dialogue),
 		(tl('Sigil'), GUIKeys.toggle_sigil),
 		(tl('Questing'), GUIKeys.toggle_questing),
-		(tl('Auto Pet'), GUIKeys.toggle_auto_pet)
+		(tl('Auto Pet'), GUIKeys.toggle_auto_pet),
+		(tl('Auto Fish'), GUIKeys.toggle_auto_fish)
 	]
 	hotkeys: list[tuple[str, str]] = [
 		(tl('Quest TP'), GUIKeys.hotkey_quest_tp),
@@ -411,7 +413,7 @@ def manage_gui(send_queue: queue.Queue, recv_queue: queue.Queue, gui_theme, gui_
 
 			# Toggles
 			case GUIKeys.toggle_speedhack | GUIKeys.toggle_combat | GUIKeys.toggle_dialogue | GUIKeys.toggle_sigil | \
-				GUIKeys.toggle_questing | GUIKeys.toggle_auto_pet | GUIKeys.toggle_freecam | \
+				GUIKeys.toggle_questing | GUIKeys.toggle_auto_pet | GUIKeys.toggle_auto_fish | GUIKeys.toggle_freecam | \
 				GUIKeys.toggle_camera_collision: 
 				send_queue.put(GUICommand(GUICommandType.ToggleOption, event))
 			

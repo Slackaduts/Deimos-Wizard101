@@ -25,6 +25,7 @@ import pypresence
 from pypresence import AioPresence
 from src.command_parser import execute_flythrough, parse_command
 from src.auto_pet import nomnom
+from src.auto_fish import fish_bot
 from src.drop_logger import logging_loop
 # from src.combat_new import Fighter
 from src.stat_viewer import total_stats
@@ -50,7 +51,7 @@ from src.tokenizer import tokenize
 cMessageBox = ctypes.windll.user32.MessageBoxW
 
 
-tool_version = '3.8.1'
+tool_version = '3.8.6'
 tool_name = 'Deimos'
 tool_author = 'Slackaduts'
 repo_name = tool_name + '-Wizard101'
@@ -126,6 +127,7 @@ def read_config(config_name : str):
 	global toggle_auto_sigil_key
 	global toggle_freecam_key
 	global toggle_auto_questing_key
+	global toggle_auto_fish_key
 	x_press_key = parser.get('hotkeys', 'x_press', fallback='X')
 	sync_locations_key = parser.get('hotkeys', 'sync_client_locations', fallback='F8')
 	quest_teleport_key = parser.get('hotkeys', 'quest_teleport', fallback='F7')
@@ -138,7 +140,7 @@ def read_config(config_name : str):
 	toggle_auto_sigil_key = parser.get('hotkeys', 'toggle_auto_sigil', fallback='F2')
 	toggle_freecam_key = parser.get('hotkeys', 'toggle_freecam', fallback='F1')
 	toggle_auto_questing_key = parser.get('hotkeys', 'toggle_auto_questing', fallback='F3')
-
+	toggle_auto_fish_key = parser.get('hotkeys', 'toggle_auto_fishing', fallback='F10')
 
 	# GUI Settings
 	global show_gui
@@ -196,6 +198,20 @@ def read_config(config_name : str):
 	ignore_pet_level_up = parser.getboolean('auto pet', 'ignore_pet_level_up', fallback=False)
 	only_play_dance_game = parser.getboolean('auto pet', 'only_play_dance_game', fallback=False)
 
+	#Auto Fishing Settigs
+	global is_fish_chest
+	global fish_school
+	global fish_rank
+	global fish_id
+	global min_fish_size
+	global max_fish_size
+	is_fish_chest = parser.getboolean('auto fish', 'is_fish_chest', fallback=False)
+	fish_school = parser.get('auto fish', 'fish_school', fallback='Any')
+	fish_rank = parser.get('auto fish', 'fish_rank', fallback='0')
+	fish_id = parser.get('auto fish', 'fish_id', fallback='0')
+	min_fish_size = parser.get('auto fish', 'min_fish_size', fallback='0')
+	max_fish_size = parser.get('auto fish', 'max_fish_size', fallback='999')
+
 
 while True:
 	if not os.path.exists(f'{tool_name}-config.ini'):
@@ -227,6 +243,7 @@ freecam_status = False
 hotkey_status = False
 questing_status = False
 auto_pet_status = False
+is_fishing = False
 side_quest_status = False
 tool_status = True
 original_client_locations = dict()
@@ -238,6 +255,7 @@ questing_leader_pid: int = None
 
 questing_task: asyncio.Task = None
 auto_pet_task: asyncio.Task = None
+auto_fish_task: asyncio.Task = None
 sigil_task: asyncio.Task = None
 dialogue_task: asyncio.Task = None
 combat_task: asyncio.Task = None
@@ -732,6 +750,27 @@ async def main():
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Auto PetStatus', 'Enabled')))
 				auto_pet_task = asyncio.create_task(try_task_coro(auto_pet_loop, walker.clients, True))
 
+	async def toggle_auto_fish_hotkey():
+		global auto_fish_task
+		global is_fishing
+
+		if not freecam_status:
+			is_fishing ^= True
+			for p in walker.clients:
+				p.is_fishing ^= True
+
+			if auto_fish_task is not None and not auto_fish_task.cancelled():
+				logger.debug(f'Disabling auto fish.')
+				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Auto FishStatus', 'Disabled')))
+				auto_fish_task.cancel()
+				auto_fish_task = None
+
+			else:
+				logger.debug(f'Enabling auto fish.')
+				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Auto FishStatus', 'Enabled')))
+				auto_fish_task = asyncio.create_task(try_task_coro(auto_fish_loop, walker.clients, True))
+
+
 	# async def toggle_side_quests():
 	# 	global side_quest_status
 
@@ -764,6 +803,7 @@ async def main():
 			await listener.add_hotkey(Keycode[toggle_speed_key], toggle_speed_hotkey, modifiers=ModifierKeys.NOREPEAT)
 			await listener.add_hotkey(Keycode[friend_teleport_key], friend_teleport_sync_hotkey, modifiers=ModifierKeys.NOREPEAT)
 			await listener.add_hotkey(Keycode[toggle_auto_combat_key], toggle_combat_hotkey, modifiers=ModifierKeys.NOREPEAT)
+			await listener.add_hotkey(Keycode[toggle_auto_fish_key], toggle_auto_fish_hotkey, modifiers=ModifierKeys.NOREPEAT)
 			await listener.add_hotkey(Keycode[toggle_auto_dialogue_key], toggle_dialogue_hotkey, modifiers=ModifierKeys.NOREPEAT)
 			await listener.add_hotkey(Keycode[toggle_auto_dialogue_key], toggle_dialogue_side_quests_hotkey, modifiers=ModifierKeys.SHIFT | ModifierKeys.NOREPEAT)
 			await listener.add_hotkey(Keycode[toggle_auto_sigil_key], toggle_sigil_hotkey, modifiers=ModifierKeys.NOREPEAT)
@@ -790,6 +830,7 @@ async def main():
 			if not exclude_kill:
 				await listener.remove_hotkey(Keycode[kill_tool_key], modifiers=ModifierKeys.NOREPEAT)
 			await listener.remove_hotkey(Keycode[toggle_auto_combat_key], modifiers=ModifierKeys.NOREPEAT)
+			await listener.remove_hotkey(Keycode[toggle_auto_fish_key], modifiers=ModifierKeys.NOREPEAT)
 			await listener.remove_hotkey(Keycode[toggle_auto_dialogue_key], modifiers=ModifierKeys.NOREPEAT)
 			await listener.remove_hotkey(Keycode[toggle_auto_dialogue_key], modifiers=ModifierKeys.SHIFT | ModifierKeys.NOREPEAT)
 			await listener.remove_hotkey(Keycode[toggle_auto_sigil_key], modifiers=ModifierKeys.NOREPEAT)
@@ -948,6 +989,18 @@ async def main():
 
 
 		await asyncio.gather(*[async_afk_questing(p) for p in walker.clients])
+
+	# logger.catch()
+	async def auto_fish_loop():
+		#Auto fishing on a per client basis.
+		async def async_auto_fish(client: Client):
+			while True:
+				await asyncio.sleep(1)
+
+				if client in walker.clients and is_fishing:
+					await fish_bot(client, IS_CHEST=is_fish_chest, SCHOOL=fish_school, RANK=fish_rank, ID=fish_id, SIZE_MIN=min_fish_size, SIZE_MAX=max_fish_size)
+
+		await asyncio.gather(*[async_auto_fish(p) for p in walker.clients])
 
 	# logger.catch()
 	async def auto_pet_loop():
@@ -1267,6 +1320,9 @@ async def main():
 
 									case GUIKeys.toggle_auto_pet:
 										await toggle_auto_pet_hotkey()
+
+									case GUIKeys.toggle_auto_fish:
+										await toggle_auto_fish_hotkey()
 
 									case GUIKeys.toggle_freecam:
 										await toggle_freecam_hotkey()
@@ -1595,6 +1651,7 @@ async def main():
 					pass
 
 				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Auto PetStatus', bool_to_string(auto_pet_status))))
+				gui_send_queue.put(deimosgui.GUICommand(deimosgui.GUICommandType.UpdateWindow, ('Auto FishStatus', bool_to_string(is_fishing))))
 
 				await asyncio.sleep(0.1)
 		else:
@@ -1877,6 +1934,7 @@ async def main():
 		p.sigil_status = False
 		p.questing_status = False
 		p.auto_pet_status = False
+		p.is_fishing = False
 		p.feeding_pet_status = False
 		p.use_team_up = use_team_up
 		p.dance_hook_status = False
