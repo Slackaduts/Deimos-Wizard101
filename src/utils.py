@@ -161,7 +161,7 @@ async def new_portals_cycle( client: Client, location: str):
                 currentPage = pageCount.split('/', 1)[0]
                 maxPage = pageCount.split('/', 1)[1]
                 break
-            
+
         spiralGateName = location
 
         isChildFound = False
@@ -614,7 +614,7 @@ async def safe_wait_for_zone_change(self: Client, name: Optional[str] = None, *,
         if await is_visible_by_path(self, friend_is_busy_and_dungeon_reset_path):
             async with self.mouse_handler:
                 await click_window_by_path(self, friend_is_busy_and_dungeon_reset_path)
-    
+
             raise FriendBusyOrInstanceClosed
 
         if timeout is not None:
@@ -640,20 +640,6 @@ async def click_window_until_closed(client: Client, path):
         return False
 
 
-async def refill_potions_if_needed(p: Client):
-    if await p.stats.potion_charge() < 1.0 and await p.stats.reference_level() >= 6:
-        for i in range(3):
-            await p.send_key(Keycode.PAGE_DOWN)
-
-        await refill_potions(p, mark=True, recall=False)
-
-        for i in range(3):
-            await p.send_key(Keycode.PAGE_UP)
-
-        await p.wait_for_zone_change(name='WizardCity/WC_Hub')
-        await asyncio.sleep(2.0)
-
-
 async def refill_potions(client: Client, mark: bool = False, recall: bool = True, original_zone=None):
     if await client.stats.reference_level() >= 6:
         # mark if needed
@@ -673,6 +659,11 @@ async def refill_potions(client: Client, mark: bool = False, recall: bool = True
         await navigate_to_potions(client)
         # Buy potions
         await buy_potions(client, recall, original_zone=original_zone)
+
+
+async def refill_potions_if_needed(p: Client, mark: bool = False, recall: bool = True, original_zone=None):
+    if await p.stats.potion_charge() < 1.0 and await p.stats.reference_level() >= 6:
+        await refill_potions(p, mark, recall, original_zone)
 
 
 async def auto_potions(client: Client, mark: bool = False, minimum_mana: int = 16, buy: bool = True):
@@ -971,7 +962,7 @@ async def teleport_to_friend_from_list(
 async def check_for_multiple_friends_in_list(client: Client, friend_names: list[str]):
 
     async with client.mouse_handler:
-        
+
         # if some form of friend list or friend popup is already open, close it
         # This fails consistently, even when the friends list is actually open.  Detecting whether the friends list is open is also horrifically inconsistent so just brute force it
         for i in range(5):
@@ -1283,7 +1274,7 @@ async def class_snapshot(instance, recurse: bool = True, current_depth: int = 0,
 
     if current_depth >= max_depth: #If we have reached or exceeded max depth, return an empty dict
         return snapshot_data
-    
+
     if not recurse and current_depth: #If we have any depth and we are not recursing, return an empty dict
         return snapshot_data
 

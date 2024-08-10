@@ -410,7 +410,10 @@ class Parser:
                 self.i += 1
                 result.data.append(self.parse_key())
                 self.skip_comma()
-                result.data.append(self.parse_expression())
+                if self.tokens[self.i].kind != TokenKind.END_LINE:
+                    result.data.append(self.parse_expression())
+                else:
+                    result.data.append(None)
                 self.end_line()
             case TokenKind.command_waitfor_zonechange:
                 result.kind = CommandKind.waitfor
@@ -472,7 +475,7 @@ class Parser:
                 x = self.expect_consume(TokenKind.number)
                 self.skip_comma()
                 y = self.expect_consume(TokenKind.number)
-                result.data = [ClickKind.position, x, y]
+                result.data = [ClickKind.position, x.value, y.value]
                 self.end_line()
             case TokenKind.command_friendtp:
                 result.kind = CommandKind.teleport
@@ -499,7 +502,7 @@ class Parser:
             case TokenKind.command_tozone:
                 result.kind = CommandKind.tozone
                 self.i += 1
-                result.data = [self.expect_consume(TokenKind.path)]
+                result.data = [self.parse_zone_path()]
                 self.end_line()
 
             case TokenKind.command_expr_window_visible:

@@ -1,14 +1,16 @@
 import asyncio
 
-from wizwalker import Client, XYZ
+from wizwalker import Client, XYZ, Keycode
+from wizwalker.extensions.wizsprinter import SprintyClient
+from wizwalker.extensions.wizsprinter.wiz_sprinter import upgrade_clients
+from wizwalker.extensions.wizsprinter.wiz_navigator import toZone
 
 from .tokenizer import *
 from .parser import *
 from .ir import *
 
-from wizwalker.extensions.wizsprinter import SprintyClient
-from wizwalker.extensions.wizsprinter.wiz_sprinter import upgrade_clients
-from src.utils import is_visible_by_path, is_free, get_window_from_path
+from src.utils import is_visible_by_path, is_free, get_window_from_path, refill_potions, refill_potions_if_needed \
+                    , logout_and_in, click_window_by_path
 from src.command_parser import teleport_to_friend_from_list
 
 from loguru import logger
@@ -115,7 +117,10 @@ class VM:
             case StringExpression():
                 return expression.string
             case KeyExpression():
-                return expression.key
+                key = expression.key
+                if key not in Keycode.__members__:
+                    raise VMError(f"Unknown key code: {key}")
+                return Keycode[expression.key]
             case _:
                 raise VMError(f"Unimplemented expression type: {expression}")
 
@@ -231,6 +236,58 @@ class VM:
                                     tg.create_task(waitfor_impl(proxy))
                         case _:
                             raise VMError(f"Unimplemented waitfor kind: {instruction}")
+            case "sendkey":
+                args = instruction.data[2]
+                async with asyncio.TaskGroup() as tg:
+                    for client in clients:
+                        key: Keycode = await self.eval(args[0], client) # type: ignore
+                        time: float = 0.1 if args[1] is None else (await self.eval(args[1], client)) # type: ignore
+                        tg.create_task(client.send_key(key, time))
+            case "usepotion":
+                args = instruction.data[2]
+                async with asyncio.TaskGroup() as tg:
+                    for client in clients:
+                        if len(args) > 0:
+                            health_num: float = await self.eval(args[0], client) # type: ignore
+                            mana_num: float = await self.eval(args[1], client) # type: ignore
+                            tg.create_task(client.use_potion_if_needed(int(health_num), int(mana_num)))
+                        else:
+                            tg.create_task(client.use_potion())
+            case "buypotions":
+                args = instruction.data[2]
+                ifneeded = args[0]
+                async with asyncio.TaskGroup() as tg:
+                    for client in clients:
+                        if ifneeded:
+                            tg.create_task(refill_potions_if_needed(client, mark=True, recall=True))
+                        else:
+                            tg.create_task(refill_potions(client, mark=True, recall=True))
+            case "relog":
+                async with asyncio.TaskGroup() as tg:
+                    for client in clients:
+                        tg.create_task(logout_and_in(client))
+            case "click":
+                args = instruction.data[2]
+                async with asyncio.TaskGroup() as tg:
+                    for client in clients:
+                        match args[0]:
+                            case ClickKind.position:
+                                async def proxy(client: SprintyClient, x: float, y: float):
+                                    async with client.mouse_handler:
+                                        await client.mouse_handler.click(int(x), int(y))
+                                x: float = args[1] # type: ignore
+                                y: float = args[2] # type: ignore
+                                tg.create_task(proxy(client, x, y))
+                            case ClickKind.window:
+                                path = args[1]
+                                tg.create_task(click_window_by_path(client, path))
+                            case _:
+                                raise VMError(f"Unimplemented click kind: {instruction}")
+            case "tozone":
+                args = instruction.data[2]
+                async with asyncio.TaskGroup() as tg:
+                    for client in clients:
+                        tg.create_task(toZone([client], "/".join(args[0])))
             case _:
                 raise VMError(f"Unimplemented deimos call: {instruction}")
 
