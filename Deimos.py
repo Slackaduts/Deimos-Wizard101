@@ -46,6 +46,7 @@ from typing import List
 from src import deimosgui
 from src.deimosgui import GUIKeys
 from src.tokenizer import tokenize
+from src.deimoslang import vm
 
 cMessageBox = ctypes.windll.user32.MessageBoxW
 
@@ -1542,29 +1543,45 @@ async def main():
 							case deimosgui.GUICommandType.ExecuteBot:
 								command_data: str = com.data
 
+								expert_mode = command_data.startswith("###deimos_expertmode")
 								async def run_bot():
 									logger.debug('Started Bot')
+									if expert_mode:
+										while True:
+											v = vm.VM(walker.clients)
+											try:
+												v.load_from_text(command_data)
+												v.running = True
+												while v.running:
+													await v.step()
+											except Exception as e:
+												logger.exception(e)
+											v.running = False
+											if v.killed:
+												break
+											await asyncio.sleep(1)
+									else:
+										split_commands = command_data.splitlines()
+										web_commands_strs = ['webpage', 'pull', 'embed']
+										new_commands = []
 
-									split_commands = command_data.split('\n')
-									web_command_strs = ['webpage', 'pull', 'embed']
-									new_commands = []
+										for command_str in split_commands:
+											command_tokens = tokenize(command_str)
+											if command_tokens and command_tokens[0].lower in web_commands_strs:
+												web_commands = read_webpage(command_tokens[1])
+												new_commands.extend(web_commands)
+											else:
+												new_commands.append(command_str)
 
-									for command_str in split_commands:
-										command_tokens = tokenize(command_str)
+										while True:
+											for command_str in new_commands:
+												await parse_command(walker.clients, command_str)
+											await asyncio.sleep(1)
 
-										if command_tokens and command_tokens[0].lower() in web_command_strs:
-											web_commands = read_webpage(command_tokens[1])
-											new_commands.extend(web_commands)
-
-										else:
-											new_commands.append(command_str)
-
-									while True:
-										for command_str in new_commands:
-											await parse_command(walker.clients, command_str)
-
-										await asyncio.sleep(1)
-
+								if bot_task is not None and not bot_task.cancelled():
+									bot_task.cancel()
+									logger.debug('Bot Killed')
+									bot_task = None
 								bot_task = asyncio.create_task(try_task_coro(run_bot, walker.clients, True))
 
 							case deimosgui.GUICommandType.KillBot:
@@ -1771,23 +1788,23 @@ async def main():
 
 	async def zone_check_loop():
 		zone_blacklist = [
-			'WizardCity-TreasureTower-WC_TT', 
-			'Raids', 
+			'WizardCity-TreasureTower-WC_TT',
+			'Raids',
 			'Battlegrounds'
 		]
 
 		explicit_zone_blacklist = [
-			'WizardCity/WC_Duel_Arena_New', 
-			'WizardCity/KT_Duel_Arena', 
-			'WizardCity/MB_Arena', 
-			'WizardCity/MS_Arena', 
-			'WizardCity/DS_Arena', 
-			'WizardCity/CL_Arena', 
-			'WizardCity/ZF_Arena', 
-			'WizardCity/AV_Arena', 
-			'WizardCity/AZ_Arena', 
-			'WizardCity/PA_Arena', 
-			'WizardCity/GH_Arena', 
+			'WizardCity/WC_Duel_Arena_New',
+			'WizardCity/KT_Duel_Arena',
+			'WizardCity/MB_Arena',
+			'WizardCity/MS_Arena',
+			'WizardCity/DS_Arena',
+			'WizardCity/CL_Arena',
+			'WizardCity/ZF_Arena',
+			'WizardCity/AV_Arena',
+			'WizardCity/AZ_Arena',
+			'WizardCity/PA_Arena',
+			'WizardCity/GH_Arena',
 			'WizardCity/LM_Arena'
 		]
 
