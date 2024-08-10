@@ -8,7 +8,7 @@ from .ir import *
 
 from wizwalker.extensions.wizsprinter import SprintyClient
 from wizwalker.extensions.wizsprinter.wiz_sprinter import upgrade_clients
-from src.utils import is_visible_by_path, is_free, wait_for_visible_by_path
+from src.utils import is_visible_by_path, is_free, get_window_from_path
 from src.command_parser import teleport_to_friend_from_list
 
 from loguru import logger
@@ -288,6 +288,18 @@ class VM:
                             raise VMError(f"Unable to log: {x}")
                 s = " ".join(strs)
                 logger.debug(s)
+                self._ip += 1
+            case InstructionKind.log_window:
+                assert type(instruction.data) == list
+                clients = self._select_players(instruction.data[0])
+                path = instruction.data[1]
+                async with asyncio.TaskGroup() as tg:
+                    for client in clients:
+                        window = await get_window_from_path(client.root_window, path)
+                        if not window:
+                            raise VMError(f"Unable to find window at path: {path}")
+                        window_str = await window.maybe_text()
+                        logger.debug(f"{client.title} - {window_str}")
                 self._ip += 1
             case InstructionKind.label:
                 self._ip += 1

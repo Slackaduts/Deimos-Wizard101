@@ -59,8 +59,12 @@ class Compiler:
             case CommandKind.sleep:
                 self.emit(InstructionKind.sleep, com.data[0])
             case CommandKind.log:
-                kind = InstructionKind.log_window if com.data[0] == LogKind.window else InstructionKind.log_literal
-                self.emit(kind, com.data[1:len(com.data)])
+                if com.data[0] == LogKind.window:
+                    self.emit(InstructionKind.log_window, [com.player_selector, com.data[1]])
+                elif com.data[0] == LogKind.literal:
+                    self.emit(InstructionKind.log_literal, com.data[1:len(com.data)])
+                else:
+                    raise CompilerError(f"Unimplemented log kind: {com}")
 
             case CommandKind.sendkey | CommandKind.click | CommandKind.teleport \
                 | CommandKind.goto | CommandKind.waitfor | CommandKind.usepotion | CommandKind.buypotions \

@@ -375,7 +375,8 @@ class Parser:
             case TokenKind.command_log:
                 result.kind = CommandKind.log
                 self.i += 1
-                if self.tokens[self.i] == TokenKind.identifier and self.tokens[self.i].literal == "window":
+                if self.tokens[self.i].kind == TokenKind.identifier and self.tokens[self.i].literal == "window":
+                    self.i += 1
                     result.data = [LogKind.window, self.parse_window_path()]
                 else:
                     result.data = [LogKind.literal]
