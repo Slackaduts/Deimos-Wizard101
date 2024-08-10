@@ -1541,27 +1541,11 @@ async def main():
 									await foreground_client.camera_elastic()
 
 							case deimosgui.GUICommandType.ExecuteBot:
-								command_data: str = com.data
+								code: str = com.data
 
 								async def run_bot():
 									logger.debug('Started Bot')
-
-									split_commands = command_data.split('\n')
-									web_command_strs = ['webpage', 'pull', 'embed']
-									new_commands = []
-
-									for command_str in split_commands:
-										command_tokens = tokenize(command_str)
-
-										if command_tokens and command_tokens[0].lower() in web_command_strs:
-											web_commands = read_webpage(command_tokens[1])
-											new_commands.extend(web_commands)
-
-										else:
-											new_commands.append(command_str)
-
 									while True:
-										code = "\n".join(new_commands)
 										v = vm.VM(walker.clients)
 										try:
 											v.load_from_text(code)
@@ -1569,7 +1553,7 @@ async def main():
 											while v.running:
 												await v.step()
 										except Exception as e:
-											logger.error(e)
+											logger.exception(e)
 										v.running = False
 										if v.killed:
 											break
@@ -1785,23 +1769,23 @@ async def main():
 
 	async def zone_check_loop():
 		zone_blacklist = [
-			'WizardCity-TreasureTower-WC_TT', 
-			'Raids', 
+			'WizardCity-TreasureTower-WC_TT',
+			'Raids',
 			'Battlegrounds'
 		]
 
 		explicit_zone_blacklist = [
-			'WizardCity/WC_Duel_Arena_New', 
-			'WizardCity/KT_Duel_Arena', 
-			'WizardCity/MB_Arena', 
-			'WizardCity/MS_Arena', 
-			'WizardCity/DS_Arena', 
-			'WizardCity/CL_Arena', 
-			'WizardCity/ZF_Arena', 
-			'WizardCity/AV_Arena', 
-			'WizardCity/AZ_Arena', 
-			'WizardCity/PA_Arena', 
-			'WizardCity/GH_Arena', 
+			'WizardCity/WC_Duel_Arena_New',
+			'WizardCity/KT_Duel_Arena',
+			'WizardCity/MB_Arena',
+			'WizardCity/MS_Arena',
+			'WizardCity/DS_Arena',
+			'WizardCity/CL_Arena',
+			'WizardCity/ZF_Arena',
+			'WizardCity/AV_Arena',
+			'WizardCity/AZ_Arena',
+			'WizardCity/PA_Arena',
+			'WizardCity/GH_Arena',
 			'WizardCity/LM_Arena'
 		]
 

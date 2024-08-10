@@ -404,7 +404,7 @@ class Parser:
             case TokenKind.command_waitfor_zonechange:
                 result.kind = CommandKind.waitfor
                 self.i += 1
-                result.data = [WaitforKind.zonechange, self.parse_zone_path_optional(), self.parse_completion_optional()]
+                result.data = [WaitforKind.zonechange, self.parse_completion_optional()]
                 self.end_line()
             case TokenKind.command_waitfor_battle:
                 result.kind = CommandKind.waitfor
