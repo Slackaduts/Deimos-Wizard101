@@ -1571,6 +1571,8 @@ async def main():
 										except Exception as e:
 											logger.error(e)
 										v.running = False
+										if v.killed:
+											break
 										await asyncio.sleep(1)
 
 								if bot_task is not None and not bot_task.cancelled():

@@ -20,6 +20,7 @@ class VM:
         self._clients = clients
         self.program: list[Instruction] = []
         self.running = False
+        self.killed = False
         self._ip = 0 # instruction pointer
         self._callstack = []
 
@@ -27,6 +28,13 @@ class VM:
         self.program = []
         self._ip = 0
         self._callstack = []
+
+    def stop(self):
+        self.running = False
+
+    def kill(self):
+        self.stop()
+        self.killed = True
 
     def load_from_text(self, code: str):
         compiler = Compiler.from_text(code)
@@ -114,6 +122,7 @@ class VM:
 
         selector: PlayerSelector = instruction.data[0]
         clients = self._select_players(selector)
+        # TODO: is eval always fast enough to run in order during a TaskGroup
         match instruction.data[1]:
             case "teleport":
                 args = instruction.data[2]
@@ -121,11 +130,19 @@ class VM:
                 assert type(args[0]) == TeleportKind
                 match args[0]:
                     case TeleportKind.position:
-                        for client in clients:
-                            pos: XYZ = await self.eval(args[1], client) # type: ignore
-                            await client.teleport(pos)
+                        async with asyncio.TaskGroup() as tg:
+                            for client in clients:
+                                pos: XYZ = await self.eval(args[1], client) # type: ignore
+                                tg.create_task(client.teleport(pos))
                     case _:
                         raise VMError(f"Unimplemented teleport kind: {instruction}")
+            case "goto":
+                args = instruction.data[2]
+                assert type(args) == list
+                async with asyncio.TaskGroup() as tg:
+                    for client in clients:
+                        pos: XYZ = await self.eval(args[0], client) # type: ignore
+                        await client.goto(pos.x, pos.y)
             case _:
                 raise VMError(f"Unimplemented deimos call: {instruction}")
 
@@ -135,7 +152,7 @@ class VM:
         instruction = self.program[self._ip]
         match instruction.kind:
             case InstructionKind.kill:
-                self.running = False
+                self.kill()
                 logger.debug("Bot Killed")
             case InstructionKind.sleep:
                 assert instruction.data != None
@@ -199,7 +216,7 @@ class VM:
             case _:
                 raise VMError(f"Unimplemented instruction: {instruction}")
         if self._ip >= len(self.program):
-            self.running = False
+            self.stop()
 
     async def run(self):
         self.running = True
