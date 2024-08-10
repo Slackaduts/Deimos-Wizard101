@@ -36,9 +36,7 @@ class TeleportKind(Enum):
 class WaitforKind(Enum):
     dialog = auto()
     battle = auto()
-    zonechange_any = auto()
-    zonechange_from = auto()
-    zonechange_to = auto()
+    zonechange = auto()
     free = auto()
     window = auto()
 
@@ -283,6 +281,7 @@ class Parser:
     def parse_key(self) -> KeyExpression:
         # We must accept kill as well here as there is a naming collision for END
         tok = self.expect_consume_any([TokenKind.identifier, TokenKind.command_kill])
+        tok.kind = TokenKind.identifier
         return KeyExpression(tok.literal)
 
     def parse_xyz(self) -> XYZExpression:
@@ -379,7 +378,10 @@ class Parser:
                 else:
                     result.data = [LogKind.literal]
                     while self.tokens[self.i].kind != TokenKind.END_LINE:
-                        result.data.append(self.tokens[self.i])
+                        tok = self.tokens[self.i]
+                        if tok.kind != TokenKind.string:
+                            tok.kind = TokenKind.identifier
+                        result.data.append(tok)
                         self.i += 1
                 self.end_line()
             case TokenKind.command_teleport:
@@ -402,14 +404,7 @@ class Parser:
             case TokenKind.command_waitfor_zonechange:
                 result.kind = CommandKind.waitfor
                 self.i += 1
-                kind = WaitforKind.zonechange_any
-                if self.tokens[self.i].kind == TokenKind.keyword_to:
-                    kind = WaitforKind.zonechange_to
-                    self.i += 1
-                elif self.tokens[self.i].kind == TokenKind.keyword_from:
-                    kind = WaitforKind.zonechange_from
-                    self.i += 1
-                result.data = [kind, self.parse_zone_path_optional(), self.parse_completion_optional()]
+                result.data = [WaitforKind.zonechange, self.parse_zone_path_optional(), self.parse_completion_optional()]
                 self.end_line()
             case TokenKind.command_waitfor_battle:
                 result.kind = CommandKind.waitfor

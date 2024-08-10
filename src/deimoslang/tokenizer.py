@@ -200,10 +200,6 @@ def tokenize_line(l: str) -> list[str]:
                                 result.append(Token(TokenKind.keyword_ifneeded, full))
                             case "completion":
                                 result.append(Token(TokenKind.keyword_completion, full))
-                            case "from":
-                                result.append(Token(TokenKind.keyword_from, full))
-                            case "to":
-                                result.append(Token(TokenKind.keyword_to, full))
                             case "xyz":
                                 result.append(Token(TokenKind.keyword_xyz, full))
                             case "orient":

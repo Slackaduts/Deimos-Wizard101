@@ -6,7 +6,7 @@ from .tokenizer import *
 from .parser import *
 from .ir import *
 
-from src.utils import is_visible_by_path
+from src.utils import is_visible_by_path, is_free, wait_for_visible_by_path
 
 from loguru import logger
 
@@ -128,21 +128,70 @@ class VM:
                 args = instruction.data[2]
                 assert type(args) == list
                 assert type(args[0]) == TeleportKind
-                match args[0]:
-                    case TeleportKind.position:
-                        async with asyncio.TaskGroup() as tg:
+                async with asyncio.TaskGroup() as tg:
+                    match args[0]:
+                        case TeleportKind.position:
                             for client in clients:
                                 pos: XYZ = await self.eval(args[1], client) # type: ignore
                                 tg.create_task(client.teleport(pos))
-                    case _:
-                        raise VMError(f"Unimplemented teleport kind: {instruction}")
+                        case _:
+                            raise VMError(f"Unimplemented teleport kind: {instruction}")
             case "goto":
                 args = instruction.data[2]
                 assert type(args) == list
                 async with asyncio.TaskGroup() as tg:
                     for client in clients:
                         pos: XYZ = await self.eval(args[0], client) # type: ignore
-                        await client.goto(pos.x, pos.y)
+                        tg.create_task(client.goto(pos.x, pos.y))
+            case "waitfor":
+                args = instruction.data[2]
+                completion: bool = args[-1]
+                assert type(completion) == bool
+
+                async def waitfor_coro(coro, invert: bool, interval=0.25):
+                    while not (invert ^ await coro()):
+                        await asyncio.sleep(interval)
+
+                async def waitfor_impl(coro, interval=0.25):
+                    nonlocal completion
+                    await waitfor_coro(coro, False, interval)
+                    if completion:
+                        await waitfor_coro(coro, True, interval)
+
+                method_map = {
+                    WaitforKind.dialog: Client.is_in_dialog,
+                    WaitforKind.battle: Client.in_battle,
+                    WaitforKind.free: is_free,
+                }
+                if args[0] in method_map:
+                    method = method_map[args[0]]
+                    async with asyncio.TaskGroup() as tg:
+                        for client in clients:
+                            async def proxy(): # type: ignore
+                                return await method(client)
+                            tg.create_task(waitfor_impl(proxy))
+                else:
+                    match args[0]:
+                        case WaitforKind.zonechange:
+                            async with asyncio.TaskGroup() as tg:
+                                for client in clients:
+                                    starting_zone = await client.zone_name()
+                                    async def proxy():
+                                        return starting_zone != (await client.zone_name())
+                                    tg.create_task(waitfor_coro(proxy, False))
+                            if completion:
+                                async with asyncio.TaskGroup() as tg:
+                                    for client in clients:
+                                        tg.create_task(waitfor_coro(client.is_loading, True))
+                        case WaitforKind.window:
+                            window_path = args[1]
+                            async with asyncio.TaskGroup() as tg:
+                                for client in clients:
+                                    async def proxy():
+                                        return await is_visible_by_path(client, window_path)
+                                    tg.create_task(waitfor_impl(proxy))
+                        case _:
+                            raise VMError(f"Unimplemented waitfor kind: {instruction}")
             case _:
                 raise VMError(f"Unimplemented deimos call: {instruction}")
 
