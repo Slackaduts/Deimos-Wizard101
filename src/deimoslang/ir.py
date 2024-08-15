@@ -20,10 +20,14 @@ class InstructionKind(Enum):
     jump_if = auto()
     jump_ifn = auto()
 
+    enter_until = auto()
+
     label = auto()
     ret = auto()
     call = auto()
     deimos_call = auto()
+
+    nop = auto()
 
 class Instruction:
     def __init__(self, kind: InstructionKind, data: Any | None = None) -> None:
@@ -85,6 +89,7 @@ class Compiler:
                     self.emit(InstructionKind.label, stmt.ident)
                     self._program.extend(instrs_body)
                     self.emit(InstructionKind.ret)
+                    self.emit(InstructionKind.nop)
                 case IfStmt():
                     instrs_false = Compiler(stmt.branch_false.stmts).compile()
                     instrs_true = Compiler(stmt.branch_true.stmts).compile()
@@ -92,6 +97,7 @@ class Compiler:
                     self._program.extend(instrs_false)
                     self.emit(InstructionKind.jump, len(instrs_true) + 1)
                     self._program.extend(instrs_true)
+                    self.emit(InstructionKind.nop)
                 case WhileStmt():
                     body_compiler = Compiler(stmt.body.stmts)
                     body_compiler.compile()
@@ -99,8 +105,18 @@ class Compiler:
                     instrs_body = body_compiler._program
                     self.emit(InstructionKind.jump_ifn, [stmt.expr, len(instrs_body) + 1])
                     self._program.extend(instrs_body)
+                    self.emit(InstructionKind.nop)
+                case UntilStmt():
+                    body_compiler = Compiler(stmt.body.stmts)
+                    body_compiler.compile()
+                    body_compiler.emit(InstructionKind.jump, -len(body_compiler._program))
+                    instrs_body = body_compiler._program
+                    self.emit(InstructionKind.enter_until, [stmt.expr, len(instrs_body) + 1])
+                    self._program.extend(instrs_body)
+                    self.emit(InstructionKind.nop)
                 case CallStmt():
                     self.emit(InstructionKind.call, stmt.ident)
+                    self.emit(InstructionKind.nop)
                 case _:
                     raise CompilerError(f"Unknown statement: {stmt}")
         return self._program

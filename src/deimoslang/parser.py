@@ -55,6 +55,7 @@ class ExprKind(Enum):
     window_visible = auto()
     in_zone = auto()
     same_zone = auto()
+    playercount = auto()
 
 
 class PlayerSelector:
@@ -171,6 +172,14 @@ class WhileStmt(Stmt):
     def __repr__(self) -> str:
         return f"WhileS {self.expr} {{ {self.body} }}"
 
+class UntilStmt(Stmt):
+    def __init__(self, expr: Expression, body: StmtList):
+        self.expr = expr
+        self.body = body
+
+    def __repr__(self) -> str:
+        return f"UntilS {self.expr} {{ {self.body} }}"
+
 class BlockDefStmt(Stmt):
     def __init__(self, ident: str, body: StmtList) -> None:
         self.ident = ident
@@ -242,7 +251,8 @@ class Parser:
     def parse_command_expression(self) -> Expression:
         match self.tokens[self.i].kind:
             case TokenKind.player_num | TokenKind.keyword_mass | TokenKind.keyword_except \
-                | TokenKind.command_expr_window_visible | TokenKind.command_expr_in_zone | TokenKind.command_expr_same_zone:
+                | TokenKind.command_expr_window_visible | TokenKind.command_expr_in_zone | TokenKind.command_expr_same_zone \
+                | TokenKind.command_expr_playercount:
                 return CommandExpression(self.parse_command())
             case _:
                 return self.parse_unary_expression()
@@ -525,6 +535,11 @@ class Parser:
                 result.kind = CommandKind.expr
                 self.i += 1
                 result.data = [ExprKind.same_zone]
+            case TokenKind.command_expr_playercount:
+                result.kind = CommandKind.expr
+                self.i += 1
+                num = self.parse_expression()
+                result.data = [ExprKind.playercount, num]
             case _:
                 raise ParserError(f"Unhandled command token: {self.tokens[self.i]}")
         return result
@@ -563,14 +578,33 @@ class Parser:
                 expr = self.parse_expression()
                 body = self.parse_block()
                 return WhileStmt(expr, body)
+            case TokenKind.keyword_until:
+                self.i += 1
+                expr = self.parse_expression()
+                body = self.parse_block()
+                return UntilStmt(expr, body)
             case TokenKind.keyword_if:
                 self.i += 1
                 expr = self.parse_expression()
                 true_body = self.parse_block()
+                elif_body_stack: list[IfStmt] = []
                 else_body = StmtList([])
-                if self.i < len(self.tokens) and self.tokens[self.i].kind == TokenKind.keyword_else:
-                    self.i += 1
-                    else_body = self.parse_block()
+                while self.i < len(self.tokens) and self.tokens[self.i].kind in [TokenKind.keyword_else, TokenKind.keyword_elif]:
+                    if self.tokens[self.i].kind == TokenKind.keyword_else:
+                        self.i += 1
+                        else_body = self.parse_block()
+                        if len(elif_body_stack) > 0:
+                            elif_body_stack[-1].branch_false = else_body
+                            else_body = StmtList([elif_body_stack[0]])
+                        break
+                    elif self.tokens[self.i].kind == TokenKind.keyword_elif:
+                        self.i += 1
+                        elif_expr = self.parse_expression()
+                        elif_body = self.parse_block()
+                        elif_stmt = IfStmt(elif_expr, elif_body, StmtList([]))
+                        if len(elif_body_stack) > 0:
+                            elif_body_stack[-1].branch_false = StmtList([elif_stmt])
+                        elif_body_stack.append(elif_stmt)
                 return IfStmt(expr, true_body, else_body)
             case TokenKind.curly_open:
                 return self.parse_block()
