@@ -214,9 +214,7 @@ class VM:
 
                 async def waitfor_impl(coro, interval=0.25):
                     nonlocal completion
-                    await waitfor_coro(coro, False, interval)
-                    if completion:
-                        await waitfor_coro(coro, True, interval)
+                    await waitfor_coro(coro, completion, interval)
 
                 method_map = {
                     WaitforKind.dialog: Client.is_in_dialog,
@@ -233,16 +231,17 @@ class VM:
                 else:
                     match args[0]:
                         case WaitforKind.zonechange:
-                            async with asyncio.TaskGroup() as tg:
-                                for client in clients:
-                                    starting_zone = await client.zone_name()
-                                    async def proxy():
-                                        return starting_zone != (await client.zone_name())
-                                    tg.create_task(waitfor_coro(proxy, False))
                             if completion:
                                 async with asyncio.TaskGroup() as tg:
                                     for client in clients:
                                         tg.create_task(waitfor_coro(client.is_loading, True))
+                            else:
+                                async with asyncio.TaskGroup() as tg:
+                                    for client in clients:
+                                        starting_zone = await client.zone_name()
+                                        async def proxy():
+                                            return starting_zone != (await client.zone_name())
+                                        tg.create_task(waitfor_coro(proxy, False))
                         case WaitforKind.window:
                             window_path = args[1]
                             async with asyncio.TaskGroup() as tg:

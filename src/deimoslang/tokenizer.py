@@ -81,83 +81,116 @@ class TokenKind(Enum):
     END_LINE = auto()
     END_FILE = auto()
 
+class LineInfo:
+    def __init__(self, line: int, column: int, last_column: int, last_line: int | None = None, filename: str | None = None):
+        self.line = line
+        self.column = column
+        self.last_column = last_column
+        self.filename = filename
+        self.last_line = last_line if last_line is not None else line
+
+    def __repr__(self) -> str:
+        if self.filename != None:
+            return f"{self.filename}:{self.line}:{self.column}-{self.last_column}"
+        return f"{self.line}:{self.column}-{self.last_column}"
+
 class Token:
-    def __init__(self, kind: TokenKind, literal: str, value: Any | None = None):
+    def __init__(self, kind: TokenKind, literal: str, line_info: LineInfo, value: Any | None = None):
         self.kind = kind
         self.literal = literal
         self.value = value
+        self.line_info = line_info
 
     def __repr__(self) -> str:
-        return f"{self.kind.name}`{self.literal}`({self.value})"
+        return f"{self.line_info} {self.kind.name}`{self.literal}`({self.value})"
+
+
+def render_tokens(toks: list[Token]) -> str:
+    lines_strs: dict[int, str] = {}
+    for tok in toks:
+        if tok.line_info.line not in lines_strs:
+            lines_strs[tok.line_info.line] = ""
+        spaces = " " * (tok.line_info.column - 1 - len(lines_strs[tok.line_info.line]))
+        lines_strs[tok.line_info.line] += spaces + tok.literal
+    return "\n".join(lines_strs.values())
 
 
 def normalize_ident(dirty: str) -> str:
     return dirty.lower().replace("_", "")
 
-def tokenize_line(l: str) -> list[str]:
+def tokenize_line(l: str, line_num: int, filename: str | None = None) -> list[str]:
     result = []
-
     i = 0
+    def put_simple(kind: TokenKind, literal: str, value: Any = None):
+        nonlocal result, line_num, i, filename
+        line_info = LineInfo(line=line_num, column=i+1, last_column=i+len(literal)+1, filename=filename)
+        result.append(Token(kind, literal, line_info, value))
+
+    def err(message: str, column_start: int):
+        indent_start = " " * column_start
+        raise TokenizerError(f"{message}\n{l}\n{indent_start}^\nLine: {line_num} | Column: {column_start+1}")
 
     while i < len(l):
         c = l[i]
         match c:
             case ":":
-                result.append(Token(TokenKind.colon, c))
+                put_simple(TokenKind.colon, c)
                 i += 1
             case ",":
-                result.append(Token(TokenKind.comma, c))
+                put_simple(TokenKind.comma, c)
                 i += 1
             case "+":
-                result.append(Token(TokenKind.plus, c))
+                put_simple(TokenKind.plus, c)
                 i += 1
             case "-":
-                result.append(Token(TokenKind.minus, c))
+                put_simple(TokenKind.minus, c)
                 i += 1
             case "*":
-                i += 1
-                if i < len(l) and l[i] == "*":
-                    result.append(Token(TokenKind.star_star, "**"))
+                if i + 1 < len(l) and l[i + 1] == "*":
+                    put_simple(TokenKind.star_star, "**")
+                    i += 2
                 else:
-                    result.append(Token(TokenKind.star, c))
+                    put_simple(TokenKind.star, c)
+                    i += 1
             case "/":
-                i += 1
-                if i < len(l) and l[i] == "/":
-                    result.append(Token(TokenKind.slash_slash, "//"))
+                if i + 1 < len(l) and l[i + 1] == "/":
+                    put_simple(TokenKind.slash_slash, "//")
+                    i += 2
                 else:
-                    result.append(Token(TokenKind.slash, c))
+                    put_simple(TokenKind.slash, c)
+                    i += 1
             case "(":
-                result.append(Token(TokenKind.paren_open, c))
+                put_simple(TokenKind.paren_open, c)
                 i += 1
             case ")":
-                result.append(Token(TokenKind.paren_close, c))
+                put_simple(TokenKind.paren_close, c)
                 i += 1
             case "[":
-                result.append(Token(TokenKind.square_open, c))
+                put_simple(TokenKind.square_open, c)
                 i += 1
             case "]":
-                result.append(Token(TokenKind.square_close, c))
+                put_simple(TokenKind.square_close, c)
                 i += 1
             case "{":
-                result.append(Token(TokenKind.curly_open, c))
+                put_simple(TokenKind.curly_open, c)
                 i += 1
             case "}":
-                result.append(Token(TokenKind.curly_close, c))
+                put_simple(TokenKind.curly_close, c)
                 i += 1
 
             case '"' | "'":
                 quote_kind = c
                 str_lit = c
-                i += 1
-                while i < len(l) and l[i] != quote_kind:
-                    str_lit += l[i]
-                    i += 1
-                if i >= len(l):
-                    raise TokenizerError("Unclosed string encountered")
-                str_lit += l[i]
-                i += 1
-                result.append(Token(TokenKind.string, str_lit, str_lit[1:-1]))
-
+                j = i + 1
+                while j < len(l) and l[j] != quote_kind:
+                    str_lit += l[j]
+                    j += 1
+                if j >= len(l):
+                    err(f"Unclosed string encountered", i)
+                str_lit += l[j]
+                j += 1
+                put_simple(TokenKind.string, str_lit, str_lit[1:-1])
+                i = j
             case "#":
                 break
 
@@ -166,113 +199,120 @@ def tokenize_line(l: str) -> list[str]:
                     i += 1
                 else:
                     full = ""
-                    while i < len(l) and not (l[i].isspace() or l[i] in "():[],"):
-                        full += l[i]
-                        i += 1
+                    j = i
+                    while j < len(l) and not (l[j].isspace() or l[j] in "():[],"):
+                        full += l[j]
+                        j += 1
 
                     if len(full) == 0:
                         pass
                     elif all([x.isnumeric() or x == "." or x == "e" or x == "-" for x in full]):
-                        result.append(Token(TokenKind.number, full, float(full)))
+                        try:
+                            put_simple(TokenKind.number, full, float(full))
+                        except ValueError:
+                            err("Unable to convert to number", i)
                     elif "/" in full:
-                        result.append(Token(TokenKind.path, full, full.split("/")))
+                        if full.endswith("/"):
+                            err("Invalid path", i)
+                        put_simple(TokenKind.path, full, full.split("/"))
                     elif full[0].lower() == "p" and full[1:len(full)].isnumeric():
-                        result.append(Token(TokenKind.player_num, full, int(full[1:len(full)])))
+                        put_simple(TokenKind.player_num, full, int(full[1:len(full)]))
                     else:
                         match normalize_ident(full):
                             case "block":
-                                result.append(Token(TokenKind.keyword_block, full))
+                                put_simple(TokenKind.keyword_block, full)
                             case "call":
-                                result.append(Token(TokenKind.keyword_call, full))
+                                put_simple(TokenKind.keyword_call, full)
                             case "while":
-                                result.append(Token(TokenKind.keyword_while, full))
+                                put_simple(TokenKind.keyword_while, full)
                             case "until":
-                                result.append(Token(TokenKind.keyword_until, full))
+                                put_simple(TokenKind.keyword_until, full)
                             case "if":
-                                result.append(Token(TokenKind.keyword_if, full))
+                                put_simple(TokenKind.keyword_if, full)
                             case "else":
-                                result.append(Token(TokenKind.keyword_else, full))
+                                put_simple(TokenKind.keyword_else, full)
                             case "elif":
-                                result.append(Token(TokenKind.keyword_elif, full))
+                                put_simple(TokenKind.keyword_elif, full)
                             case "except":
-                                result.append(Token(TokenKind.keyword_except, full))
+                                put_simple(TokenKind.keyword_except, full)
                             case "mass":
-                                result.append(Token(TokenKind.keyword_mass, full))
+                                put_simple(TokenKind.keyword_mass, full)
                             case "closestmob" | "mob":
-                                result.append(Token(TokenKind.keyword_mob, full))
+                                put_simple(TokenKind.keyword_mob, full)
                             case "quest" | "questpos" | "questposition":
-                                result.append(Token(TokenKind.keyword_quest, full))
+                                put_simple(TokenKind.keyword_quest, full)
                             case "icon":
-                                result.append(Token(TokenKind.keyword_icon, full))
+                                put_simple(TokenKind.keyword_icon, full)
                             case "ifneeded":
-                                result.append(Token(TokenKind.keyword_ifneeded, full))
+                                put_simple(TokenKind.keyword_ifneeded, full)
                             case "completion":
-                                result.append(Token(TokenKind.keyword_completion, full))
+                                put_simple(TokenKind.keyword_completion, full)
                             case "xyz":
-                                result.append(Token(TokenKind.keyword_xyz, full))
+                                put_simple(TokenKind.keyword_xyz, full)
                             case "orient":
-                                result.append(Token(TokenKind.keyword_orient, full))
+                                put_simple(TokenKind.keyword_orient, full)
                             case "not":
-                                result.append(Token(TokenKind.keyword_not, full))
+                                put_simple(TokenKind.keyword_not, full)
 
                             case "kill" | "killbot" | "stop" | "stopbot" | "end" | "exit":
-                                result.append(Token(TokenKind.command_kill, full))
+                                put_simple(TokenKind.command_kill, full)
                             case "sleep" | "wait" | "delay":
-                                result.append(Token(TokenKind.command_sleep, full))
+                                put_simple(TokenKind.command_sleep, full)
                             case "log" | "debug" | "print":
-                                result.append(Token(TokenKind.command_log, full))
+                                put_simple(TokenKind.command_log, full)
                             case "teleport" | "tp" | "setpos":
-                                result.append(Token(TokenKind.command_teleport, full))
+                                put_simple(TokenKind.command_teleport, full)
                             case "goto" | "walkto":
-                                result.append(Token(TokenKind.command_goto, full))
+                                put_simple(TokenKind.command_goto, full)
                             case "sendkey" | "press" | "presskey":
-                                result.append(Token(TokenKind.command_sendkey, full))
+                                put_simple(TokenKind.command_sendkey, full)
                             case "waitfordialog" | "waitfordialogue":
-                                result.append(Token(TokenKind.command_waitfor_dialog, full))
+                                put_simple(TokenKind.command_waitfor_dialog, full)
                             case "waitforbattle" | "waitforcombat":
-                                result.append(Token(TokenKind.command_waitfor_battle, full))
+                                put_simple(TokenKind.command_waitfor_battle, full)
                             case "waitforzonechange":
-                                result.append(Token(TokenKind.command_waitfor_zonechange, full))
+                                put_simple(TokenKind.command_waitfor_zonechange, full)
                             case "waitforfree":
-                                result.append(Token(TokenKind.command_waitfor_free, full))
+                                put_simple(TokenKind.command_waitfor_free, full)
                             case "waitforwindow" | "waitforpath":
-                                result.append(Token(TokenKind.command_waitfor_window, full))
+                                put_simple(TokenKind.command_waitfor_window, full)
                             case "usepotion":
-                                result.append(Token(TokenKind.command_usepotion, full))
+                                put_simple(TokenKind.command_usepotion, full)
                             case "buypotions" | "refillpotions" | "buypots" | "refillpots":
-                                result.append(Token(TokenKind.command_buypotions, full))
+                                put_simple(TokenKind.command_buypotions, full)
                             case "relog" | "logoutandin":
-                                result.append(Token(TokenKind.command_relog, full))
+                                put_simple(TokenKind.command_relog, full)
                             case "click":
-                                result.append(Token(TokenKind.command_click, full))
+                                put_simple(TokenKind.command_click, full)
                             case "clickwindow":
-                                result.append(Token(TokenKind.command_clickwindow, full))
+                                put_simple(TokenKind.command_clickwindow, full)
                             case "friendtp" | "friendteleport":
-                                result.append(Token(TokenKind.command_friendtp, full))
+                                put_simple(TokenKind.command_friendtp, full)
                             case "entitytp" | "entityteleport":
-                                result.append(Token(TokenKind.command_entitytp, full))
+                                put_simple(TokenKind.command_entitytp, full)
                             case "tozone":
-                                result.append(Token(TokenKind.command_tozone, full))
+                                put_simple(TokenKind.command_tozone, full)
 
                             # expression commands
                             case "windowvisible":
-                                result.append(Token(TokenKind.command_expr_window_visible, full))
+                                put_simple(TokenKind.command_expr_window_visible, full)
                             case "inzone":
-                                result.append(Token(TokenKind.command_expr_in_zone, full))
+                                put_simple(TokenKind.command_expr_in_zone, full)
                             case "samezone":
-                                result.append(Token(TokenKind.command_expr_same_zone, full))
+                                put_simple(TokenKind.command_expr_same_zone, full)
                             case "playercount" | "clientcount":
-                                result.append(Token(TokenKind.command_expr_playercount, full))
+                                put_simple(TokenKind.command_expr_playercount, full)
 
                             case _:
-                                result.append(Token(TokenKind.identifier, full))
-    result.append(Token(TokenKind.END_LINE, ""))
+                                put_simple(TokenKind.identifier, full)
+                    i = j
+    put_simple(TokenKind.END_LINE, "")
     return result
 
-def tokenize(contents: str) -> list[Token]:
+def tokenize(contents: str, filename: str | None = None) -> list[Token]:
     result = []
-    for line in contents.splitlines():
-        toks = tokenize_line(line)
+    for line_num, line in enumerate(contents.splitlines()):
+        toks = tokenize_line(line, line_num+1, filename=filename)
         if len(toks) == 1:
             # only end line
             continue
@@ -281,14 +321,7 @@ def tokenize(contents: str) -> list[Token]:
 
 
 if __name__ == "__main__":
-    print(tokenize_line("\tglideTo	\t X\tYZ\t(0, 0, 0), Or\tient(90, 0, 0)"))
-    print(tokenize_line("p1 walkto XYZ(1,) [a, '2'] 'test'"))
-    print(tokenize_line("p1 waitforwindow ['WorldView', 'windowHUD', 'compassAndTeleporterButtons', 'OpenCantripsButton']"))
-    print(tokenize_line("p1 walkto XYZ(0, 0, 0) ''"))
-    print(tokenize_line("p1 walkto XYZ (0.1, 0, 0) Orient(0) '\ta\t'"))
-    print(tokenize_line("[]"))
-    print(tokenize_line("''"))
-    print(tokenize_line("aa a"))
-    print(tokenize_line("mass tozone WizardCity/WC_Ravenwood"))
-    print(tokenize_line("except p1:p2 teleport XYZ(0, 0, 0)"))
-    print(tokenize_line("except p1:p2 teleport XYZ(, , 0)"))
+    from pathlib import Path
+    toks = tokenize(Path("testbot.txt").read_text(), filename="testbot.txt")
+    for i in toks:
+        print(i)
