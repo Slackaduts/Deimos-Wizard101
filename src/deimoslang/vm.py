@@ -27,12 +27,18 @@ class VM:
         self.running = False
         self.killed = False
         self._ip = 0 # instruction pointer
-        self._callstack = []
+        self._callstack: list[int] = []
+
+        # Every until loop condition must be checked for every vm step.
+        # Once a condition becomes True, all untils that were entered later must be exited and removed.
+        # This means that the stack must be rolled back to the index stored here and the rhs of this list is discarded.
+        self._until_stack_sizes: list[tuple[Expression, int]] = []
 
     def reset(self):
         self.program = []
         self._ip = 0
         self._callstack = []
+        self._until_stack_sizes = []
 
     def stop(self):
         self.running = False
@@ -96,6 +102,11 @@ class VM:
                     if await client.zone_name() != expected_zone:
                         return False
                 return True
+            case ExprKind.playercount:
+                expected_count = await self.eval(expression.command.data[1])
+                assert type(expected_count) == float
+                expected_count = int(expected_count)
+                return expected_count == len(self._clients)
             case _:
                 raise VMError(f"Unimplemented expression: {expression}")
 
@@ -296,10 +307,20 @@ class VM:
             case _:
                 raise VMError(f"Unimplemented deimos call: {instruction}")
 
+    async def _process_untils(self):
+        for i in range(len(self._until_stack_sizes) - 1, -1, -1):
+            (expr, stack_size) = self._until_stack_sizes[i]
+            if await self.eval(expr):
+                self._until_stack_sizes = self._until_stack_sizes[:i]
+                self._callstack = self._callstack[:stack_size]
+                self._ip = self._callstack.pop()
+                return
+
     async def step(self):
         if not self.running:
             return
         await asyncio.sleep(0)
+        await self._process_untils() # must run before the next instruction is fetched
         instruction = self.program[self._ip]
         match instruction.kind:
             case InstructionKind.kill:
@@ -344,6 +365,13 @@ class VM:
             case InstructionKind.ret:
                 self._ip = self._callstack.pop()
 
+            case InstructionKind.enter_until:
+                assert type(instruction.data) == list
+                exit_dist = instruction.data[1]
+                self._callstack.append(self._ip + exit_dist)
+                self._until_stack_sizes.append((instruction.data[0], len(self._callstack)))
+                self._ip += 1 # simply advance, if the until is finished immediately that's fine because it's checked at the start of each step
+
             case InstructionKind.log_literal:
                 assert type(instruction.data) == list
                 strs = []
@@ -370,7 +398,7 @@ class VM:
                         window_str = await window.maybe_text()
                         logger.debug(f"{client.title} - {window_str}")
                 self._ip += 1
-            case InstructionKind.label:
+            case InstructionKind.label | InstructionKind.nop:
                 self._ip += 1
 
             case InstructionKind.deimos_call:

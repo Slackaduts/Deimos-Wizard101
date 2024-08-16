@@ -15,7 +15,9 @@ class TokenKind(Enum):
     keyword_block = auto()
     keyword_call = auto()
     keyword_while = auto()
+    keyword_until = auto()
     keyword_if = auto()
+    keyword_elif = auto()
     keyword_else = auto()
     keyword_except = auto()
     keyword_mass = auto()
@@ -54,6 +56,7 @@ class TokenKind(Enum):
     command_expr_window_visible = auto()
     command_expr_in_zone = auto()
     command_expr_same_zone = auto()
+    command_expr_playercount = auto()
 
     colon = auto() # :
     comma = auto()
@@ -183,10 +186,14 @@ def tokenize_line(l: str) -> list[str]:
                                 result.append(Token(TokenKind.keyword_call, full))
                             case "while":
                                 result.append(Token(TokenKind.keyword_while, full))
+                            case "until":
+                                result.append(Token(TokenKind.keyword_until, full))
                             case "if":
                                 result.append(Token(TokenKind.keyword_if, full))
                             case "else":
                                 result.append(Token(TokenKind.keyword_else, full))
+                            case "elif":
+                                result.append(Token(TokenKind.keyword_elif, full))
                             case "except":
                                 result.append(Token(TokenKind.keyword_except, full))
                             case "mass":
@@ -254,6 +261,8 @@ def tokenize_line(l: str) -> list[str]:
                                 result.append(Token(TokenKind.command_expr_in_zone, full))
                             case "samezone":
                                 result.append(Token(TokenKind.command_expr_same_zone, full))
+                            case "playercount" | "clientcount":
+                                result.append(Token(TokenKind.command_expr_playercount, full))
 
                             case _:
                                 result.append(Token(TokenKind.identifier, full))
