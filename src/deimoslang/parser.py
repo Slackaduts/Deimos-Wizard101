@@ -275,7 +275,7 @@ class Parser:
         match self.tokens[self.i].kind:
             case TokenKind.player_num | TokenKind.keyword_mass | TokenKind.keyword_except \
                 | TokenKind.command_expr_window_visible | TokenKind.command_expr_in_zone | TokenKind.command_expr_same_zone \
-                | TokenKind.command_expr_playercount:
+                | TokenKind.command_expr_playercount | TokenKind.command_expr_tracking_quest | TokenKind.command_expr_tracking_goal:
                 return CommandExpression(self.parse_command())
             case _:
                 return self.parse_unary_expression()
@@ -397,7 +397,7 @@ class Parser:
         result = []
         for x in self.parse_list():
             if not isinstance(x, StringExpression):
-                assert isinstance(x, NumberExpression), f"Unexpected expression type: {x}")
+                raise ParserError(f"Unexpected expression type: {x}")
             result.append(x.string)
         return result
 
