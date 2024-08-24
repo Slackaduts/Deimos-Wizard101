@@ -40,7 +40,7 @@ from src.gui_inputs import param_input
 from src import discsdk
 from wizwalker.extensions.wizsprinter.wiz_navigator import toZoneDisplayName, toZone
 from wizwalker.extensions.wizsprinter.sprinty_combat import SprintyCombat
-from src.config_combat import StrCombatConfigProvider, delegate_combat_configs
+from src.config_combat import StrCombatConfigProvider, delegate_combat_configs, default_config
 from typing import List
 
 from src import deimosgui
@@ -248,8 +248,6 @@ pet_task: asyncio.Task = None
 
 bot_task: asyncio.Task = None
 flythrough_task: asyncio.Task = None
-
-default_config = "any<trap & inc_damage>[potent] @ enemy | any<trap & inc_damage & aoe>[potent] | any<blade & out_damage>[sharp] @ self | any<blade & out_damage & aoe>[sharp] | any<global> | any<aura & out_damage> | any<shadow> | any<damage & aoe>[epic] | any<damage>[epic] @ enemy"
 
 def file_len(filepath) -> List[str]:
 	# return the number of lines in a file
@@ -1593,9 +1591,7 @@ async def main():
 							case deimosgui.GUICommandType.SetPlaystyles:
 								combat_configs = delegate_combat_configs(str(com.data), len(walker.clients))
 								for i, client in enumerate(walker.clients):
-									if i not in combat_configs:
-										client.combat_config = default_config
-									client.combat_config = combat_configs[i]
+									client.combat_config = combat_configs.get(i, default_config)
 
 								await toggle_combat_hotkey(False)
 								await toggle_combat_hotkey(False)

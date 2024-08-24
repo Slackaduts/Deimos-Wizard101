@@ -28,6 +28,8 @@ class InstructionKind(Enum):
     call = auto()
     deimos_call = auto()
 
+    load_playstyle = auto()
+
     nop = auto()
 
 class Instruction:
@@ -48,7 +50,8 @@ class Compiler:
 
     @staticmethod
     def from_text(code: str) -> "Compiler":
-        parser = Parser(tokenize(code))
+        tokenizer = Tokenizer()
+        parser = Parser(tokenizer.tokenize(code))
         return Compiler(parser.parse())
 
     def emit(self, kind: InstructionKind, data: Any | None = None):
@@ -85,6 +88,9 @@ class Compiler:
                 self.emit_deimos_call(non_inverted_com)
                 if com.data[1] == True:
                     self.emit_deimos_call(com)
+
+            case CommandKind.load_playstyle:
+                self.emit(InstructionKind.load_playstyle, com.data[0])
             case _:
                 raise CompilerError(f"Unimplemented command: {com}")
 

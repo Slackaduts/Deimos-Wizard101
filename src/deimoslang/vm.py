@@ -13,6 +13,7 @@ from .ir import *
 from src.utils import is_visible_by_path, is_free, get_window_from_path, refill_potions, refill_potions_if_needed \
                     , logout_and_in, click_window_by_path, get_quest_name
 from src.command_parser import teleport_to_friend_from_list
+from src.config_combat import delegate_combat_configs, default_config
 
 from loguru import logger
 
@@ -435,6 +436,14 @@ class VM:
                         logger.debug(f"{client.title} - {window_str}")
                 self._ip += 1
             case InstructionKind.label | InstructionKind.nop:
+                self._ip += 1
+
+            case InstructionKind.load_playstyle:
+                logger.debug("Loading playstyle")
+                delegated = delegate_combat_configs(instruction.data, len(self._clients)) # type: ignore
+                logger.debug(delegated)
+                for i, client in enumerate(self._clients):
+                    client.combat_config = delegated.get(i, default_config)
                 self._ip += 1
 
             case InstructionKind.deimos_call:

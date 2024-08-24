@@ -25,6 +25,7 @@ class CommandKind(Enum):
     relog = auto()
     click = auto()
     tozone = auto()
+    load_playstyle = auto()
 
 class TeleportKind(Enum):
     position = auto()
@@ -548,6 +549,11 @@ class Parser:
                 self.i += 1
                 result.data = [self.parse_zone_path()]
                 self.end_line()
+            case TokenKind.command_load_playstyle:
+                result.kind = CommandKind.load_playstyle
+                self.i += 1
+                result.data = [self.expect_consume(TokenKind.string).value]
+                self.end_line()
 
             case TokenKind.command_expr_window_visible:
                 result.kind = CommandKind.expr
@@ -656,9 +662,9 @@ class Parser:
 
 
 if __name__ == "__main__":
-    from tokenizer import tokenize
+    from .tokenizer import Tokenizer
     from pathlib import Path
 
-    toks = tokenize(Path("testbot.txt").read_text())
+    toks = Tokenizer().tokenize(Path("testbot.txt").read_text())
     parser = Parser(toks)
     print(parser.parse())
