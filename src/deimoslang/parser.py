@@ -90,20 +90,18 @@ class Command:
 
 
 class Expression:
-    def __init__(self, line_info: LineInfo):
-        self.line_info = line_info
+    def __init__(self):
+        pass
 
 class NumberExpression(Expression):
-    def __init__(self, line_info: LineInfo, number: float):
-        super().__init__(line_info)
+    def __init__(self, number: float):
         self.number = number
 
     def __repr__(self) -> str:
         return f"Number({self.number})"
 
 class StringExpression(Expression):
-    def __init__(self, line_info: LineInfo, string: str):
-        super().__init__(line_info)
+    def __init__(self, string: str):
         self.string = string
 
     def __repr__(self) -> str:
@@ -257,9 +255,9 @@ class Parser:
         tok = self.expect_consume_any([TokenKind.number, TokenKind.string])
         match tok.kind:
             case TokenKind.number:
-                return NumberExpression(tok.line_info, tok.value)
+                return NumberExpression(tok.value)
             case TokenKind.string:
-                return StringExpression(tok.line_info, tok.value)
+                return StringExpression(tok.value)
             case _:
                 self.err(tok, f"Invalid atom kind: {tok.kind} in {tok}")
 
@@ -347,7 +345,7 @@ class Parser:
                     found_closing = True
                 case TokenKind.comma | TokenKind.number | TokenKind.minus:
                     if self.tokens[self.i].kind == TokenKind.comma:
-                        vals.append(NumberExpression(self.tokens[self.i].line_info, 0.0))
+                        vals.append(NumberExpression(0.0))
                         self.i += 1
                     else:
                         vals.append(self.parse_expression())
@@ -397,8 +395,7 @@ class Parser:
         result = []
         for x in self.parse_list():
             if not isinstance(x, StringExpression):
-                assert isinstance(x, NumberExpression), f"Unexpected expression type: {x}"
-                self.err_manual(x.line_info, "Invalid path entry")
+                assert isinstance(x, NumberExpression), f"Unexpected expression type: {x}")
             result.append(x.string)
         return result
 
