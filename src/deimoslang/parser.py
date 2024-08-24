@@ -1,7 +1,7 @@
 from enum import Enum, auto
 from typing import Any
 
-from .tokenizer import Token, TokenKind
+from .tokenizer import Token, TokenKind, LineInfo, render_tokens
 
 
 class ParserError(Exception):
@@ -25,6 +25,7 @@ class CommandKind(Enum):
     relog = auto()
     click = auto()
     tozone = auto()
+    load_playstyle = auto()
 
 class TeleportKind(Enum):
     position = auto()
@@ -56,7 +57,11 @@ class ExprKind(Enum):
     in_zone = auto()
     same_zone = auto()
     playercount = auto()
+    tracking_quest = auto()
+    tracking_goal = auto()
 
+
+# TODO: Replace asserts
 
 class PlayerSelector:
     def __init__(self):
@@ -67,7 +72,7 @@ class PlayerSelector:
     def validate(self):
         assert not (self.mass and self.inverted), "Invalid player selector: mass + except"
         assert not (self.mass and len(self.player_nums) > 0), "Invalid player selector: mass + specified players"
-        assert not (self.inverted and len(self.player_nums) == 0), "Invalid palayer selector: inverted + 0 players"
+        assert not (self.inverted and len(self.player_nums) == 0), "Invalid player selector: inverted + 0 players"
 
     def __repr__(self) -> str:
         return f"PlayerSelector(nums: {self.player_nums}, mass: {self.mass}, inverted: {self.inverted})"
@@ -201,6 +206,24 @@ class Parser:
         self.tokens = tokens
         self.i = 0
 
+    def _fetch_line_tokens(self, line: int) -> list[Token]:
+        result = []
+        for tok in self.tokens:
+            if tok.line_info.line == line:
+                result.append(tok)
+        return result
+
+    def err_manual(self, line_info: LineInfo, msg: str):
+        line_toks = self._fetch_line_tokens(line_info.line)
+        err_msg = msg
+        err_msg += f"\n{render_tokens(line_toks)}"
+        arrow_indent = " " * (line_info.column - 1)
+        err_msg += f"\n{arrow_indent}^"
+        raise ParserError(f"{err_msg}\nLine: {line_info.line}")
+
+    def err(self, token: Token, msg: str):
+        self.err_manual(token.line_info, msg)
+
     def skip_any(self, kinds: list[TokenKind]):
         if self.i < len(self.tokens) and self.tokens[self.i].kind in kinds:
             self.i += 1
@@ -209,12 +232,13 @@ class Parser:
         self.skip_any([TokenKind.comma])
 
     def expect_consume_any(self, kinds: list[TokenKind]) -> Token:
+        if self.i >= len(self.tokens):
+            self.err(self.tokens[-1], f"Premature end of file, expected {kinds} before the end")
         result = self.tokens[self.i]
         if result.kind not in kinds:
-            raise ParserError(f"Expected token kinds {kinds} but got {result.kind}\n{self.tokens}")
+            self.err(result, f"Expected token kinds {kinds} but got {result.kind}")
         self.i += 1
         return result
-
     def expect_consume(self, kind: TokenKind) -> Token:
         return self.expect_consume_any([kind])
 
@@ -238,7 +262,7 @@ class Parser:
             case TokenKind.string:
                 return StringExpression(tok.value)
             case _:
-                raise ParserError(f"Invalid atom kind: {tok.kind} in {tok}")
+                self.err(tok, f"Invalid atom kind: {tok.kind} in {tok}")
 
     def parse_unary_expression(self) -> UnaryExpression | Expression:
         kinds = [TokenKind.minus]
@@ -252,7 +276,7 @@ class Parser:
         match self.tokens[self.i].kind:
             case TokenKind.player_num | TokenKind.keyword_mass | TokenKind.keyword_except \
                 | TokenKind.command_expr_window_visible | TokenKind.command_expr_in_zone | TokenKind.command_expr_same_zone \
-                | TokenKind.command_expr_playercount:
+                | TokenKind.command_expr_playercount | TokenKind.command_expr_tracking_quest | TokenKind.command_expr_tracking_goal:
                 return CommandExpression(self.parse_command())
             case _:
                 return self.parse_unary_expression()
@@ -274,7 +298,7 @@ class Parser:
         expected_toks = [TokenKind.keyword_mass, TokenKind.keyword_except, TokenKind.player_num]
         while self.i < len(self.tokens) and self.tokens[self.i].kind in valid_toks:
             if self.tokens[self.i].kind not in expected_toks:
-                raise ParserError(f"Invalid player selector encountered: {self.tokens[self.i]}")
+                self.err(self.tokens[self.i], f"Invalid player selector encountered: {self.tokens[self.i]}")
             match self.tokens[self.i].kind:
                 case TokenKind.keyword_mass:
                     result.mass = True
@@ -306,14 +330,14 @@ class Parser:
         return KeyExpression(tok.literal)
 
     def parse_xyz(self) -> XYZExpression:
-        self.expect_consume(TokenKind.keyword_xyz)
+        start_tok = self.expect_consume(TokenKind.keyword_xyz)
         vals = []
         valid_toks = [TokenKind.paren_open, TokenKind.paren_close, TokenKind.comma, TokenKind.number, TokenKind.minus]
         expected_toks = [TokenKind.paren_open]
         found_closing = False
         while self.i < len(self.tokens) and self.tokens[self.i].kind in valid_toks:
             if self.tokens[self.i].kind not in expected_toks:
-                raise ParserError(f"Invalid xyz encountered: {self.tokens[self.i]}")
+                self.err(self.tokens[self.i], f"Invalid xyz encountered")
             match self.tokens[self.i].kind:
                 case TokenKind.paren_open:
                     self.i += 1
@@ -332,9 +356,9 @@ class Parser:
                             self.i += 1
                     expected_toks = [TokenKind.comma, TokenKind.paren_close, TokenKind.number, TokenKind.minus]
         if not found_closing:
-            raise ParserError("Encountered unclosed XYZ")
+            self.err(start_tok, "Encountered unclosed XYZ")
         if len(vals) != 3:
-            raise ParserError(f"Encountered invalid XYZ: {vals}")
+            self.err(start_tok, f"Encountered invalid XYZ")
         return XYZExpression(*vals)
 
     def parse_completion_optional(self) -> bool:
@@ -353,7 +377,10 @@ class Parser:
     def parse_zone_path(self) -> list[str] | None:
         res = self.parse_zone_path_optional()
         if res is None:
-            raise ParserError("Failed to parse zone path")
+            self.err(
+                self.tokens[self.i] if self.i < len(self.tokens) else self.tokens[-1],
+                "Failed to parse zone path"
+            )
         return res
 
     def parse_list(self) -> list[Expression]:
@@ -371,7 +398,7 @@ class Parser:
         result = []
         for x in self.parse_list():
             if not isinstance(x, StringExpression):
-                raise ParserError(f"Invalid path entry: {x}")
+                raise ParserError(f"Unexpected expression type: {x}")
             result.append(x.string)
         return result
 
@@ -475,7 +502,7 @@ class Parser:
                 if health_arg != None:
                     self.skip_comma()
                     mana_arg = self.expect_consume(TokenKind.number)
-                    result.data = [health_arg, mana_arg]
+                    result.data = [NumberExpression(health_arg.value), NumberExpression(mana_arg.value)]
                 self.end_line()
             case TokenKind.command_buypotions:
                 result.kind = CommandKind.buypotions
@@ -522,6 +549,11 @@ class Parser:
                 self.i += 1
                 result.data = [self.parse_zone_path()]
                 self.end_line()
+            case TokenKind.command_load_playstyle:
+                result.kind = CommandKind.load_playstyle
+                self.i += 1
+                result.data = [self.expect_consume(TokenKind.string).value]
+                self.end_line()
 
             case TokenKind.command_expr_window_visible:
                 result.kind = CommandKind.expr
@@ -540,8 +572,18 @@ class Parser:
                 self.i += 1
                 num = self.parse_expression()
                 result.data = [ExprKind.playercount, num]
+            case TokenKind.command_expr_tracking_quest:
+                result.kind = CommandKind.expr
+                self.i += 1
+                text: str = self.expect_consume(TokenKind.string).value # type: ignore
+                result.data = [ExprKind.tracking_quest, text.lower()]
+            case TokenKind.command_expr_tracking_goal:
+                result.kind = CommandKind.expr
+                self.i += 1
+                text: str = self.expect_consume(TokenKind.string).value # type: ignore
+                result.data = [ExprKind.tracking_goal, text.lower()]
             case _:
-                raise ParserError(f"Unhandled command token: {self.tokens[self.i]}")
+                self.err(self.tokens[self.i], "Unhandled command token")
         return result
 
     def parse_block(self) -> StmtList:
@@ -557,7 +599,7 @@ class Parser:
     def consume_any_ident(self) -> Token:
         result = self.tokens[self.i]
         if result.kind != TokenKind.identifier and "keyword" not in result.kind.name and "command" not in result.kind.name:
-            raise ParserError(f"Unable to consume an identifier. Got: {result}")
+            self.err(result, "Unable to consume an identifier")
         self.i += 1
         return result
 
@@ -620,9 +662,9 @@ class Parser:
 
 
 if __name__ == "__main__":
-    from tokenizer import tokenize
+    from .tokenizer import Tokenizer
     from pathlib import Path
 
-    toks = tokenize(Path("testbot.txt").read_text())
+    toks = Tokenizer().tokenize(Path("testbot.txt").read_text())
     parser = Parser(toks)
     print(parser.parse())

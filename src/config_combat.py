@@ -12,6 +12,10 @@ from typing import List, Dict, Tuple
 
 import re
 
+
+default_config = "any<trap & inc_damage>[potent] @ enemy | any<trap & inc_damage & aoe>[potent] | any<blade & out_damage>[sharp] @ self | any<blade & out_damage & aoe>[sharp] | any<global> | any<aura & out_damage> | any<shadow> | any<damage & aoe>[epic] | any<damage>[epic] @ enemy"
+
+
 class StrCombatConfigProvider(CombatConfigProvider):
     '''
     Handles string-based combat configuration. The GUI handles files so this is modified to just use a string.
@@ -23,7 +27,7 @@ class StrCombatConfigProvider(CombatConfigProvider):
 
     async def handle_no_cards_given(self):
         raise RuntimeError("Full config fail! Config might be empty or contains only explicit rounds. Consider adding a pass or something else.")
-    
+
     def parse_config(self, file_contents) -> CombatConfig:
         grammar = get_sprinty_grammar()
 
@@ -39,7 +43,7 @@ def delegate_combat_configs(input_data: str, fallback_clients: int = 1, line_sep
 
     Args:
     - input_data (str): File content to use
-    - fallback_clients(int): In the event of no clients specified, use the 
+    - fallback_clients(int): In the event of no clients specified, use the
     - line_seperator (str): Symbol or string that seperates lines of the file, newline by default
     '''
 

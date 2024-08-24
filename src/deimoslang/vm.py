@@ -1,6 +1,7 @@
 import asyncio
 
 from wizwalker import Client, XYZ, Keycode
+from wizwalker.memory.memory_objects.quest_data import QuestData, GoalData
 from wizwalker.extensions.wizsprinter import SprintyClient
 from wizwalker.extensions.wizsprinter.wiz_sprinter import upgrade_clients
 from wizwalker.extensions.wizsprinter.wiz_navigator import toZone
@@ -10,8 +11,9 @@ from .parser import *
 from .ir import *
 
 from src.utils import is_visible_by_path, is_free, get_window_from_path, refill_potions, refill_potions_if_needed \
-                    , logout_and_in, click_window_by_path
+                    , logout_and_in, click_window_by_path, get_quest_name
 from src.command_parser import teleport_to_friend_from_list
+from src.config_combat import delegate_combat_configs, default_config
 
 from loguru import logger
 
@@ -73,6 +75,26 @@ class VM:
                     result.append(self.player_by_num(num))
             return result
 
+    async def _fetch_tracked_quest(self, client: SprintyClient) -> QuestData:
+        tracked_id = await client.quest_id()
+        qm = await client.quest_manager()
+        for quest_id, quest in (await qm.quest_data()).items():
+            if quest_id == tracked_id:
+                return quest
+        raise VMError(f"Unable to fetch the currently tracked quest for client with title {client.title}")
+
+    async def _fetch_tracked_quest_text(self, client: SprintyClient) -> str:
+        quest = await self._fetch_tracked_quest(client)
+        name_key = await quest.name_lang_key()
+        name: str = await client.cache_handler.get_langcode_name(name_key)
+        return name.lower().strip()
+
+    async def _fetch_tracked_goal_text(self, client: SprintyClient) -> str:
+        goal_txt = await get_quest_name(client)
+        if '(' in goal_txt:
+            goal_txt = goal_txt[:goal_txt.find("(")]
+        return goal_txt.lower().strip()
+
     async def _eval_command_expression(self, expression: CommandExpression):
         assert expression.command.kind == CommandKind.expr
         assert type(expression.command.data) is list
@@ -107,6 +129,22 @@ class VM:
                 assert type(expected_count) == float
                 expected_count = int(expected_count)
                 return expected_count == len(self._clients)
+            case ExprKind.tracking_quest:
+                expected_text = expression.command.data[1]
+                assert type(expected_text) == str
+                for client in clients:
+                    name = await self._fetch_tracked_quest_text(client)
+                    if name != expected_text:
+                        return False
+                return True
+            case ExprKind.tracking_goal:
+                expected_text = expression.command.data[1]
+                assert type(expected_text) == str
+                for client in clients:
+                    text = await self._fetch_tracked_goal_text(client)
+                    if text != expected_text:
+                        return False
+                return True
             case _:
                 raise VMError(f"Unimplemented expression: {expression}")
 
@@ -214,9 +252,7 @@ class VM:
 
                 async def waitfor_impl(coro, interval=0.25):
                     nonlocal completion
-                    await waitfor_coro(coro, False, interval)
-                    if completion:
-                        await waitfor_coro(coro, True, interval)
+                    await waitfor_coro(coro, completion, interval)
 
                 method_map = {
                     WaitforKind.dialog: Client.is_in_dialog,
@@ -233,16 +269,17 @@ class VM:
                 else:
                     match args[0]:
                         case WaitforKind.zonechange:
-                            async with asyncio.TaskGroup() as tg:
-                                for client in clients:
-                                    starting_zone = await client.zone_name()
-                                    async def proxy():
-                                        return starting_zone != (await client.zone_name())
-                                    tg.create_task(waitfor_coro(proxy, False))
                             if completion:
                                 async with asyncio.TaskGroup() as tg:
                                     for client in clients:
                                         tg.create_task(waitfor_coro(client.is_loading, True))
+                            else:
+                                async with asyncio.TaskGroup() as tg:
+                                    for client in clients:
+                                        starting_zone = await client.zone_name()
+                                        async def proxy():
+                                            return starting_zone != (await client.zone_name())
+                                        tg.create_task(waitfor_coro(proxy, False))
                         case WaitforKind.window:
                             window_path = args[1]
                             async with asyncio.TaskGroup() as tg:
@@ -399,6 +436,14 @@ class VM:
                         logger.debug(f"{client.title} - {window_str}")
                 self._ip += 1
             case InstructionKind.label | InstructionKind.nop:
+                self._ip += 1
+
+            case InstructionKind.load_playstyle:
+                logger.debug("Loading playstyle")
+                delegated = delegate_combat_configs(instruction.data, len(self._clients)) # type: ignore
+                logger.debug(delegated)
+                for i, client in enumerate(self._clients):
+                    client.combat_config = delegated.get(i, default_config)
                 self._ip += 1
 
             case InstructionKind.deimos_call:
