@@ -56,6 +56,8 @@ class ExprKind(Enum):
     in_zone = auto()
     same_zone = auto()
     playercount = auto()
+    tracking_quest = auto()
+    tracking_goal = auto()
 
 
 # TODO: Replace asserts
@@ -499,7 +501,7 @@ class Parser:
                 if health_arg != None:
                     self.skip_comma()
                     mana_arg = self.expect_consume(TokenKind.number)
-                    result.data = [health_arg, mana_arg]
+                    result.data = [NumberExpression(health_arg.value), NumberExpression(mana_arg.value)]
                 self.end_line()
             case TokenKind.command_buypotions:
                 result.kind = CommandKind.buypotions
@@ -564,6 +566,16 @@ class Parser:
                 self.i += 1
                 num = self.parse_expression()
                 result.data = [ExprKind.playercount, num]
+            case TokenKind.command_expr_tracking_quest:
+                result.kind = CommandKind.expr
+                self.i += 1
+                text: str = self.expect_consume(TokenKind.string).value # type: ignore
+                result.data = [ExprKind.tracking_quest, text.lower()]
+            case TokenKind.command_expr_tracking_goal:
+                result.kind = CommandKind.expr
+                self.i += 1
+                text: str = self.expect_consume(TokenKind.string).value # type: ignore
+                result.data = [ExprKind.tracking_goal, text.lower()]
             case _:
                 self.err(self.tokens[self.i], "Unhandled command token")
         return result

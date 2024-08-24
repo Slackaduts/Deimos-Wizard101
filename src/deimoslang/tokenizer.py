@@ -57,6 +57,8 @@ class TokenKind(Enum):
     command_expr_in_zone = auto()
     command_expr_same_zone = auto()
     command_expr_playercount = auto()
+    command_expr_tracking_quest = auto()
+    command_expr_tracking_goal = auto()
 
     colon = auto() # :
     comma = auto()
@@ -302,6 +304,10 @@ def tokenize_line(l: str, line_num: int, filename: str | None = None) -> list[st
                                 put_simple(TokenKind.command_expr_same_zone, full)
                             case "playercount" | "clientcount":
                                 put_simple(TokenKind.command_expr_playercount, full)
+                            case "trackingquest":
+                                put_simple(TokenKind.command_expr_tracking_quest, full)
+                            case "trackinggoal":
+                                put_simple(TokenKind.command_expr_tracking_goal, full)
 
                             case _:
                                 put_simple(TokenKind.identifier, full)
