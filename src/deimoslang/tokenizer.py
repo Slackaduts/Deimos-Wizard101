@@ -16,6 +16,8 @@ class TokenKind(Enum):
     keyword_call = auto()
     keyword_while = auto()
     keyword_until = auto()
+    keyword_times = auto()
+    keyword_loop = auto()
     keyword_if = auto()
     keyword_elif = auto()
     keyword_else = auto()
@@ -60,6 +62,8 @@ class TokenKind(Enum):
     command_expr_playercount = auto()
     command_expr_tracking_quest = auto()
     command_expr_tracking_goal = auto()
+    command_expr_in_combat = auto()
+    command_expr_has_quest = auto()
 
     colon = auto() # :
     comma = auto()
@@ -254,6 +258,10 @@ class Tokenizer:
                                         put_simple(TokenKind.keyword_while, full)
                                     case "until":
                                         put_simple(TokenKind.keyword_until, full)
+                                    case "times":
+                                        put_simple(TokenKind.keyword_times, full)
+                                    case "loop":
+                                        put_simple(TokenKind.keyword_loop, full)
                                     case "if":
                                         put_simple(TokenKind.keyword_if, full)
                                     case "else":
@@ -335,6 +343,10 @@ class Tokenizer:
                                         put_simple(TokenKind.command_expr_tracking_quest, full)
                                     case "trackinggoal":
                                         put_simple(TokenKind.command_expr_tracking_goal, full)
+                                    case "incombat" | "inbattle" | "induel":
+                                        put_simple(TokenKind.command_expr_in_combat, full)
+                                    case "hasquest":
+                                        put_simple(TokenKind.command_expr_has_quest, full)
 
                                     case _:
                                         put_simple(TokenKind.identifier, full)

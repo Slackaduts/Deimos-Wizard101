@@ -59,6 +59,8 @@ class ExprKind(Enum):
     playercount = auto()
     tracking_quest = auto()
     tracking_goal = auto()
+    in_combat = auto()
+    has_quest = auto()
 
 
 # TODO: Replace asserts
@@ -97,7 +99,7 @@ class Expression:
         pass
 
 class NumberExpression(Expression):
-    def __init__(self, number: float):
+    def __init__(self, number: float | int):
         self.number = number
 
     def __repr__(self) -> str:
@@ -140,6 +142,21 @@ class XYZExpression(Expression):
 
     def __repr__(self) -> str:
         return f"XYZE({self.x}, {self.y}, {self.z})"
+
+class GetVarExpression(Expression):
+    def __init__(self, id: int):
+        self.id = id
+
+    def __repr__(self) -> str:
+        return f"GetVarE({self.id})"
+
+class GreaterExpression(Expression):
+    def __init__(self, lhs: Expression, rhs: Expression):
+        self.lhs = lhs
+        self.rhs = rhs
+
+    def __repr__(self) -> str:
+        return f"GreaterE({self.lhs}, {self.rhs})"
 
 
 class Stmt:
@@ -185,6 +202,13 @@ class UntilStmt(Stmt):
     def __repr__(self) -> str:
         return f"UntilS {self.expr} {{ {self.body} }}"
 
+class LoopStmt(Stmt):
+    def __init__(self, body: StmtList):
+        self.body = body
+
+    def __repr__(self) -> str:
+        return f"LoopS{{ {self.body} }}"
+
 class BlockDefStmt(Stmt):
     def __init__(self, ident: str, body: StmtList) -> None:
         self.ident = ident
@@ -200,11 +224,32 @@ class CallStmt(Stmt):
     def __repr__(self) -> str:
         return f"CallS {self.ident}"
 
+class SetVarStmt(Stmt):
+    def __init__(self, id: int, expr: Expression) -> None:
+        self.id = id
+        self.expr = expr
+
+    def __repr__(self) -> str:
+        return f"SetVarS({self.id}, {self.expr})"
+
+class DecVarStmt(Stmt):
+    def __init__(self, id: int) -> None:
+        self.id = id
+
+    def __repr__(self) -> str:
+        return f"DecVarS({self.id})"
+
 
 class Parser:
     def __init__(self, tokens: list[Token]):
         self.tokens = tokens
         self.i = 0
+        self._next_var_id = 0
+
+    def _next_var(self) -> int:
+        result = self._next_var_id
+        self._next_var_id += 1
+        return result
 
     def _fetch_line_tokens(self, line: int) -> list[Token]:
         result = []
@@ -276,7 +321,8 @@ class Parser:
         match self.tokens[self.i].kind:
             case TokenKind.player_num | TokenKind.keyword_mass | TokenKind.keyword_except \
                 | TokenKind.command_expr_window_visible | TokenKind.command_expr_in_zone | TokenKind.command_expr_same_zone \
-                | TokenKind.command_expr_playercount | TokenKind.command_expr_tracking_quest | TokenKind.command_expr_tracking_goal:
+                | TokenKind.command_expr_playercount | TokenKind.command_expr_tracking_quest | TokenKind.command_expr_tracking_goal \
+                | TokenKind.command_expr_in_combat | TokenKind.command_expr_has_quest:
                 return CommandExpression(self.parse_command())
             case _:
                 return self.parse_unary_expression()
@@ -582,6 +628,15 @@ class Parser:
                 self.i += 1
                 text: str = self.expect_consume(TokenKind.string).value # type: ignore
                 result.data = [ExprKind.tracking_goal, text.lower()]
+            case TokenKind.command_expr_in_combat:
+                result.kind = CommandKind.expr
+                self.i += 1
+                result.data = [ExprKind.in_combat]
+            case TokenKind.command_expr_has_quest:
+                result.kind = CommandKind.expr
+                self.i += 1
+                text: str = self.expect_consume(TokenKind.string).value # type: ignore
+                result.data = [ExprKind.has_quest, text.lower()]
             case _:
                 self.err(self.tokens[self.i], "Unhandled command token")
         return result
@@ -625,6 +680,21 @@ class Parser:
                 expr = self.parse_expression()
                 body = self.parse_block()
                 return UntilStmt(expr, body)
+            case TokenKind.keyword_times:
+                self.i += 1
+                num_tok = self.expect_consume(TokenKind.number)
+                body = self.parse_block()
+                var_id = self._next_var()
+
+                body.stmts.append(DecVarStmt(var_id))
+                return StmtList([
+                    SetVarStmt(var_id, NumberExpression(int(num_tok.value))),
+                    WhileStmt(GreaterExpression(GetVarExpression(var_id), NumberExpression(0)), body),
+                ])
+            case TokenKind.keyword_loop:
+                self.i += 1
+                body = self.parse_block()
+                return LoopStmt(body)
             case TokenKind.keyword_if:
                 self.i += 1
                 expr = self.parse_expression()
