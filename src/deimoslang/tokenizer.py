@@ -60,6 +60,7 @@ class TokenKind(Enum):
     command_expr_playercount = auto()
     command_expr_tracking_quest = auto()
     command_expr_tracking_goal = auto()
+    command_expr_free = auto()
 
     colon = auto() # :
     comma = auto()
@@ -335,6 +336,9 @@ class Tokenizer:
                                         put_simple(TokenKind.command_expr_tracking_quest, full)
                                     case "trackinggoal":
                                         put_simple(TokenKind.command_expr_tracking_goal, full)
+                                    case "free":
+                                        put_simple(TokenKind.command_expr_free, full)
+
 
                                     case _:
                                         put_simple(TokenKind.identifier, full)

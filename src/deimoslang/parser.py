@@ -59,6 +59,7 @@ class ExprKind(Enum):
     playercount = auto()
     tracking_quest = auto()
     tracking_goal = auto()
+    free = auto()
 
 
 # TODO: Replace asserts
@@ -276,7 +277,7 @@ class Parser:
         match self.tokens[self.i].kind:
             case TokenKind.player_num | TokenKind.keyword_mass | TokenKind.keyword_except \
                 | TokenKind.command_expr_window_visible | TokenKind.command_expr_in_zone | TokenKind.command_expr_same_zone \
-                | TokenKind.command_expr_playercount | TokenKind.command_expr_tracking_quest | TokenKind.command_expr_tracking_goal:
+                | TokenKind.command_expr_playercount | TokenKind.command_expr_tracking_quest | TokenKind.command_expr_tracking_goal | TokenKind.command_expr_free:
                 return CommandExpression(self.parse_command())
             case _:
                 return self.parse_unary_expression()
@@ -567,6 +568,10 @@ class Parser:
                 result.kind = CommandKind.expr
                 self.i += 1
                 result.data = [ExprKind.same_zone]
+            case TokenKind.command_expr_free:
+                result.kind = CommandKind.expr
+                self.i += 1
+                result.data = [ExprKind.free]
             case TokenKind.command_expr_playercount:
                 result.kind = CommandKind.expr
                 self.i += 1
@@ -659,12 +664,52 @@ class Parser:
             stmt = self.parse_stmt()
             result.append(stmt)
         return result
+def add_indent(string, indent):
+    for _ in range(indent):
+        string += '    '
+    return string;
 
+def print_cmd(input_str:str):
+    final_string = ""
+    indent = 0
+    idx = 0
+
+    while idx < len(input_str):
+        ch = input_str[idx]
+        if ch == '{':
+            indent += 1
+            final_string += f'{ch}\n'
+            final_string = add_indent(final_string, indent)
+        elif ch == '}':
+            if idx < len(input_str)-1 and (ch=='}' and input_str[idx+1] == ';'):
+                indent -= 1
+                final_string += '\n'
+                final_string = add_indent(final_string, indent)
+                final_string += f'{ch}'
+                final_string += f'{input_str[idx+1]}\n'
+                idx+=1
+                final_string = add_indent(final_string, indent)
+            else:
+                indent -= 1
+                final_string += '\n'
+                final_string = add_indent(final_string, indent)
+                final_string += f'{ch}\n'
+                final_string = add_indent(final_string, indent)
+        elif ch == ';':
+            final_string += f'{ch}\n'
+            final_string = add_indent(final_string, indent)
+        else:
+            final_string += ch
+
+        idx+=1
+    print(final_string)
 
 if __name__ == "__main__":
     from .tokenizer import Tokenizer
     from pathlib import Path
 
-    toks = Tokenizer().tokenize(Path("testbot.txt").read_text())
+    toks = Tokenizer().tokenize(Path("./deimoslang/testbot.txt").read_text())
     parser = Parser(toks)
-    print(parser.parse())
+    parsed = (parser.parse())
+    for parse in parsed:
+        print_cmd(str(parse))

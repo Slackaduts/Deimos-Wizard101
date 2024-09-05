@@ -140,7 +140,7 @@ class Compiler:
 
 if __name__ == "__main__":
     from pathlib import Path
-    compiler = Compiler.from_text(Path("testbot.txt").read_text())
+    compiler = Compiler.from_text(Path("./deimoslang/testbot.txt").read_text())
     prog = compiler.compile()
     for i in prog:
         print(i)
