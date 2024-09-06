@@ -60,6 +60,11 @@ class ExprKind(Enum):
     tracking_quest = auto()
     tracking_goal = auto()
     free = auto()
+    in_combat = auto()
+    has_dialogue = auto()
+    has_xyz = auto()
+    health_below = auto()
+    health_above = auto()
 
 
 # TODO: Replace asserts
@@ -256,9 +261,11 @@ class Parser:
         return self.consume_any_optional([kind])
 
     def parse_atom(self) -> NumberExpression | StringExpression:
-        tok = self.expect_consume_any([TokenKind.number, TokenKind.string])
+        tok = self.expect_consume_any([TokenKind.number, TokenKind.string, TokenKind.percent])
         match tok.kind:
             case TokenKind.number:
+                return NumberExpression(tok.value)
+            case TokenKind.percent:
                 return NumberExpression(tok.value)
             case TokenKind.string:
                 return StringExpression(tok.value)
@@ -277,7 +284,7 @@ class Parser:
         match self.tokens[self.i].kind:
             case TokenKind.player_num | TokenKind.keyword_mass | TokenKind.keyword_except \
                 | TokenKind.command_expr_window_visible | TokenKind.command_expr_in_zone | TokenKind.command_expr_same_zone \
-                | TokenKind.command_expr_playercount | TokenKind.command_expr_tracking_quest | TokenKind.command_expr_tracking_goal | TokenKind.command_expr_free:
+                | TokenKind.command_expr_playercount | TokenKind.command_expr_tracking_quest | TokenKind.command_expr_tracking_goal | TokenKind.command_expr_free | TokenKind.command_expr_in_combat | TokenKind.command_expr_has_dialogue | TokenKind.command_expr_has_xyz | TokenKind.command_expr_health_below | TokenKind.command_expr_health_above:
                 return CommandExpression(self.parse_command())
             case _:
                 return self.parse_unary_expression()
@@ -568,10 +575,33 @@ class Parser:
                 result.kind = CommandKind.expr
                 self.i += 1
                 result.data = [ExprKind.same_zone]
+            case TokenKind.command_expr_in_combat:
+                result.kind = CommandKind.expr
+                self.i += 1
+                result.data = [ExprKind.in_combat]
+            case TokenKind.command_expr_has_dialogue:
+                result.kind = CommandKind.expr
+                self.i += 1
+                result.data = [ExprKind.has_dialogue]
             case TokenKind.command_expr_free:
                 result.kind = CommandKind.expr
                 self.i += 1
                 result.data = [ExprKind.free]
+            case TokenKind.command_expr_has_xyz:
+                result.kind = CommandKind.expr
+                self.i += 1
+                xyz = self.parse_xyz()
+                result.data = [ExprKind.has_xyz, xyz]
+            case TokenKind.command_expr_health_above:
+                result.kind = CommandKind.expr
+                self.i += 1
+                num = self.parse_expression()
+                result.data = [ExprKind.health_above, num]
+            case TokenKind.command_expr_health_below:
+                result.kind = CommandKind.expr
+                self.i += 1
+                num = self.parse_expression()
+                result.data = [ExprKind.health_below, num]
             case TokenKind.command_expr_playercount:
                 result.kind = CommandKind.expr
                 self.i += 1

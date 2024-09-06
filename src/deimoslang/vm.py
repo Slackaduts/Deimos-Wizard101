@@ -145,6 +145,44 @@ class VM:
                     if text != expected_text:
                         return False
                 return True
+            case ExprKind.free:
+                for client in clients:
+                    if await client.is_loading():
+                        return False
+                return True
+            case ExprKind.in_combat:
+                for client in clients:
+                    if not await client.in_battle():
+                        return False
+                return True
+            case ExprKind.has_dialogue:
+                for client in clients:
+                    if await client.is_in_dialog():
+                        return True
+                return False
+            case ExprKind.has_xyz:
+                target_pos: XYZ = await self.eval(expression.command.data[1]) # type: ignore
+                for client in clients:
+                    client_pos = await client.body.position()
+                    if abs(target_pos - client_pos) > 1:
+                        return False
+                return True
+            case ExprKind.health_above:
+                health_percent:float = await self.eval(expression.command.data[1]) # type: ignore
+                for client in clients:
+                    client_health = await client.stats.current_hitpoints()
+                    max_health = await client.stats.max_hitpoints()
+                    if client_health/max_health > health_percent:
+                        return True
+                return False
+            case ExprKind.health_below:
+                health_percent:float = await self.eval(expression.command.data[1]) # type: ignore
+                for client in clients:
+                    client_health = await client.stats.current_hitpoints()
+                    max_health = await client.stats.max_hitpoints()
+                    if client_health/max_health < health_percent:
+                        return True
+                return False
             case _:
                 raise VMError(f"Unimplemented expression: {expression}")
 

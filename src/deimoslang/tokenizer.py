@@ -10,6 +10,7 @@ class TokenKind(Enum):
     player_num = auto()
     string = auto()
     number = auto()
+    percent = auto()
     path = auto() # A/B/C
 
     keyword_block = auto()
@@ -61,6 +62,11 @@ class TokenKind(Enum):
     command_expr_tracking_quest = auto()
     command_expr_tracking_goal = auto()
     command_expr_free = auto()
+    command_expr_in_combat = auto()
+    command_expr_has_dialogue = auto()
+    command_expr_has_xyz = auto()
+    command_expr_health_below = auto()
+    command_expr_health_above = auto()
 
     colon = auto() # :
     comma = auto()
@@ -239,6 +245,11 @@ class Tokenizer:
                                     put_simple(TokenKind.number, full, float(full))
                                 except ValueError:
                                     err("Unable to convert to number", i)
+                            elif all([x.isnumeric() or x == "." or x == "e" or x == "-" or x == "%" for x in full]):
+                                try:
+                                    put_simple(TokenKind.percent, full, float(full[:-1])/100)
+                                except ValueError:
+                                    err("Unable to convert to percent", i)
                             elif "/" in full:
                                 if full.endswith("/"):
                                     err("Invalid path", i)
@@ -338,6 +349,18 @@ class Tokenizer:
                                         put_simple(TokenKind.command_expr_tracking_goal, full)
                                     case "free":
                                         put_simple(TokenKind.command_expr_free, full)
+                                    case "incombat":
+                                        put_simple(TokenKind.command_expr_in_combat, full)
+                                    case "hasdialogue":
+                                        put_simple(TokenKind.command_expr_has_dialogue, full)
+                                    case "hasxyz":
+                                        put_simple(TokenKind.command_expr_has_xyz, full)
+                                    case "healthbelow":
+                                        put_simple(TokenKind.command_expr_health_below, full)
+                                    case "healthabove":
+                                        put_simple(TokenKind.command_expr_health_above, full)
+
+
 
 
                                     case _:
