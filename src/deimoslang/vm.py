@@ -168,21 +168,86 @@ class VM:
                         return False
                 return True
             case ExprKind.health_above:
-                health_percent:float = await self.eval(expression.command.data[1]) # type: ignore
+                threshold:float = await self.eval(expression.command.data[1]) # type: ignore
                 for client in clients:
                     client_health = await client.stats.current_hitpoints()
                     max_health = await client.stats.max_hitpoints()
-                    if client_health/max_health > health_percent:
+                    if client_health/max_health > threshold:
                         return True
                 return False
             case ExprKind.health_below:
-                health_percent:float = await self.eval(expression.command.data[1]) # type: ignore
+                threshold:float = await self.eval(expression.command.data[1]) # type: ignore
                 for client in clients:
                     client_health = await client.stats.current_hitpoints()
                     max_health = await client.stats.max_hitpoints()
-                    if client_health/max_health < health_percent:
+                    if client_health/max_health < threshold:
                         return True
                 return False
+            case ExprKind.health:
+                health:float = await self.eval(expression.command.data[1]) # type: ignore
+                for client in clients:
+                    client_health = await client.stats.current_hitpoints()
+                    if client_health != health:
+                        return False
+                return True
+            case ExprKind.mana:
+                mana:float = await self.eval(expression.command.data[1]) # type: ignore
+                for client in clients:
+                    client_mana = await client.stats.current_mana()
+                    if client_mana != mana:
+                        return False
+                return True
+            case ExprKind.mana_below:
+                threshold:float = await self.eval(expression.command.data[1]) # type: ignore
+                for client in clients:
+                    client_mana = await client.stats.current_mana()
+                    max_mana = await client.stats.max_mana()
+                    if client_mana/max_mana < threshold:
+                        return True
+                return False
+            case ExprKind.mana_above:
+                threshold:float = await self.eval(expression.command.data[1]) # type: ignore
+                for client in clients:
+                    client_mana = await client.stats.current_mana()
+                    max_mana = await client.stats.max_mana()
+                    if client_mana/max_mana > threshold:
+                        return True
+                return False
+            case ExprKind.bag_count:
+                expected_count:float = await self.eval(expression.command.data[1]) # type: ignore
+                for client in clients:
+                    try:
+                        bag = await client.backpack_space()
+                        if expected_count != bag[0]:
+                            return False
+                    except ValueError:
+                        print("You must open your bag, before accessing the count.")
+                        return False
+                return True
+            case ExprKind.bag_count_above:
+                threshold:float = await self.eval(expression.command.data[1]) # type: ignore
+                for client in clients:
+                    try:
+                        bag = await client.backpack_space()
+                        if threshold > bag[0]/bag[1]:
+                            return False
+                    except ValueError:
+                        print("You must open your bag, before accessing the count.")
+                        return False
+                return True
+            case ExprKind.bag_count_below:
+                threshold:float = await self.eval(expression.command.data[1]) # type: ignore
+                for client in clients:
+                    try:
+                        bag = await client.backpack_space()
+                        if threshold < bag[0]/bag[1]:
+                            return False
+                    except ValueError:
+                        print("You must open your bag, before accessing the count.")
+                        return False
+                return True
+
+
             case _:
                 raise VMError(f"Unimplemented expression: {expression}")
 

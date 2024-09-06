@@ -54,20 +54,6 @@ class TokenKind(Enum):
     command_tozone = auto()
     command_load_playstyle = auto()
 
-    # command expressions
-    command_expr_window_visible = auto()
-    command_expr_in_zone = auto()
-    command_expr_same_zone = auto()
-    command_expr_playercount = auto()
-    command_expr_tracking_quest = auto()
-    command_expr_tracking_goal = auto()
-    command_expr_free = auto()
-    command_expr_in_combat = auto()
-    command_expr_has_dialogue = auto()
-    command_expr_has_xyz = auto()
-    command_expr_health_below = auto()
-    command_expr_health_above = auto()
-
     colon = auto() # :
     comma = auto()
 
@@ -91,6 +77,27 @@ class TokenKind(Enum):
     END_LINE = auto()
     END_FILE = auto()
 
+class TokenExpressionKind(Enum):
+    command_expr_window_visible = auto()
+    command_expr_in_zone = auto()
+    command_expr_same_zone = auto()
+    command_expr_playercount = auto()
+    command_expr_tracking_quest = auto()
+    command_expr_tracking_goal = auto()
+    command_expr_free = auto()
+    command_expr_in_combat = auto()
+    command_expr_has_dialogue = auto()
+    command_expr_has_xyz = auto()
+    command_expr_health_below = auto()
+    command_expr_health_above = auto()
+    command_expr_health = auto()
+    command_expr_bagcount = auto()
+    command_expr_bagcount_above = auto()
+    command_expr_bagcount_below = auto()
+    command_expr_mana = auto()
+    command_expr_mana_above = auto()
+    command_expr_mana_below = auto()
+
 class LineInfo:
     def __init__(self, line: int, column: int, last_column: int, last_line: int | None = None, filename: str | None = None):
         self.line = line
@@ -105,7 +112,7 @@ class LineInfo:
         return f"{self.line}:{self.column}-{self.last_column}"
 
 class Token:
-    def __init__(self, kind: TokenKind, literal: str, line_info: LineInfo, value: Any | None = None):
+    def __init__(self, kind: TokenKind | TokenExpressionKind, literal: str, line_info: LineInfo, value: Any | None = None):
         self.kind = kind
         self.literal = literal
         self.value = value
@@ -139,7 +146,7 @@ class Tokenizer:
         result = []
         i = 0
 
-        def put_simple(kind: TokenKind, literal: str, value: Any = None):
+        def put_simple(kind: TokenKind | TokenExpressionKind, literal: str, value: Any = None):
             nonlocal result, line_num, i, filename
             line_info = LineInfo(line=line_num, column=i+1, last_column=i+len(literal)+1, filename=filename)
             result.append(Token(kind, literal, line_info, value))
@@ -336,31 +343,43 @@ class Tokenizer:
 
                                     # expression commands
                                     case "windowvisible":
-                                        put_simple(TokenKind.command_expr_window_visible, full)
+                                        put_simple(TokenExpressionKind.command_expr_window_visible, full)
                                     case "inzone":
-                                        put_simple(TokenKind.command_expr_in_zone, full)
+                                        put_simple(TokenExpressionKind.command_expr_in_zone, full)
                                     case "samezone":
-                                        put_simple(TokenKind.command_expr_same_zone, full)
+                                        put_simple(TokenExpressionKind.command_expr_same_zone, full)
                                     case "playercount" | "clientcount":
-                                        put_simple(TokenKind.command_expr_playercount, full)
+                                        put_simple(TokenExpressionKind.command_expr_playercount, full)
                                     case "trackingquest":
-                                        put_simple(TokenKind.command_expr_tracking_quest, full)
+                                        put_simple(TokenExpressionKind.command_expr_tracking_quest, full)
                                     case "trackinggoal":
-                                        put_simple(TokenKind.command_expr_tracking_goal, full)
+                                        put_simple(TokenExpressionKind.command_expr_tracking_goal, full)
                                     case "free":
-                                        put_simple(TokenKind.command_expr_free, full)
+                                        put_simple(TokenExpressionKind.command_expr_free, full)
                                     case "incombat":
-                                        put_simple(TokenKind.command_expr_in_combat, full)
+                                        put_simple(TokenExpressionKind.command_expr_in_combat, full)
                                     case "hasdialogue":
-                                        put_simple(TokenKind.command_expr_has_dialogue, full)
+                                        put_simple(TokenExpressionKind.command_expr_has_dialogue, full)
                                     case "hasxyz":
-                                        put_simple(TokenKind.command_expr_has_xyz, full)
+                                        put_simple(TokenExpressionKind.command_expr_has_xyz, full)
                                     case "healthbelow":
-                                        put_simple(TokenKind.command_expr_health_below, full)
+                                        put_simple(TokenExpressionKind.command_expr_health_below, full)
                                     case "healthabove":
-                                        put_simple(TokenKind.command_expr_health_above, full)
-
-
+                                        put_simple(TokenExpressionKind.command_expr_health_above, full)
+                                    case "health":
+                                        put_simple(TokenExpressionKind.command_expr_health, full)
+                                    case "manabelow":
+                                        put_simple(TokenExpressionKind.command_expr_mana_below, full)
+                                    case "manaabove":
+                                        put_simple(TokenExpressionKind.command_expr_mana_above, full)
+                                    case "mana":
+                                        put_simple(TokenExpressionKind.command_expr_mana, full)
+                                    case "bagcount":
+                                        put_simple(TokenExpressionKind.command_expr_bagcount, full)
+                                    case "bagcountbelow":
+                                        put_simple(TokenExpressionKind.command_expr_bagcount_below, full)
+                                    case "bagcountabove":
+                                        put_simple(TokenExpressionKind.command_expr_bagcount_above, full)
 
 
                                     case _:
