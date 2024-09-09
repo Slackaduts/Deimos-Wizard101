@@ -542,8 +542,14 @@ class VM:
             case InstructionKind.log_bagcount:
                 assert type(instruction.data) == list
                 clients = self._select_players(instruction.data[0])
-                for client in clients:
-                    bag_space = await client.backpack_space()
+                try:
+                    for client in clients:
+                        bag_space = await client.backpack_space()
+                        logger.debug(f'{client.title} - {bag_space[0]}/{bag_space[1]}')
+                except ValueError:
+                    print("You must open your bag, before accessing the count.")
+                self._ip += 1
+
             case InstructionKind.label | InstructionKind.nop:
                 self._ip += 1
 
