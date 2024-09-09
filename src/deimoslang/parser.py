@@ -51,6 +51,7 @@ class ClickKind(Enum):
 class LogKind(Enum):
     window = auto()
     literal = auto()
+    bagcount = auto()
 
 class ExprKind(Enum):
     window_visible = auto()
@@ -524,19 +525,25 @@ class Parser:
                 self.i += 1
                 self.end_line()
             case TokenKind.command_log:
+                kind = self.tokens[self.i].kind
                 result.kind = CommandKind.log
                 self.i += 1
-                if self.tokens[self.i].kind == TokenKind.identifier and self.tokens[self.i].literal == "window":
-                    self.i += 1
-                    result.data = [LogKind.window, self.parse_window_path()]
-                else:
-                    result.data = [LogKind.literal]
-                    while self.tokens[self.i].kind != TokenKind.END_LINE:
-                        tok = self.tokens[self.i]
-                        if tok.kind != TokenKind.string:
-                            tok.kind = TokenKind.identifier
-                        result.data.append(tok)
+                match kind:
+                    case TokenKind.identifier:
+                        if self.tokens[self.i].literal == "window":
+                            self.i += 1
+                            result.data = [LogKind.window, self.parse_window_path()]
+                        else:
+                            result.data = [LogKind.literal]
+                            while self.tokens[self.i].kind != TokenKind.END_LINE:
+                                tok = self.tokens[self.i]
+                                if tok.kind != TokenKind.string:
+                                    tok.kind = TokenKind.identifier
+                                result.data.append(tok)
+                                self.i += 1
+                    case TokenKind.command_expr_bagcount:
                         self.i += 1
+                        result.data = [LogKind.bagcount]
                 self.end_line()
             case TokenKind.command_teleport:
                 result.kind = CommandKind.teleport

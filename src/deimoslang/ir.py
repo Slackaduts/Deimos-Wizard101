@@ -14,8 +14,10 @@ class CompilerError(Exception):
 class InstructionKind(Enum):
     kill = auto()
     sleep = auto()
+
     log_literal = auto()
     log_window = auto()
+    log_bagcount = auto()
 
     jump = auto()
     jump_if = auto()
@@ -67,12 +69,16 @@ class Compiler:
             case CommandKind.sleep:
                 self.emit(InstructionKind.sleep, com.data[0])
             case CommandKind.log:
-                if com.data[0] == LogKind.window:
-                    self.emit(InstructionKind.log_window, [com.player_selector, com.data[1]])
-                elif com.data[0] == LogKind.literal:
-                    self.emit(InstructionKind.log_literal, com.data[1:len(com.data)])
-                else:
-                    raise CompilerError(f"Unimplemented log kind: {com}")
+                kind = com.data[0]
+                match kind:
+                    case LogKind.window:
+                        self.emit(InstructionKind.log_window, [com.player_selector, com.data[1]])
+                    case LogKind.bagcount:
+                        self.emit(InstructionKind.log_bagcount, [com.player_selector])
+                    case LogKind.literal:
+                        self.emit(InstructionKind.log_literal, com.data[1:len(com.data)])
+                    case _:
+                        raise CompilerError(f"Unimplemented log kind: {com}")
 
             case CommandKind.sendkey | CommandKind.click | CommandKind.teleport \
                 | CommandKind.goto | CommandKind.usepotion | CommandKind.buypotions \

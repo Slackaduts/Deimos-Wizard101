@@ -1,6 +1,7 @@
 import asyncio
 
 from wizwalker import Client, XYZ, Keycode
+from wizwalker.memory import DynamicClientObject
 from wizwalker.memory.memory_objects.quest_data import QuestData, GoalData
 from wizwalker.extensions.wizsprinter import SprintyClient
 from wizwalker.extensions.wizsprinter.wiz_sprinter import upgrade_clients
@@ -538,6 +539,11 @@ class VM:
                         window_str = await window.maybe_text()
                         logger.debug(f"{client.title} - {window_str}")
                 self._ip += 1
+            case InstructionKind.log_bagcount:
+                assert type(instruction.data) == list
+                clients = self._select_players(instruction.data[0])
+                for client in clients:
+                    bag_space = await client.backpack_space()
             case InstructionKind.label | InstructionKind.nop:
                 self._ip += 1
 
