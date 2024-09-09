@@ -52,6 +52,9 @@ class LogKind(Enum):
     window = auto()
     literal = auto()
     bagcount = auto()
+    mana = auto()
+    health = auto()
+    gold = auto()
 
 class ExprKind(Enum):
     window_visible = auto()
@@ -548,9 +551,16 @@ class Parser:
                         self.i += 1
                         result.data = [LogKind.bagcount]
                     case TokenKind.command_expr_mana:
-                        pass
+                        self.i += 1
+                        result.data = [LogKind.mana]
                     case TokenKind.command_expr_health:
-                        pass
+                        self.i += 1
+                        result.data = [LogKind.health]
+                    case TokenKind.command_expr_gold:
+                        self.i += 1
+                        result.data = [LogKind.gold]
+                    case TokenKind.string:
+                        print_literal()
                     case _:
                         print_literal()
                 self.end_line()

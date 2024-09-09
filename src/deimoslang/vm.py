@@ -492,7 +492,8 @@ class VM:
             case InstructionKind.call:
                 self._callstack.append(self._ip + 1)
                 jump = instruction.data  
-                self._ip += jump
+                self._ip += jump # type: ignore
+
             case InstructionKind.ret:
                 self._ip = self._callstack.pop()
 
@@ -531,13 +532,33 @@ class VM:
                 self._ip += 1
             case InstructionKind.log_bagcount:
                 assert type(instruction.data) == list
-                clients = self._select_players(instruction.data[0])
+                clients: list[SprintyClient] = self._select_players(instruction.data[0])
                 try:
                     for client in clients:
                         bag_space = await client.backpack_space()
                         logger.debug(f'{client.title} - {bag_space[0]}/{bag_space[1]}')
                 except ValueError:
                     print("You must open your bag, before accessing the count.")
+                self._ip += 1
+            case InstructionKind.log_health:
+                assert type(instruction.data) == list
+                clients: list[SprintyClient] = self._select_players(instruction.data[0])
+                for client in clients:
+                    logger.debug(f'{client.title} - {await client.stats.current_hitpoints()}/{await client.stats.max_hitpoints()}')
+                self._ip += 1
+
+            case InstructionKind.log_mana:
+                assert type(instruction.data) == list
+                clients: list[SprintyClient] = self._select_players(instruction.data[0])
+                for client in clients:
+                    logger.debug(f'{client.title} - {await client.stats.current_mana()}/{await client.stats.max_mana()}')
+                self._ip += 1
+
+            case InstructionKind.log_gold:
+                assert type(instruction.data) == list
+                clients: list[SprintyClient] = self._select_players(instruction.data[0])
+                for client in clients:
+                    logger.debug(f'{client.title} - {await client.stats.current_gold()}/{await client.stats.base_gold_pouch()}')
                 self._ip += 1
 
             case InstructionKind.label | InstructionKind.nop:

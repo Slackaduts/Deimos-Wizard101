@@ -75,6 +75,9 @@ class TokenKind(Enum):
     command_expr_mana_above = auto()
     command_expr_mana_below = auto()
     command_expr_in_range = auto()
+    command_expr_gold = auto()
+    command_expr_gold_above = auto()
+    command_expr_gold_below = auto()
 
     colon = auto() # :
     comma = auto()
@@ -381,6 +384,12 @@ class Tokenizer:
                                         put_simple(TokenKind.command_expr_bagcount_below, full)
                                     case "bagcountabove":
                                         put_simple(TokenKind.command_expr_bagcount_above, full)
+                                    case "gold":
+                                        put_simple(TokenKind.command_expr_gold, full)
+                                    case "goldabove":
+                                        put_simple(TokenKind.command_expr_gold_above, full)
+                                    case "goldbelow":
+                                        put_simple(TokenKind.command_expr_gold_below, full)
 
 
                                     case _:

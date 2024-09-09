@@ -18,6 +18,9 @@ class InstructionKind(Enum):
     log_literal = auto()
     log_window = auto()
     log_bagcount = auto()
+    log_mana = auto()
+    log_health = auto()
+    log_gold = auto()
 
     jump = auto()
     jump_if = auto()
@@ -75,6 +78,12 @@ class Compiler:
                         self.emit(InstructionKind.log_window, [com.player_selector, com.data[1]])
                     case LogKind.bagcount:
                         self.emit(InstructionKind.log_bagcount, [com.player_selector])
+                    case LogKind.health:
+                        self.emit(InstructionKind.log_health, [com.player_selector])
+                    case LogKind.mana:
+                        self.emit(InstructionKind.log_mana, [com.player_selector])
+                    case LogKind.gold:
+                        self.emit(InstructionKind.log_gold, [com.player_selector])
                     case LogKind.literal:
                         self.emit(InstructionKind.log_literal, com.data[1:len(com.data)])
                     case _:
