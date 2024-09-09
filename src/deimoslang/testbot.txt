@@ -4,4 +4,13 @@ block a {
   }
 }
 
+block a {
+  block b {
+  }
+}
+
+block hello {
+  print "hello"
+}
+
 call b

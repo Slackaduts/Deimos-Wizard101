@@ -529,19 +529,21 @@ class Parser:
                 self.i += 1
                 kind = self.tokens[self.i].kind
                 result.kind = CommandKind.log
+                def print_literal():
+                    result.data = [LogKind.literal]
+                    while self.tokens[self.i].kind != TokenKind.END_LINE:
+                        tok = self.tokens[self.i]
+                        if tok.kind != TokenKind.string:
+                            tok.kind = TokenKind.identifier
+                        result.data.append(tok)
+                        self.i += 1
                 match kind:
                     case TokenKind.identifier:
                         if self.tokens[self.i].literal == "window":
                             self.i += 1
                             result.data = [LogKind.window, self.parse_window_path()]
                         else:
-                            result.data = [LogKind.literal]
-                            while self.tokens[self.i].kind != TokenKind.END_LINE:
-                                tok = self.tokens[self.i]
-                                if tok.kind != TokenKind.string:
-                                    tok.kind = TokenKind.identifier
-                                result.data.append(tok)
-                                self.i += 1
+                            print_literal()
                     case TokenKind.command_expr_bagcount:
                         self.i += 1
                         result.data = [LogKind.bagcount]
@@ -550,7 +552,7 @@ class Parser:
                     case TokenKind.command_expr_health:
                         pass
                     case _:
-                        raise Exception(f'{kind} was not implemented.')
+                        print_literal()
                 self.end_line()
             case TokenKind.command_teleport:
                 result.kind = CommandKind.teleport
