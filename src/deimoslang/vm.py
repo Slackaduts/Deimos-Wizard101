@@ -491,22 +491,8 @@ class VM:
 
             case InstructionKind.call:
                 self._callstack.append(self._ip + 1)
-                print("IN HERE")
                 jump = instruction.data  
-                print(jump)
                 self._ip += jump
-                #j = self._ip
-                #label = instruction.data
-                ## TODO: Less hacky solution. This scans upwards looking for labels
-                #while True:
-                #    j -= 1
-                #    if j < 0:
-                #        raise VMError(f"Unable to find label: {label}")
-                #    x = self.program[j]
-                #    if x.kind != InstructionKind.label or x.data != label:
-                #        continue
-                #    break
-                #self._ip = j
             case InstructionKind.ret:
                 self._ip = self._callstack.pop()
 

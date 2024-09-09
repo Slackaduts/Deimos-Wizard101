@@ -107,7 +107,7 @@ class Compiler:
                 case InstructionKind.label:
                     data = instr.data
                     offsets[data] = idx
-                    #program[idx] = Instruction(InstructionKind.nop)
+                    program[idx] = Instruction(InstructionKind.nop)
                 case InstructionKind.call:
                     data = instr.data
                     offset = offsets[data]
@@ -115,21 +115,21 @@ class Compiler:
                 case _:
                     pass
         return program
-    def compile(self) -> list[Instruction]:
+    def _compile(self) -> list[Instruction]:
         for stmt in self._stmts:
             match stmt:
                 case CommandStmt():
                     self.compile_command(stmt.command)
                 case BlockDefStmt():
-                    instrs_body = Compiler(stmt.body.stmts).compile()
+                    instrs_body = Compiler(stmt.body.stmts)._compile()
                     self.emit(InstructionKind.jump, len(instrs_body) + 3)
                     self.emit(InstructionKind.label, stmt.ident)
                     self._program.extend(instrs_body)
                     self.emit(InstructionKind.ret)
                     self.emit(InstructionKind.nop)
                 case IfStmt():
-                    instrs_false = Compiler(stmt.branch_false.stmts).compile()
-                    instrs_true = Compiler(stmt.branch_true.stmts).compile()
+                    instrs_false = Compiler(stmt.branch_false.stmts)._compile()
+                    instrs_true = Compiler(stmt.branch_true.stmts)._compile()
                     self.emit(InstructionKind.jump_if, [stmt.expr, len(instrs_false) + 2]) # account for the jump in false branch
                     self._program.extend(instrs_false)
                     self.emit(InstructionKind.jump, len(instrs_true) + 1)
@@ -137,7 +137,7 @@ class Compiler:
                     self.emit(InstructionKind.nop)
                 case WhileStmt():
                     body_compiler = Compiler(stmt.body.stmts)
-                    body_compiler.compile()
+                    body_compiler._compile()
                     body_compiler.emit(InstructionKind.jump_if, [stmt.expr, -len(body_compiler._program)])
                     instrs_body = body_compiler._program
                     self.emit(InstructionKind.jump_ifn, [stmt.expr, len(instrs_body) + 1])
@@ -145,7 +145,7 @@ class Compiler:
                     self.emit(InstructionKind.nop)
                 case UntilStmt():
                     body_compiler = Compiler(stmt.body.stmts)
-                    body_compiler.compile()
+                    body_compiler._compile()
                     body_compiler.emit(InstructionKind.jump, -len(body_compiler._program))
                     instrs_body = body_compiler._program
                     self.emit(InstructionKind.enter_until, [stmt.expr, len(instrs_body) + 1])
@@ -156,7 +156,9 @@ class Compiler:
                     self.emit(InstructionKind.nop)
                 case _:
                     raise CompilerError(f"Unknown statement: {stmt}")
-        return self.semantic_pass(self._program)
+        return self._program
+    def compile(self):
+        return self.semantic_pass(self._compile())
 
 
 if __name__ == "__main__":
