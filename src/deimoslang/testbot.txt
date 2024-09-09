@@ -1,3 +1,7 @@
-if healthbelow 60% {
-    print "hello, world"
+###deimos_expertmode
+block a {
+  block b {
+  }
 }
+
+call b

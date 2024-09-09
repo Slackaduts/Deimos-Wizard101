@@ -382,6 +382,7 @@ class Parser:
                 self.i += 1
                 text: str = self.expect_consume(TokenKind.string).value # type: ignore
                 result.data = [ExprKind.tracking_goal, text.lower()]
+
             case _:
                 return self.parse_unary_expression()
 
@@ -544,6 +545,10 @@ class Parser:
                     case TokenKind.command_expr_bagcount:
                         self.i += 1
                         result.data = [LogKind.bagcount]
+                    case TokenKind.command_expr_mana:
+                        pass
+                    case TokenKind.command_expr_health:
+                        pass
                     case _:
                         raise Exception(f'{kind} was not implemented.')
                 self.end_line()

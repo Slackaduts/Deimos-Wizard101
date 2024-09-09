@@ -100,6 +100,21 @@ class Compiler:
             case _:
                 raise CompilerError(f"Unimplemented command: {com}")
 
+    def semantic_pass(self, program:list[Instruction]):
+        offsets = {}
+        for idx, instr in enumerate(program):
+            match instr.kind:
+                case InstructionKind.label:
+                    data = instr.data
+                    offsets[data] = idx
+                    #program[idx] = Instruction(InstructionKind.nop)
+                case InstructionKind.call:
+                    data = instr.data
+                    offset = offsets[data]
+                    program[idx] = Instruction(InstructionKind.call, offset-idx)
+                case _:
+                    pass
+        return program
     def compile(self) -> list[Instruction]:
         for stmt in self._stmts:
             match stmt:
@@ -141,7 +156,7 @@ class Compiler:
                     self.emit(InstructionKind.nop)
                 case _:
                     raise CompilerError(f"Unknown statement: {stmt}")
-        return self._program
+        return self.semantic_pass(self._program)
 
 
 if __name__ == "__main__":

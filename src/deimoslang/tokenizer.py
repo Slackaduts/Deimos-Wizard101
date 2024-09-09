@@ -74,6 +74,7 @@ class TokenKind(Enum):
     command_expr_mana = auto()
     command_expr_mana_above = auto()
     command_expr_mana_below = auto()
+    command_expr_in_range = auto()
 
     colon = auto() # :
     comma = auto()
