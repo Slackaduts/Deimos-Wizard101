@@ -354,7 +354,7 @@ class Tokenizer:
                                         put_simple(TokenKind.command_expr_tracking_quest, full)
                                     case "trackinggoal":
                                         put_simple(TokenKind.command_expr_tracking_goal, full)
-                                    case "free":
+                                    case "loading":
                                         put_simple(TokenKind.command_expr_free, full)
                                     case "incombat":
                                         put_simple(TokenKind.command_expr_in_combat, full)
