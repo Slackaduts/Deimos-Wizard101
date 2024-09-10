@@ -5,6 +5,9 @@ from typing import Any
 class TokenizerError(Exception):
     pass
 
+class Percent(float):
+    pass
+
 
 class TokenKind(Enum):
     player_num = auto()
@@ -258,7 +261,7 @@ class Tokenizer:
                                     err("Unable to convert to number", i)
                             elif all([x.isnumeric() or x == "." or x == "e" or x == "-" or x == "%" for x in full]):
                                 try:
-                                    put_simple(TokenKind.percent, full, float(full[:-1])/100)
+                                    put_simple(TokenKind.percent, full, Percent(float(full[:-1])/100))
                                 except ValueError:
                                     err("Unable to convert to percent", i)
                             elif "/" in full:
