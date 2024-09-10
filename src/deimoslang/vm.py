@@ -148,7 +148,7 @@ class VM:
                 return True
             case ExprKind.loading:
                 for client in clients:
-                    if await client.is_loading():
+                    if not await client.is_loading():
                         return False
                 return True
             case ExprKind.in_combat:
@@ -158,9 +158,9 @@ class VM:
                 return True
             case ExprKind.has_dialogue:
                 for client in clients:
-                    if await client.is_in_dialog():
-                        return True
-                return False
+                    if not await client.is_in_dialog():
+                        return False
+                return True
             case ExprKind.has_xyz:
                 target_pos: XYZ = await self.eval(expression.command.data[1]) # type: ignore
                 for client in clients:
