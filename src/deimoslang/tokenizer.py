@@ -61,7 +61,7 @@ class TokenKind(Enum):
     command_expr_playercount = auto()
     command_expr_tracking_quest = auto()
     command_expr_tracking_goal = auto()
-    command_expr_free = auto()
+    command_expr_loading = auto()
     command_expr_in_combat = auto()
     command_expr_has_dialogue = auto()
     command_expr_has_xyz = auto()
@@ -359,7 +359,7 @@ class Tokenizer:
                                     case "trackinggoal":
                                         put_simple(TokenKind.command_expr_tracking_goal, full)
                                     case "loading":
-                                        put_simple(TokenKind.command_expr_free, full)
+                                        put_simple(TokenKind.command_expr_loading, full)
                                     case "incombat":
                                         put_simple(TokenKind.command_expr_in_combat, full)
                                     case "hasdialogue":
@@ -390,6 +390,9 @@ class Tokenizer:
                                         put_simple(TokenKind.command_expr_gold_above, full)
                                     case "goldbelow":
                                         put_simple(TokenKind.command_expr_gold_below, full)
+                                    case "inrange":
+                                        put_simple(TokenKind.command_expr_in_range, full)
+
 
 
                                     case _:

@@ -146,7 +146,7 @@ class VM:
                     if text != expected_text:
                         return False
                 return True
-            case ExprKind.free:
+            case ExprKind.loading:
                 for client in clients:
                     if await client.is_loading():
                         return False
@@ -245,6 +245,24 @@ class VM:
                             return False
                     except ValueError:
                         print("You must open your bag, before accessing the count.")
+                        return False
+                return True
+            case ExprKind.gold:
+                target:float = await self.eval(expression.command.data[1]) # type: ignore
+                for client in clients:
+                    if await client.stats.current_gold() != target:
+                        return False
+                return True
+            case ExprKind.gold_above:
+                threshold:float = await self.eval(expression.command.data[1]) # type: ignore
+                for client in clients:
+                    if await client.stats.current_gold()/await client.stats.base_gold_pouch() < threshold:
+                        return False
+                return True
+            case ExprKind.gold_below:
+                threshold:float = await self.eval(expression.command.data[1]) # type: ignore
+                for client in clients:
+                    if await client.stats.current_gold()/await client.stats.base_gold_pouch() > threshold:
                         return False
                 return True
 

@@ -63,7 +63,7 @@ class ExprKind(Enum):
     playercount = auto()
     tracking_quest = auto()
     tracking_goal = auto()
-    free = auto()
+    loading = auto()
     in_combat = auto()
     has_dialogue = auto()
     has_xyz = auto()
@@ -76,6 +76,9 @@ class ExprKind(Enum):
     bag_count = auto()
     bag_count_above = auto()
     bag_count_below = auto()
+    gold = auto()
+    gold_above = auto()
+    gold_below = auto()
 
 
 # TODO: Replace asserts
@@ -316,10 +319,10 @@ class Parser:
                 result.kind = CommandKind.expr
                 self.i += 1
                 result.data = [ExprKind.has_dialogue]
-            case TokenKind.command_expr_free:
+            case TokenKind.command_expr_loading:
                 result.kind = CommandKind.expr
                 self.i += 1
-                result.data = [ExprKind.free]
+                result.data = [ExprKind.loading]
             case TokenKind.command_expr_has_xyz:
                 result.kind = CommandKind.expr
                 self.i += 1
@@ -370,6 +373,21 @@ class Parser:
                 self.i += 1
                 num = self.parse_expression()
                 result.data = [ExprKind.bag_count_below, num]
+            case TokenKind.command_expr_gold:
+                result.kind = CommandKind.expr
+                self.i += 1
+                num = self.parse_expression()
+                result.data = [ExprKind.gold, num]
+            case TokenKind.command_expr_gold_above:
+                result.kind = CommandKind.expr
+                self.i += 1
+                num = self.parse_expression()
+                result.data = [ExprKind.gold_above, num]
+            case TokenKind.command_expr_gold_below:
+                result.kind = CommandKind.expr
+                self.i += 1
+                num = self.parse_expression()
+                result.data = [ExprKind.gold_below, num]
             case TokenKind.command_expr_playercount:
                 result.kind = CommandKind.expr
                 self.i += 1
