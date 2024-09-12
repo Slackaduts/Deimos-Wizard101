@@ -42,6 +42,8 @@ class TeleportKind(Enum):
 class EvalKind(Enum):
     health = auto()
     max_health = auto()
+    mana = auto()
+    max_mana = auto()
 
 class WaitforKind(Enum):
     dialog = auto()
@@ -182,6 +184,14 @@ class GreaterExpression(Expression):
 
     def __repr__(self) -> str:
         return f"GreaterE({self.lhs}, {self.rhs})"
+
+class SelectorGroup(Expression):
+    def __init__(self, players: PlayerSelector, expr: Expression):
+        self.players = players
+        self.expr = expr
+
+    def __repr__(self) -> str:
+        return f"SelectorG({self.players}, {self.expr})"
 
 class DivideExpression(Expression):
     def __init__(self, lhs: Expression, rhs: Expression):
@@ -332,9 +342,16 @@ class Parser:
         else:
             return self.parse_atom()
 
+    def gen_greater_expression(self, left:Expression, right:Expression, player_selector:PlayerSelector):
+        return SelectorGroup(player_selector, GreaterExpression(left, right))
+    def gen_equivalent_expression(self, left:Expression, right:Expression, player_selector:PlayerSelector):
+        return SelectorGroup(player_selector, EquivalentExpression(left, right))
+
+
     def parse_command_expression(self) -> Expression:
         result = Command()
-        result.player_selector = self.parse_player_selector()
+        player_selector  = self.parse_player_selector()
+        result.player_selector = player_selector
 
         match self.tokens[self.i].kind:
             case TokenKind.command_expr_window_visible:
@@ -367,41 +384,77 @@ class Parser:
                 xyz = self.parse_xyz()
                 result.data = [ExprKind.has_xyz, xyz]
             case TokenKind.command_expr_health_above:
-                result.kind = CommandKind.expr
-                self.i += 1
-                num = self.parse_expression()
-                result.data = [ExprKind.health_above, num]
-            case TokenKind.command_expr_health_below:
-                result.kind = CommandKind.expr
-                self.i += 1
-                num = self.parse_expression()
-                result.data = [ExprKind.health_below, num]
-            case TokenKind.command_expr_health:
-                #result.kind = CommandKind.expr_eq
                 self.i += 1
                 num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
-                #result.data = [ExprKind.health, num]
+                assert(num.value!=None)
                 if num.kind == TokenKind.percent:
-                    print("Percent")
-                    return EquivalentExpression(NumberExpression(num.value), DivideExpression(Eval(EvalKind.health), Eval(EvalKind.max_health)))
+                    left = DivideExpression(Eval(EvalKind.health), Eval(EvalKind.max_health))
+                    right = NumberExpression(num.value)
+                    return self.gen_greater_expression(left, right, player_selector)
                 else:
-                    print("Number")
-                    return EquivalentExpression(NumberExpression(num.value), Eval(EvalKind.health))
-            case TokenKind.command_expr_mana:
-                result.kind = CommandKind.expr
+                    left = Eval(EvalKind.health)
+                    right = NumberExpression(num.value)
+                    return self.gen_greater_expression(left, right, player_selector)
+            case TokenKind.command_expr_health_below:
                 self.i += 1
-                num = self.parse_expression()
-                result.data = [ExprKind.mana, num]
+                num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
+                assert(num.value!=None)
+                if num.kind == TokenKind.percent:
+                    right = DivideExpression(Eval(EvalKind.health), Eval(EvalKind.max_health))
+                    left = NumberExpression(num.value)
+                    return self.gen_greater_expression(left, right, player_selector)
+                else:
+                    right = Eval(EvalKind.health)
+                    left = NumberExpression(num.value)
+                    return self.gen_greater_expression(left, right, player_selector)
+            case TokenKind.command_expr_health:
+                self.i += 1
+                num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
+                assert(num.value!=None)
+                if num.kind == TokenKind.percent:
+                    right = DivideExpression(Eval(EvalKind.health), Eval(EvalKind.max_health))
+                    left = NumberExpression(num.value)
+                    return self.gen_equivalent_expression(left, right, player_selector)
+                else:
+                    right = Eval(EvalKind.health)
+                    left = NumberExpression(num.value)
+                    return self.gen_equivalent_expression(left, right, player_selector)
             case TokenKind.command_expr_mana_above:
-                result.kind = CommandKind.expr
                 self.i += 1
-                num = self.parse_expression()
-                result.data = [ExprKind.mana_above, num]
+                num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
+                assert(num.value!=None)
+                if num.kind == TokenKind.percent:
+                    left = DivideExpression(Eval(EvalKind.mana), Eval(EvalKind.max_mana))
+                    right = NumberExpression(num.value)
+                    return self.gen_greater_expression(left, right, player_selector)
+                else:
+                    left = Eval(EvalKind.mana)
+                    right = NumberExpression(num.value)
+                    return self.gen_greater_expression(left, right, player_selector)
             case TokenKind.command_expr_mana_below:
-                result.kind = CommandKind.expr
                 self.i += 1
-                num = self.parse_expression()
-                result.data = [ExprKind.mana_below, num]
+                num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
+                assert(num.value!=None)
+                if num.kind == TokenKind.percent:
+                    right = DivideExpression(Eval(EvalKind.mana), Eval(EvalKind.max_mana))
+                    left = NumberExpression(num.value)
+                    return self.gen_greater_expression(left, right, player_selector)
+                else:
+                    right = Eval(EvalKind.mana)
+                    left = NumberExpression(num.value)
+                    return self.gen_greater_expression(left, right, player_selector)
+            case TokenKind.command_expr_mana:
+                self.i += 1
+                num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
+                assert(num.value!=None)
+                if num.kind == TokenKind.percent:
+                    right = DivideExpression(Eval(EvalKind.mana), Eval(EvalKind.max_mana))
+                    left = NumberExpression(num.value)
+                    return self.gen_equivalent_expression(left, right, player_selector)
+                else:
+                    right = Eval(EvalKind.health)
+                    left = NumberExpression(num.value)
+                    return self.gen_equivalent_expression(left, right, player_selector)
             case TokenKind.command_expr_bagcount:
                 result.kind = CommandKind.expr
                 self.i += 1

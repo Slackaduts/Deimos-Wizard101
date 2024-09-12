@@ -319,8 +319,38 @@ class VM:
                 left = await self.eval(expression.lhs, client)
                 right = await self.eval(expression.rhs, client)
                 return left == right
+            case DivideExpression():
+                left = await self.eval(expression.lhs, client)
+                right = await self.eval(expression.rhs, client)
+                return (left / right) # type: ignore
+            case GreaterExpression():
+                left = await self.eval(expression.lhs, client)
+                right = await self.eval(expression.rhs, client)
+                return (left > right) #type: ignore
+            case Eval():
+                assert(client != None)
+                return await self._eval_expression(expression.kind, client)
+            case SelectorGroup():
+                players = self._select_players(expression.players)
+                expr = expression.expr
+                for player in players:
+                    if not await self.eval(expr, player):
+                        return False
+                return True
             case _:
                 raise VMError(f"Unimplemented expression type: {expression}")
+
+    async def _eval_expression(self, kind:EvalKind, client: Client):
+        match kind:
+            case EvalKind.health:
+                return await client.stats.current_hitpoints()
+            case EvalKind.max_health:
+                return await client.stats.max_hitpoints()
+            case EvalKind.mana:
+                return await client.stats.current_mana()
+            case EvalKind.max_mana:
+                return await client.stats.max_mana()
+
 
     async def exec_deimos_call(self, instruction: Instruction):
         assert instruction.kind == InstructionKind.deimos_call

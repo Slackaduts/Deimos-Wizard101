@@ -254,16 +254,17 @@ class Tokenizer:
 
                             if len(full) == 0:
                                 pass
-                            elif all([x.isnumeric() or x == "." or x == "e" or x == "-" for x in full]):
-                                try:
-                                    put_simple(TokenKind.number, full, float(full))
-                                except ValueError:
-                                    err("Unable to convert to number", i)
-                            elif all([x.isnumeric() or x == "." or x == "e" or x == "-" or x == "%" for x in full]):
-                                try:
-                                    put_simple(TokenKind.percent, full, Percent(float(full[:-1])/100))
-                                except ValueError:
-                                    err("Unable to convert to percent", i)
+                            elif all([x.isnumeric() or x in ".e-%" for x in full]):
+                                if '%' in full:
+                                    try:
+                                        put_simple(TokenKind.percent, full, Percent(float(full[:-1])/100))
+                                    except ValueError:
+                                        err("Unable to convert to percent", i)
+                                else:
+                                    try:
+                                        put_simple(TokenKind.number, full, float(full))
+                                    except ValueError:
+                                        err("Unable to convert to number", i)
                             elif "/" in full:
                                 if full.endswith("/"):
                                     err("Invalid path", i)
