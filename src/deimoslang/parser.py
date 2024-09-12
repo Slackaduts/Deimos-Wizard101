@@ -44,6 +44,10 @@ class EvalKind(Enum):
     max_health = auto()
     mana = auto()
     max_mana = auto()
+    bagcount = auto()
+    max_bagcount = auto()
+    gold = auto()
+    max_gold = auto()
 
 class WaitforKind(Enum):
     dialog = auto()
@@ -457,40 +461,88 @@ class Parser:
                 if num.kind == TokenKind.percent:
                     evaluated = DivideExpression(Eval(EvalKind.mana), Eval(EvalKind.max_mana))
                 else:
-                    evaluated = Eval(EvalKind.health)
+                    evaluated = Eval(EvalKind.mana)
 
                 # target == evaluated
                 return self.gen_equivalent_expression(target, evaluated, player_selector)
-            case TokenKind.command_expr_bagcount:
-                result.kind = CommandKind.expr
-                self.i += 1
-                num = self.parse_expression()
-                result.data = [ExprKind.bag_count, num]
             case TokenKind.command_expr_bagcount_above:
-                result.kind = CommandKind.expr
                 self.i += 1
-                num = self.parse_expression()
-                result.data = [ExprKind.bag_count_above, num]
+                num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
+                assert(num.value!=None)
+                target = NumberExpression(num.value)
+
+                if num.kind == TokenKind.percent:
+                    evaluated = DivideExpression(Eval(EvalKind.bagcount), Eval(EvalKind.max_bagcount))
+                else:
+                    evaluated = Eval(EvalKind.bagcount)
+
+                # evaluated_value > target_value
+                return self.gen_greater_expression(evaluated, target, player_selector)
             case TokenKind.command_expr_bagcount_below:
-                result.kind = CommandKind.expr
                 self.i += 1
-                num = self.parse_expression()
-                result.data = [ExprKind.bag_count_below, num]
-            case TokenKind.command_expr_gold:
-                result.kind = CommandKind.expr
+                num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
+                assert(num.value!=None)
+                target = NumberExpression(num.value)
+                
+                if num.kind == TokenKind.percent:
+                    evaluated = DivideExpression(Eval(EvalKind.bagcount), Eval(EvalKind.max_bagcount))
+                else:
+                    evaluated = Eval(EvalKind.bagcount)
+
+                # target > evaluated
+                return self.gen_greater_expression(target, evaluated, player_selector)
+            case TokenKind.command_expr_bagcount:
                 self.i += 1
-                num = self.parse_expression()
-                result.data = [ExprKind.gold, num]
+                num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
+                assert(num.value!=None)
+                target = NumberExpression(num.value)
+
+                if num.kind == TokenKind.percent:
+                    evaluated = DivideExpression(Eval(EvalKind.bagcount), Eval(EvalKind.max_bagcount))
+                else:
+                    evaluated = Eval(EvalKind.bagcount)
+
+                # target == evaluated
+                return self.gen_equivalent_expression(target, evaluated, player_selector)
             case TokenKind.command_expr_gold_above:
-                result.kind = CommandKind.expr
                 self.i += 1
-                num = self.parse_expression()
-                result.data = [ExprKind.gold_above, num]
+                num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
+                assert(num.value!=None)
+                target = NumberExpression(num.value)
+
+                if num.kind == TokenKind.percent:
+                    evaluated = DivideExpression(Eval(EvalKind.gold), Eval(EvalKind.max_gold))
+                else:
+                    evaluated = Eval(EvalKind.gold)
+
+                # evaluated_value > target_value
+                return self.gen_greater_expression(evaluated, target, player_selector)
             case TokenKind.command_expr_gold_below:
-                result.kind = CommandKind.expr
                 self.i += 1
-                num = self.parse_expression()
-                result.data = [ExprKind.gold_below, num]
+                num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
+                assert(num.value!=None)
+                target = NumberExpression(num.value)
+                
+                if num.kind == TokenKind.percent:
+                    evaluated = DivideExpression(Eval(EvalKind.gold), Eval(EvalKind.max_gold))
+                else:
+                    evaluated = Eval(EvalKind.gold)
+
+                # target > evaluated
+                return self.gen_greater_expression(target, evaluated, player_selector)
+            case TokenKind.command_expr_gold:
+                self.i += 1
+                num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
+                assert(num.value!=None)
+                target = NumberExpression(num.value)
+
+                if num.kind == TokenKind.percent:
+                    evaluated = DivideExpression(Eval(EvalKind.gold), Eval(EvalKind.max_gold))
+                else:
+                    evaluated = Eval(EvalKind.gold)
+
+                # target == evaluated
+                return self.gen_equivalent_expression(target, evaluated, player_selector)
             case TokenKind.command_expr_playercount:
                 result.kind = CommandKind.expr
                 self.i += 1

@@ -5,11 +5,12 @@ import traceback
 import requests
 
 import wizwalker.errors
-from wizwalker import Client, Keycode, XYZ, kernel32
+from wizwalker import Client, Keycode, XYZ, Primitive, kernel32
+from wizwalker.memory.memory_objects.character_registry import DynamicMemoryObject
 from wizwalker.utils import get_all_wizard_handles, override_wiz_install_location, get_pid_from_handle
 from wizwalker.extensions.scripting.utils import _maybe_get_named_window, _cycle_to_online_friends, _click_on_friend, _teleport_to_friend, _friend_list_entry
 from wizwalker.extensions.wizsprinter.wiz_navigator import toZone
-from wizwalker.memory import Window, WindowFlags
+from wizwalker.memory import ObjectType, Window, WindowFlags
 from wizwalker.combat import CombatMember
 from loguru import logger
 
@@ -1365,3 +1366,66 @@ def override_wiz_install_using_handle(max_size = 100):
     kernel32.CloseHandle(handle)
     install_location = path.value.replace("\Bin\WizardGraphicalClient.exe", "")
     override_wiz_install_location(install_location)
+
+
+async def backpack_space(client:Client):
+    def sign_extend(val: int) -> int:
+        return (val & 0x7FFFFFFF) - (val & 0x80000000)
+    def make_string_id(x: str) -> int:
+        # https://kronos-project.github.io/grimoire/internals/string-id.html
+        hash = 0
+        for idx, c in enumerate(x):
+            val = ord(c) - 32
+            shift = 5 * idx % 32
+            hash ^= sign_extend(val << shift)
+            if shift > 24:
+                hash ^= sign_extend(val >> (32 - shift))
+        return hash & 0xFFFF_FFFF
+    async def read_hashset_basic(x: DynamicMemoryObject, primitive_type: Primitive) -> set[int]:
+        result = set()
+        stack = [DynamicMemoryObject(x.hook_handler, await x.read_value_from_offset(8, Primitive.uint64))]
+        while len(stack) > 0:
+            node = stack.pop()
+            is_leaf = await node.read_value_from_offset(0x19, Primitive.bool)
+            if is_leaf:
+                continue
+            stack.extend([
+                DynamicMemoryObject(x.hook_handler, await node.read_value_from_offset(0x00, Primitive.uint64)),
+                DynamicMemoryObject(x.hook_handler, await node.read_value_from_offset(0x10, Primitive.uint64)),
+            ])
+            result.add(await node.read_value_from_offset(0x1C, primitive_type))
+        return result
+    co = client.client_object
+    valid_item_count = 0
+    total_items = 0
+    for b in await co.inactive_behaviors():
+        if "inv" in (await b.behavior_name()).lower():
+            total_items = await b.read_value_from_offset(160, Primitive.int32)
+            for it in await b.read_shared_linked_list(112):
+                xx = wizwalker.memory.memory_objects.DynamicClientObject(client.hook_handler, it)
+                template = await xx.object_template() # TODO: EXTREMELY INACCURATE TYPE
+                if not template: 
+                    raise Exception("Error calculating backpack size.")
+                item_flags_set_addr = await template.read_value_from_offset(264, Primitive.uint64)
+                item_string_flags = await read_hashset_basic(DynamicMemoryObject(client.hook_handler, item_flags_set_addr), Primitive.uint32)
+                excluded = len(set([make_string_id("NotCounted"), make_string_id("Jewel"), make_string_id("Emote")]).intersection(item_string_flags)) > 0
+                if await template.object_type() == ObjectType.structure:
+                    excluded = True
+                if not excluded:
+                    valid_item_count += 1
+
+        elif "equip" in (await b.behavior_name()).lower():
+            for it in await b.read_shared_linked_list(120):
+                xx = wizwalker.memory.memory_objects.DynamicClientObject(client.hook_handler, it)
+                template = await xx.object_template() # TODO: EXTREMELY INACCURATE TYPE
+                if not template: 
+                    raise Exception("Error calculating backpack size.")
+                item_flags_set_addr = await template.read_value_from_offset(264, Primitive.uint64)
+                item_string_flags = await read_hashset_basic(DynamicMemoryObject(client.hook_handler, item_flags_set_addr), Primitive.uint32)
+                excluded = len(set([make_string_id("NotCounted"), make_string_id("Jewel"), make_string_id("Emote"), make_string_id("Deeds")]).intersection(item_string_flags)) > 0
+                if await template.object_type() in [ObjectType.structure, ObjectType.deed]:
+                    excluded = True
+                if not excluded:
+                    valid_item_count += 1
+    return (valid_item_count, total_items)
+

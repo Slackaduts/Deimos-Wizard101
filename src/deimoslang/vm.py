@@ -12,7 +12,7 @@ from .parser import *
 from .ir import *
 
 from src.utils import is_visible_by_path, is_free, get_window_from_path, refill_potions, refill_potions_if_needed \
-                    , logout_and_in, click_window_by_path, get_quest_name
+                    , logout_and_in, click_window_by_path, get_quest_name, backpack_space
 from src.command_parser import teleport_to_friend_from_list
 from src.config_combat import delegate_combat_configs, default_config
 
@@ -168,122 +168,6 @@ class VM:
                     if abs(target_pos - client_pos) > 1:
                         return False
                 return True
-            case ExprKind.health_above:
-                threshold = await self.eval(expression.command.data[1]) # type: ignore
-                for client in clients:
-                    client_health = await client.stats.current_hitpoints()
-                    max_health = await client.stats.max_hitpoints()
-                    if type(threshold)==Percent and client_health/max_health <= threshold:
-                        return False
-                    elif type(threshold)!=Percent and client_health <= threshold:
-                        return False
-                return True
-            case ExprKind.health_below:
-                threshold = await self.eval(expression.command.data[1]) # type: ignore
-                for client in clients:
-                    client_health = await client.stats.current_hitpoints()
-                    max_health = await client.stats.max_hitpoints()
-                    if type(threshold)==Percent and client_health/max_health >= threshold:
-                        return False
-                    elif type(threshold)!=Percent and client_health >= threshold:
-                        return False
-                return True
-            case ExprKind.health:
-                target_health = await self.eval(expression.command.data[1]) # type: ignore
-                for client in clients:
-                    if type(target_health)==Percent and target_health != await client.stats.current_hitpoints()/await client.stats.max_hitpoints():
-                        return False
-                    if type(target_health)!=Percent and target_health != await client.stats.current_hitpoints():
-                        return False
-                return True
-            case ExprKind.mana:
-                target_mana = await self.eval(expression.command.data[1]) # type: ignore
-                for client in clients:
-                    if type(target_mana)==Percent and target_mana != await client.stats.current_mana()/await client.stats.max_mana():
-                        return False
-                    if type(target_mana)!=Percent and target_mana != await client.stats.current_mana():
-                        return False
-                return True
-            case ExprKind.mana_below:
-                threshold = await self.eval(expression.command.data[1]) # type: ignore
-                for client in clients:
-                    if type(threshold)==Percent and threshold <= await client.stats.current_mana()/await client.stats.max_mana():
-                        return False
-                    if type(threshold)!=Percent and threshold <= await client.stats.current_mana():
-                        return False
-                return True
-            case ExprKind.mana_above:
-                threshold = await self.eval(expression.command.data[1]) # type: ignore
-                for client in clients:
-                    if type(threshold)==Percent and threshold >= await client.stats.current_mana()/await client.stats.max_mana():
-                        return False
-                    if type(threshold)!=Percent and threshold >= await client.stats.current_mana():
-                        return False
-                return True
-            case ExprKind.bag_count:
-                expected_count = await self.eval(expression.command.data[1]) # type: ignore
-                for client in clients:
-                    try:
-                        bag = await client.backpack_space()
-                        if type(expected_count)==Percent and expected_count != bag[0]:
-                            return False
-                        elif type(expected_count)!=Percent and expected_count != bag[0]:
-                            return False
-                    except ValueError:
-                        print("You must open your bag, before accessing the count.")
-                        return False
-                return True
-            case ExprKind.bag_count_above:
-                threshold = await self.eval(expression.command.data[1]) # type: ignore
-                for client in clients:
-                    try:
-                        bag = await client.backpack_space()
-                        if type(threshold)==Percent and threshold >= bag[0]/bag[1]:
-                            return False
-                        elif type(threshold)!=Percent and threshold >= bag[0]:
-                            return False
-                    except ValueError:
-                        print("You must open your bag, before accessing the count.")
-                        return False
-                return True
-            case ExprKind.bag_count_below:
-                threshold = await self.eval(expression.command.data[1]) # type: ignore
-                for client in clients:
-                    try:
-                        bag = await client.backpack_space()
-                        if type(threshold)==Percent and threshold <= bag[0]/bag[1]:
-                            return False
-                        elif type(threshold)!=Percent and threshold <= bag[0]:
-                            return False
-                    except ValueError:
-                        print("You must open your bag, before accessing the count.")
-                        return False
-                return True
-            case ExprKind.gold:
-                target = await self.eval(expression.command.data[1]) # type: ignore
-                for client in clients:
-                    if type(target)==Percent and target != await client.stats.current_gold()/await client.stats.base_gold_pouch():
-                        return False
-                    if type(target)!=Percent and target != await client.stats.current_gold():
-                        return False
-                return True
-            case ExprKind.gold_above:
-                threshold = await self.eval(expression.command.data[1]) # type: ignore
-                for client in clients:
-                    if type(threshold)==Percent and threshold >= await client.stats.current_gold()/await client.stats.base_gold_pouch():
-                        return False
-                    if type(threshold)!=Percent and threshold >= await client.stats.current_gold()/await client.stats.base_gold_pouch():
-                        return False
-                return True
-            case ExprKind.gold_below:
-                threshold = await self.eval(expression.command.data[1]) # type: ignore
-                for client in clients:
-                    if type(threshold)==Percent and threshold <= await client.stats.current_gold()/await client.stats.base_gold_pouch():
-                        return False
-                    if type(threshold)!=Percent and threshold <= await client.stats.current_gold()/await client.stats.base_gold_pouch():
-                        return False
-                return True
-
 
             case _:
                 raise VMError(f"Unimplemented expression: {expression}")
@@ -350,6 +234,14 @@ class VM:
                 return await client.stats.current_mana()
             case EvalKind.max_mana:
                 return await client.stats.max_mana()
+            case EvalKind.bagcount:
+                return (await backpack_space(client))[0]
+            case EvalKind.max_bagcount:
+                return (await backpack_space(client))[1]
+            case EvalKind.gold:
+                return await client.stats.current_gold()
+            case EvalKind.max_gold:
+                return await client.stats.base_gold_pouch()
 
 
     async def exec_deimos_call(self, instruction: Instruction):
@@ -603,12 +495,9 @@ class VM:
             case InstructionKind.log_bagcount:
                 assert type(instruction.data) == list
                 clients: list[SprintyClient] = self._select_players(instruction.data[0])
-                try:
-                    for client in clients:
-                        bag_space = await client.backpack_space()
-                        logger.debug(f'{client.title} - {bag_space[0]}/{bag_space[1]}')
-                except ValueError:
-                    print("You must open your bag, before accessing the count.")
+                for client in clients:
+                    bag_space = await backpack_space(client)
+                    logger.debug(f'{client.title} - {bag_space[0]}/{bag_space[1]}')
                 self._ip += 1
             case InstructionKind.log_health:
                 assert type(instruction.data) == list
