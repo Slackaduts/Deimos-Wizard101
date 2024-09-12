@@ -1,16 +1,4 @@
 ###deimos_expertmode
-block a {
-  block b {
-  }
+if health 5 {
+  print "hello, world"
 }
-
-block a {
-  block b {
-  }
-}
-
-block hello {
-  print "hello"
-}
-
-call b

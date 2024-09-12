@@ -12,6 +12,8 @@ class CommandKind(Enum):
     invalid = auto()
 
     expr = auto()
+    expr_gt = auto()
+    expr_eq = auto()
 
     kill = auto()
     sleep = auto()
@@ -36,6 +38,10 @@ class TeleportKind(Enum):
     mob = auto()
     quest = auto()
     client_num = auto()
+
+class EvalKind(Enum):
+    health = auto()
+    max_health = auto()
 
 class WaitforKind(Enum):
     dialog = auto()
@@ -160,6 +166,38 @@ class XYZExpression(Expression):
 
     def __repr__(self) -> str:
         return f"XYZE({self.x}, {self.y}, {self.z})"
+
+class EquivalentExpression(Expression):
+    def __init__(self, lhs: Expression, rhs: Expression):
+        self.lhs = lhs
+        self.rhs = rhs
+
+    def __repr__(self) -> str:
+        return f"EquivalentE({self.lhs}, {self.rhs})"
+
+class GreaterExpression(Expression):
+    def __init__(self, lhs: Expression, rhs: Expression):
+        self.lhs = lhs
+        self.rhs = rhs
+
+    def __repr__(self) -> str:
+        return f"GreaterE({self.lhs}, {self.rhs})"
+
+class DivideExpression(Expression):
+    def __init__(self, lhs: Expression, rhs: Expression):
+        self.lhs = lhs
+        self.rhs = rhs
+
+    def __repr__(self) -> str:
+        return f"DivideE({self.lhs}, {self.rhs})"
+
+
+class Eval(Expression):
+    def __init__(self, eval_kind:EvalKind):
+        self.kind = eval_kind
+
+    def __repr__(self) -> str:
+        return f"Eval({self.kind})"
 
 
 class Stmt:
@@ -339,10 +377,16 @@ class Parser:
                 num = self.parse_expression()
                 result.data = [ExprKind.health_below, num]
             case TokenKind.command_expr_health:
-                result.kind = CommandKind.expr
+                #result.kind = CommandKind.expr_eq
                 self.i += 1
-                num = self.parse_expression()
-                result.data = [ExprKind.health, num]
+                num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
+                #result.data = [ExprKind.health, num]
+                if num.kind == TokenKind.percent:
+                    print("Percent")
+                    return EquivalentExpression(NumberExpression(num.value), DivideExpression(Eval(EvalKind.health), Eval(EvalKind.max_health)))
+                else:
+                    print("Number")
+                    return EquivalentExpression(NumberExpression(num.value), Eval(EvalKind.health))
             case TokenKind.command_expr_mana:
                 result.kind = CommandKind.expr
                 self.i += 1

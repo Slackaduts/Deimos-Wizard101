@@ -315,6 +315,10 @@ class VM:
                 if key not in Keycode.__members__:
                     raise VMError(f"Unknown key code: {key}")
                 return Keycode[expression.key]
+            case EquivalentExpression():
+                left = await self.eval(expression.lhs, client)
+                right = await self.eval(expression.rhs, client)
+                return left == right
             case _:
                 raise VMError(f"Unimplemented expression type: {expression}")
 
