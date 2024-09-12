@@ -387,74 +387,80 @@ class Parser:
                 self.i += 1
                 num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
                 assert(num.value!=None)
+                target = NumberExpression(num.value)
+
                 if num.kind == TokenKind.percent:
-                    left = DivideExpression(Eval(EvalKind.health), Eval(EvalKind.max_health))
-                    right = NumberExpression(num.value)
-                    return self.gen_greater_expression(left, right, player_selector)
+                    evaluated = DivideExpression(Eval(EvalKind.health), Eval(EvalKind.max_health))
                 else:
-                    left = Eval(EvalKind.health)
-                    right = NumberExpression(num.value)
-                    return self.gen_greater_expression(left, right, player_selector)
+                    evaluated = Eval(EvalKind.health)
+
+                # evaluated_value > target_value
+                return self.gen_greater_expression(evaluated, target, player_selector)
             case TokenKind.command_expr_health_below:
                 self.i += 1
                 num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
                 assert(num.value!=None)
+                target = NumberExpression(num.value)
+                
                 if num.kind == TokenKind.percent:
-                    right = DivideExpression(Eval(EvalKind.health), Eval(EvalKind.max_health))
-                    left = NumberExpression(num.value)
-                    return self.gen_greater_expression(left, right, player_selector)
+                    evaluated = DivideExpression(Eval(EvalKind.health), Eval(EvalKind.max_health))
                 else:
-                    right = Eval(EvalKind.health)
-                    left = NumberExpression(num.value)
-                    return self.gen_greater_expression(left, right, player_selector)
+                    evaluated = Eval(EvalKind.health)
+
+                # target > evaluated
+                return self.gen_greater_expression(target, evaluated, player_selector)
             case TokenKind.command_expr_health:
                 self.i += 1
                 num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
                 assert(num.value!=None)
+                target = NumberExpression(num.value)
+
                 if num.kind == TokenKind.percent:
-                    right = DivideExpression(Eval(EvalKind.health), Eval(EvalKind.max_health))
-                    left = NumberExpression(num.value)
-                    return self.gen_equivalent_expression(left, right, player_selector)
+                    evaluated = DivideExpression(Eval(EvalKind.health), Eval(EvalKind.max_health))
                 else:
-                    right = Eval(EvalKind.health)
-                    left = NumberExpression(num.value)
-                    return self.gen_equivalent_expression(left, right, player_selector)
+                    evaluated = Eval(EvalKind.health)
+
+                # target == evaluated
+                return self.gen_equivalent_expression(target, evaluated, player_selector)
             case TokenKind.command_expr_mana_above:
                 self.i += 1
                 num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
                 assert(num.value!=None)
+                target = NumberExpression(num.value)
+
                 if num.kind == TokenKind.percent:
-                    left = DivideExpression(Eval(EvalKind.mana), Eval(EvalKind.max_mana))
-                    right = NumberExpression(num.value)
-                    return self.gen_greater_expression(left, right, player_selector)
+                    evaluated = DivideExpression(Eval(EvalKind.mana), Eval(EvalKind.max_mana))
                 else:
-                    left = Eval(EvalKind.mana)
-                    right = NumberExpression(num.value)
-                    return self.gen_greater_expression(left, right, player_selector)
+                    evaluated = Eval(EvalKind.mana)
+
+                # evaluated > target
+                return self.gen_greater_expression(evaluated, target, player_selector)
             case TokenKind.command_expr_mana_below:
                 self.i += 1
                 num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
                 assert(num.value!=None)
+                target = NumberExpression(num.value)
+
                 if num.kind == TokenKind.percent:
-                    right = DivideExpression(Eval(EvalKind.mana), Eval(EvalKind.max_mana))
-                    left = NumberExpression(num.value)
-                    return self.gen_greater_expression(left, right, player_selector)
+                    evaluated = DivideExpression(Eval(EvalKind.mana), Eval(EvalKind.max_mana))
                 else:
-                    right = Eval(EvalKind.mana)
-                    left = NumberExpression(num.value)
-                    return self.gen_greater_expression(left, right, player_selector)
+                    evaluated = Eval(EvalKind.mana)
+
+                # target > evaluated
+                return self.gen_greater_expression(target, evaluated, player_selector)
             case TokenKind.command_expr_mana:
                 self.i += 1
                 num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
                 assert(num.value!=None)
+                target = NumberExpression(num.value)
+
                 if num.kind == TokenKind.percent:
-                    right = DivideExpression(Eval(EvalKind.mana), Eval(EvalKind.max_mana))
-                    left = NumberExpression(num.value)
-                    return self.gen_equivalent_expression(left, right, player_selector)
+                    evaluated = DivideExpression(Eval(EvalKind.mana), Eval(EvalKind.max_mana))
                 else:
-                    right = Eval(EvalKind.health)
-                    left = NumberExpression(num.value)
-                    return self.gen_equivalent_expression(left, right, player_selector)
+                    evaluated = Eval(EvalKind.health)
+
+                # target == evaluated
+                return self.gen_equivalent_expression(target, evaluated, player_selector)
             case TokenKind.command_expr_bagcount:
                 result.kind = CommandKind.expr
                 self.i += 1
