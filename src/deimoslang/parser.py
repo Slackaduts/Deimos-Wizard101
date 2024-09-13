@@ -214,7 +214,6 @@ class Eval(Expression):
     def __repr__(self) -> str:
         return f"Eval({self.kind})"
 
-
 class Stmt:
     def __init__(self) -> None:
         pass
@@ -349,9 +348,9 @@ class Parser:
 
     def gen_greater_expression(self, left:Expression, right:Expression, player_selector:PlayerSelector):
         return SelectorGroup(player_selector, GreaterExpression(left, right))
+    
     def gen_equivalent_expression(self, left:Expression, right:Expression, player_selector:PlayerSelector):
         return SelectorGroup(player_selector, EquivalentExpression(left, right))
-
 
     def parse_command_expression(self) -> Expression:
         result = Command()

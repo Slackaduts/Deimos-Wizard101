@@ -1,4 +1,0 @@
-###deimos_expertmode
-if health 5 {
-  print "hello, world"
-}
