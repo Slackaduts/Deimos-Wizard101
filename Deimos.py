@@ -826,7 +826,7 @@ async def main():
 				pass
 			background_clients = [c for c in walker.clients if not c.is_foreground and c != foreground_client]
 
-			if len(foreground_client_list) <= 0 and len(background_clients) > 0:
+			if not foreground_client and len(foreground_client_list) <= 0 and len(background_clients) > 0:
 				foreground_client = background_clients[0]
 			elif len(foreground_client_list) <= 0 and len(background_clients) <= 0 and foreground_client:
 				background_clients.append(foreground_client)
