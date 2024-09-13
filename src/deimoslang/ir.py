@@ -109,7 +109,7 @@ class Compiler:
             case _:
                 raise CompilerError(f"Unimplemented command: {com}")
 
-    def syntatic_pass(self, program:list[Instruction]):
+    def process_labels(self, program:list[Instruction]):
         offsets = {}
         for idx, instr in enumerate(program):
             match instr.kind:
@@ -124,6 +124,7 @@ class Compiler:
                 case _:
                     pass
         return program
+
     def _compile(self) -> list[Instruction]:
         for stmt in self._stmts:
             match stmt:
@@ -167,7 +168,7 @@ class Compiler:
                     raise CompilerError(f"Unknown statement: {stmt}")
         return self._program
     def compile(self):
-        return self.syntatic_pass(self._compile())
+        return self.process_labels(self._compile())
 
 
 if __name__ == "__main__":
