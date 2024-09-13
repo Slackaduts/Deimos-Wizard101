@@ -1,6 +1,6 @@
 import asyncio
 
-from wizwalker import Client, XYZ, Keycode
+from wizwalker import Client, XYZ, Keycode, Primitive
 from wizwalker.memory import DynamicClientObject
 from wizwalker.memory.memory_objects.quest_data import QuestData, GoalData
 from wizwalker.extensions.wizsprinter import SprintyClient
@@ -110,6 +110,18 @@ class VM:
                     if not await is_visible_by_path(client, expression.command.data[1]):
                         return False
                 return True
+            case ExprKind.window_disabled:
+                path = expression.command.data[1]
+                for client in clients:
+                    root = client.root_window
+                    window = await get_window_from_path(root, path)
+                    if window == False:
+                        return False
+                    elif await window.read_value_from_offset(688, Primitive.bool):
+                        return True
+                    else:
+                        return False
+                 
             case ExprKind.in_zone:
                 for client in clients:
                     zone = await client.zone_name()

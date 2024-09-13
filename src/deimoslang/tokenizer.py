@@ -81,6 +81,7 @@ class TokenKind(Enum):
     command_expr_gold = auto()
     command_expr_gold_above = auto()
     command_expr_gold_below = auto()
+    command_expr_window_disabled = auto()
 
     colon = auto() # :
     comma = auto()
@@ -394,8 +395,8 @@ class Tokenizer:
                                         put_simple(TokenKind.command_expr_gold_above, full)
                                     case "goldbelow":
                                         put_simple(TokenKind.command_expr_gold_below, full)
-                                    case "inrange":
-                                        put_simple(TokenKind.command_expr_in_range, full)
+                                    case "windowdisabled":
+                                        put_simple(TokenKind.command_expr_window_disabled, full)
 
 
 

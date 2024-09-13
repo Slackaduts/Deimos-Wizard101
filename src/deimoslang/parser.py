@@ -91,6 +91,7 @@ class ExprKind(Enum):
     gold = auto()
     gold_above = auto()
     gold_below = auto()
+    window_disabled = auto()
 
 
 # TODO: Replace asserts
@@ -548,6 +549,10 @@ class Parser:
                 self.i += 1
                 num = self.parse_expression()
                 result.data = [ExprKind.playercount, num]
+            case TokenKind.command_expr_window_disabled:
+                result.kind = CommandKind.expr
+                self.i += 1
+                result.data = [ExprKind.window_disabled, self.parse_window_path()]
             case TokenKind.command_expr_tracking_quest:
                 result.kind = CommandKind.expr
                 self.i += 1
