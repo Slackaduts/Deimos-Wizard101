@@ -12,7 +12,7 @@ from .parser import *
 from .ir import *
 
 from src.utils import is_visible_by_path, is_free, get_window_from_path, refill_potions, refill_potions_if_needed \
-                    , logout_and_in, click_window_by_path, get_quest_name, backpack_space
+                    , logout_and_in, click_window_by_path, get_quest_name
 from src.command_parser import teleport_to_friend_from_list
 from src.config_combat import delegate_combat_configs, default_config
 
@@ -247,9 +247,9 @@ class VM:
             case EvalKind.max_mana:
                 return await client.stats.max_mana()
             case EvalKind.bagcount:
-                return (await backpack_space(client))[0]
+                return (await client.backpack_space())[0]
             case EvalKind.max_bagcount:
-                return (await backpack_space(client))[1]
+                return (await client.backpack_space())[1]
             case EvalKind.gold:
                 return await client.stats.current_gold()
             case EvalKind.max_gold:
@@ -508,7 +508,7 @@ class VM:
                 assert type(instruction.data) == list
                 clients: list[SprintyClient] = self._select_players(instruction.data[0])
                 for client in clients:
-                    bag_space = await backpack_space(client)
+                    bag_space = await client.backpack_space()
                     logger.debug(f'{client.title} - {bag_space[0]}/{bag_space[1]}')
                 self._ip += 1
             case InstructionKind.log_health:

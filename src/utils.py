@@ -1366,11 +1366,3 @@ def override_wiz_install_using_handle(max_size = 100):
     kernel32.CloseHandle(handle)
     install_location = path.value.replace("\Bin\WizardGraphicalClient.exe", "")
     override_wiz_install_location(install_location)
-
-
-async def backpack_space(client):
-    try:
-        return await client.backpack_space()
-    except ValueError:
-        raise Exception("You must open your backpack before accessing bag count.")
-
