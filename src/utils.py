@@ -1369,29 +1369,8 @@ def override_wiz_install_using_handle(max_size = 100):
 
 
 async def backpack_space(client):
-    J='Error calculating backpack size.';B=client
-    async def H(x,primitive_type):
-        C=set();B=[DynamicMemoryObject(x.hook_handler,await x.read_value_from_offset(8,Primitive.uint64))]
-        while len(B)>0:
-            A=B.pop();D=await A.read_value_from_offset(25,Primitive.bool)
-            if D:continue
-            B.extend([DynamicMemoryObject(x.hook_handler,await A.read_value_from_offset(0,Primitive.uint64)),DynamicMemoryObject(x.hook_handler,await A.read_value_from_offset(16,Primitive.uint64))]);C.add(await A.read_value_from_offset(28,primitive_type))
-        return C
-    K=B.client_object;E=0;I=0
-    for C in await K.inactive_behaviors():
-        if'inv'in(await C.behavior_name()).lower():
-            I=await C.read_value_from_offset(160,Primitive.int32)
-            for F in await C.read_shared_linked_list(112):
-                G=wizwalker.memory.memory_objects.DynamicClientObject(B.hook_handler,F);A=await G.object_template()
-                if not A:raise Exception(J)
-                D=len(set([786964093,82039946,75183493]).intersection(await H(DynamicMemoryObject(B.hook_handler,await A.read_value_from_offset(264,Primitive.uint64)),Primitive.uint32)))>0
-                if await A.object_type()==ObjectType.structure:D=True
-                if not D:E+=1
-        elif'equip'in(await C.behavior_name()).lower():
-            for F in await C.read_shared_linked_list(120):
-                G=wizwalker.memory.memory_objects.DynamicClientObject(B.hook_handler,F);A=await G.object_template()
-                if not A:raise Exception(J)
-                D=len(set([786964093,82039946,75183493]).intersection(await H(DynamicMemoryObject(B.hook_handler,await A.read_value_from_offset(264,Primitive.uint64)),Primitive.uint32)))>0
-                if await A.object_type()in[ObjectType.structure,ObjectType.deed]:D=True
-                if not D:E+=1
-    return E,I
+    try:
+        return await client.backpack_space()
+    except ValueError:
+        raise Exception("You must open your backpack before accessing bag count.")
+
