@@ -134,7 +134,6 @@ class VM:
                             entity_gid = await entity.global_id_full()
                             if data[idx]==entity_gid:
                                 found += 1
-                                data.pop(idx)
                             idx+=1
                     if found != target:
                         return False
