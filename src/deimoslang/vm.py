@@ -121,7 +121,25 @@ class VM:
                         return True
                     else:
                         return False
-                 
+            case ExprKind.client_visible:
+                other_clients = self._select_players(expression.command.data[1])
+                data = [await c.client_object.global_id_full() for c in other_clients]
+                target = len(data)
+                for client in clients:
+                    entities = await client.get_base_entity_list()
+                    found = 0
+                    for entity in entities:
+                        idx = 0
+                        while idx < len(data):
+                            entity_gid = await entity.global_id_full()
+                            if data[idx]==entity_gid:
+                                found += 1
+                                data.pop(idx)
+                            idx+=1
+                    if found != target:
+                        return False
+                return True
+
             case ExprKind.in_zone:
                 for client in clients:
                     zone = await client.zone_name()
