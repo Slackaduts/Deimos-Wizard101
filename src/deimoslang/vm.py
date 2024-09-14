@@ -121,7 +121,7 @@ class VM:
                         return True
                     else:
                         return False
-            case ExprKind.client_visible:
+            case ExprKind.same_place:
                 other_clients = self._select_players(expression.command.data[1])
                 data = [await c.client_object.global_id_full() for c in other_clients]
                 target = len(data)

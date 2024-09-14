@@ -82,7 +82,7 @@ class TokenKind(Enum):
     command_expr_gold_above = auto()
     command_expr_gold_below = auto()
     command_expr_window_disabled = auto()
-    command_expr_client_visible = auto()
+    command_expr_same_place = auto()
 
     colon = auto() # :
     comma = auto()
@@ -398,8 +398,8 @@ class Tokenizer:
                                         put_simple(TokenKind.command_expr_gold_below, full)
                                     case "windowdisabled":
                                         put_simple(TokenKind.command_expr_window_disabled, full)
-                                    case "clientvisible":
-                                        put_simple(TokenKind.command_expr_client_visible, full)
+                                    case "sameplace":
+                                        put_simple(TokenKind.command_expr_same_place, full)
                                     case _:
                                         put_simple(TokenKind.identifier, full)
                             i = j
