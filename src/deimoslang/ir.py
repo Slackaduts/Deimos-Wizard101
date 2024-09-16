@@ -14,8 +14,13 @@ class CompilerError(Exception):
 class InstructionKind(Enum):
     kill = auto()
     sleep = auto()
+
     log_literal = auto()
     log_window = auto()
+    log_bagcount = auto()
+    log_mana = auto()
+    log_health = auto()
+    log_gold = auto()
 
     jump = auto()
     jump_if = auto()
@@ -67,12 +72,22 @@ class Compiler:
             case CommandKind.sleep:
                 self.emit(InstructionKind.sleep, com.data[0])
             case CommandKind.log:
-                if com.data[0] == LogKind.window:
-                    self.emit(InstructionKind.log_window, [com.player_selector, com.data[1]])
-                elif com.data[0] == LogKind.literal:
-                    self.emit(InstructionKind.log_literal, com.data[1:len(com.data)])
-                else:
-                    raise CompilerError(f"Unimplemented log kind: {com}")
+                kind = com.data[0]
+                match kind:
+                    case LogKind.window:
+                        self.emit(InstructionKind.log_window, [com.player_selector, com.data[1]])
+                    case LogKind.bagcount:
+                        self.emit(InstructionKind.log_bagcount, [com.player_selector])
+                    case LogKind.health:
+                        self.emit(InstructionKind.log_health, [com.player_selector])
+                    case LogKind.mana:
+                        self.emit(InstructionKind.log_mana, [com.player_selector])
+                    case LogKind.gold:
+                        self.emit(InstructionKind.log_gold, [com.player_selector])
+                    case LogKind.literal:
+                        self.emit(InstructionKind.log_literal, com.data[1:len(com.data)])
+                    case _:
+                        raise CompilerError(f"Unimplemented log kind: {com}")
 
             case CommandKind.sendkey | CommandKind.click | CommandKind.teleport \
                 | CommandKind.goto | CommandKind.usepotion | CommandKind.buypotions \
@@ -94,21 +109,37 @@ class Compiler:
             case _:
                 raise CompilerError(f"Unimplemented command: {com}")
 
-    def compile(self) -> list[Instruction]:
+    def process_labels(self, program:list[Instruction]):
+        offsets = {}
+        for idx, instr in enumerate(program):
+            match instr.kind:
+                case InstructionKind.label:
+                    data = instr.data
+                    offsets[data] = idx
+                    program[idx] = Instruction(InstructionKind.nop)
+                case InstructionKind.call:
+                    data = instr.data
+                    offset = offsets[data]
+                    program[idx] = Instruction(InstructionKind.call, offset-idx)
+                case _:
+                    pass
+        return program
+
+    def _compile(self) -> list[Instruction]:
         for stmt in self._stmts:
             match stmt:
                 case CommandStmt():
                     self.compile_command(stmt.command)
                 case BlockDefStmt():
-                    instrs_body = Compiler(stmt.body.stmts).compile()
+                    instrs_body = Compiler(stmt.body.stmts)._compile()
                     self.emit(InstructionKind.jump, len(instrs_body) + 3)
                     self.emit(InstructionKind.label, stmt.ident)
                     self._program.extend(instrs_body)
                     self.emit(InstructionKind.ret)
                     self.emit(InstructionKind.nop)
                 case IfStmt():
-                    instrs_false = Compiler(stmt.branch_false.stmts).compile()
-                    instrs_true = Compiler(stmt.branch_true.stmts).compile()
+                    instrs_false = Compiler(stmt.branch_false.stmts)._compile()
+                    instrs_true = Compiler(stmt.branch_true.stmts)._compile()
                     self.emit(InstructionKind.jump_if, [stmt.expr, len(instrs_false) + 2]) # account for the jump in false branch
                     self._program.extend(instrs_false)
                     self.emit(InstructionKind.jump, len(instrs_true) + 1)
@@ -116,7 +147,7 @@ class Compiler:
                     self.emit(InstructionKind.nop)
                 case WhileStmt():
                     body_compiler = Compiler(stmt.body.stmts)
-                    body_compiler.compile()
+                    body_compiler._compile()
                     body_compiler.emit(InstructionKind.jump_if, [stmt.expr, -len(body_compiler._program)])
                     instrs_body = body_compiler._program
                     self.emit(InstructionKind.jump_ifn, [stmt.expr, len(instrs_body) + 1])
@@ -124,7 +155,7 @@ class Compiler:
                     self.emit(InstructionKind.nop)
                 case UntilStmt():
                     body_compiler = Compiler(stmt.body.stmts)
-                    body_compiler.compile()
+                    body_compiler._compile()
                     body_compiler.emit(InstructionKind.jump, -len(body_compiler._program))
                     instrs_body = body_compiler._program
                     self.emit(InstructionKind.enter_until, [stmt.expr, len(instrs_body) + 1])
@@ -136,11 +167,13 @@ class Compiler:
                 case _:
                     raise CompilerError(f"Unknown statement: {stmt}")
         return self._program
+    def compile(self):
+        return self.process_labels(self._compile())
 
 
 if __name__ == "__main__":
     from pathlib import Path
-    compiler = Compiler.from_text(Path("testbot.txt").read_text())
+    compiler = Compiler.from_text(Path("./deimoslang/testbot.txt").read_text())
     prog = compiler.compile()
     for i in prog:
         print(i)

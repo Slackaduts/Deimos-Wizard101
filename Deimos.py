@@ -5,7 +5,7 @@ import queue
 import threading
 import wizwalker
 from wizwalker import Keycode, HotkeyListener, ModifierKeys, utils, XYZ, Orient
-from wizwalker.utils import get_all_wizard_handles
+from wizwalker.utils import get_all_wizard_handles, get_foreground_window
 from wizwalker.client_handler import ClientHandler, Client
 from wizwalker.extensions.scripting import teleport_to_friend_from_list
 from wizwalker.memory.memory_objects.camera_controller import DynamicCameraController, ElasticCameraController
@@ -799,6 +799,16 @@ async def main():
 			await listener.remove_hotkey(Keycode[toggle_auto_questing_key], modifiers=ModifierKeys.NOREPEAT)
 			hotkey_status = False
 
+	def get_foreground_client():
+		if foreground_client:
+			return foreground_client
+		foreground = [c for c in walker.clients if c.is_foreground]
+		if len(foreground) > 0:
+			return foreground[0]
+		return walker.clients[0]
+
+	def get_background_clients():
+		return [c for c in walker.clients if not c.is_foreground]
 
 	async def foreground_client_switching():
 		await asyncio.sleep(2)
@@ -817,14 +827,8 @@ async def main():
 		nonlocal foreground_client
 		nonlocal background_clients
 		while True:
-			foreground_client_list = [c for c in walker.clients if c.is_foreground]
-			# print(foreground_client_list)
-			if len(foreground_client_list) > 0:
-				foreground_client = foreground_client_list[0]
-			else:
-				# foreground_client = None
-				pass
-			background_clients = [c for c in walker.clients if not c.is_foreground and c != foreground_client]
+			foreground_client = get_foreground_client()
+			background_clients = get_background_clients()
 			await asyncio.sleep(0.1)
 
 

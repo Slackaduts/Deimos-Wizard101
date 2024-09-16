@@ -5,11 +5,12 @@ import traceback
 import requests
 
 import wizwalker.errors
-from wizwalker import Client, Keycode, XYZ, kernel32
+from wizwalker import Client, Keycode, XYZ, Primitive, kernel32
+from wizwalker.memory.memory_objects.character_registry import DynamicMemoryObject
 from wizwalker.utils import get_all_wizard_handles, override_wiz_install_location, get_pid_from_handle
 from wizwalker.extensions.scripting.utils import _maybe_get_named_window, _cycle_to_online_friends, _click_on_friend, _teleport_to_friend, _friend_list_entry
 from wizwalker.extensions.wizsprinter.wiz_navigator import toZone
-from wizwalker.memory import Window, WindowFlags
+from wizwalker.memory import ObjectType, Window, WindowFlags
 from wizwalker.combat import CombatMember
 from loguru import logger
 

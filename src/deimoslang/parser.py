@@ -12,6 +12,8 @@ class CommandKind(Enum):
     invalid = auto()
 
     expr = auto()
+    expr_gt = auto()
+    expr_eq = auto()
 
     kill = auto()
     sleep = auto()
@@ -37,6 +39,16 @@ class TeleportKind(Enum):
     quest = auto()
     client_num = auto()
 
+class EvalKind(Enum):
+    health = auto()
+    max_health = auto()
+    mana = auto()
+    max_mana = auto()
+    bagcount = auto()
+    max_bagcount = auto()
+    gold = auto()
+    max_gold = auto()
+
 class WaitforKind(Enum):
     dialog = auto()
     battle = auto()
@@ -51,6 +63,10 @@ class ClickKind(Enum):
 class LogKind(Enum):
     window = auto()
     literal = auto()
+    bagcount = auto()
+    mana = auto()
+    health = auto()
+    gold = auto()
 
 class ExprKind(Enum):
     window_visible = auto()
@@ -59,6 +75,24 @@ class ExprKind(Enum):
     playercount = auto()
     tracking_quest = auto()
     tracking_goal = auto()
+    loading = auto()
+    in_combat = auto()
+    has_dialogue = auto()
+    has_xyz = auto()
+    health_below = auto()
+    health_above = auto()
+    health = auto()
+    mana = auto()
+    mana_above = auto()
+    mana_below = auto()
+    bag_count = auto()
+    bag_count_above = auto()
+    bag_count_below = auto()
+    gold = auto()
+    gold_above = auto()
+    gold_below = auto()
+    window_disabled = auto()
+    same_place = auto()
 
 
 # TODO: Replace asserts
@@ -141,6 +175,45 @@ class XYZExpression(Expression):
     def __repr__(self) -> str:
         return f"XYZE({self.x}, {self.y}, {self.z})"
 
+class EquivalentExpression(Expression):
+    def __init__(self, lhs: Expression, rhs: Expression):
+        self.lhs = lhs
+        self.rhs = rhs
+
+    def __repr__(self) -> str:
+        return f"EquivalentE({self.lhs}, {self.rhs})"
+
+class GreaterExpression(Expression):
+    def __init__(self, lhs: Expression, rhs: Expression):
+        self.lhs = lhs
+        self.rhs = rhs
+
+    def __repr__(self) -> str:
+        return f"GreaterE({self.lhs}, {self.rhs})"
+
+class SelectorGroup(Expression):
+    def __init__(self, players: PlayerSelector, expr: Expression):
+        self.players = players
+        self.expr = expr
+
+    def __repr__(self) -> str:
+        return f"SelectorG({self.players}, {self.expr})"
+
+class DivideExpression(Expression):
+    def __init__(self, lhs: Expression, rhs: Expression):
+        self.lhs = lhs
+        self.rhs = rhs
+
+    def __repr__(self) -> str:
+        return f"DivideE({self.lhs}, {self.rhs})"
+
+
+class Eval(Expression):
+    def __init__(self, eval_kind:EvalKind):
+        self.kind = eval_kind
+
+    def __repr__(self) -> str:
+        return f"Eval({self.kind})"
 
 class Stmt:
     def __init__(self) -> None:
@@ -255,9 +328,11 @@ class Parser:
         return self.consume_any_optional([kind])
 
     def parse_atom(self) -> NumberExpression | StringExpression:
-        tok = self.expect_consume_any([TokenKind.number, TokenKind.string])
+        tok = self.expect_consume_any([TokenKind.number, TokenKind.string, TokenKind.percent])
         match tok.kind:
             case TokenKind.number:
+                return NumberExpression(tok.value)
+            case TokenKind.percent:
                 return NumberExpression(tok.value)
             case TokenKind.string:
                 return StringExpression(tok.value)
@@ -272,14 +347,232 @@ class Parser:
         else:
             return self.parse_atom()
 
+    def gen_greater_expression(self, left:Expression, right:Expression, player_selector:PlayerSelector):
+        return SelectorGroup(player_selector, GreaterExpression(left, right))
+    
+    def gen_equivalent_expression(self, left:Expression, right:Expression, player_selector:PlayerSelector):
+        return SelectorGroup(player_selector, EquivalentExpression(left, right))
+
     def parse_command_expression(self) -> Expression:
+        result = Command()
+        player_selector  = self.parse_player_selector()
+        result.player_selector = player_selector
+
         match self.tokens[self.i].kind:
-            case TokenKind.player_num | TokenKind.keyword_mass | TokenKind.keyword_except \
-                | TokenKind.command_expr_window_visible | TokenKind.command_expr_in_zone | TokenKind.command_expr_same_zone \
-                | TokenKind.command_expr_playercount | TokenKind.command_expr_tracking_quest | TokenKind.command_expr_tracking_goal:
-                return CommandExpression(self.parse_command())
+            case TokenKind.command_expr_window_visible:
+                result.kind = CommandKind.expr
+                self.i += 1
+                result.data = [ExprKind.window_visible, self.parse_window_path()]
+            case TokenKind.command_expr_in_zone:
+                result.kind = CommandKind.expr
+                self.i += 1
+                result.data = [ExprKind.in_zone, self.parse_zone_path()]
+            case TokenKind.command_expr_same_zone:
+                result.kind = CommandKind.expr
+                self.i += 1
+                result.data = [ExprKind.same_zone]
+            case TokenKind.command_expr_in_combat:
+                result.kind = CommandKind.expr
+                self.i += 1
+                result.data = [ExprKind.in_combat]
+            case TokenKind.command_expr_has_dialogue:
+                result.kind = CommandKind.expr
+                self.i += 1
+                result.data = [ExprKind.has_dialogue]
+            case TokenKind.command_expr_loading:
+                result.kind = CommandKind.expr
+                self.i += 1
+                result.data = [ExprKind.loading]
+            case TokenKind.command_expr_has_xyz:
+                result.kind = CommandKind.expr
+                self.i += 1
+                xyz = self.parse_xyz()
+                result.data = [ExprKind.has_xyz, xyz]
+            case TokenKind.command_expr_health_above:
+                self.i += 1
+                num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
+                assert(num.value!=None)
+                target = NumberExpression(num.value)
+
+                if num.kind == TokenKind.percent:
+                    evaluated = DivideExpression(Eval(EvalKind.health), Eval(EvalKind.max_health))
+                else:
+                    evaluated = Eval(EvalKind.health)
+
+                # evaluated_value > target_value
+                return self.gen_greater_expression(evaluated, target, player_selector)
+            case TokenKind.command_expr_health_below:
+                self.i += 1
+                num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
+                assert(num.value!=None)
+                target = NumberExpression(num.value)
+                
+                if num.kind == TokenKind.percent:
+                    evaluated = DivideExpression(Eval(EvalKind.health), Eval(EvalKind.max_health))
+                else:
+                    evaluated = Eval(EvalKind.health)
+
+                # target > evaluated
+                return self.gen_greater_expression(target, evaluated, player_selector)
+            case TokenKind.command_expr_health:
+                self.i += 1
+                num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
+                assert(num.value!=None)
+                target = NumberExpression(num.value)
+
+                if num.kind == TokenKind.percent:
+                    evaluated = DivideExpression(Eval(EvalKind.health), Eval(EvalKind.max_health))
+                else:
+                    evaluated = Eval(EvalKind.health)
+
+                # target == evaluated
+                return self.gen_equivalent_expression(target, evaluated, player_selector)
+            case TokenKind.command_expr_mana_above:
+                self.i += 1
+                num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
+                assert(num.value!=None)
+                target = NumberExpression(num.value)
+
+                if num.kind == TokenKind.percent:
+                    evaluated = DivideExpression(Eval(EvalKind.mana), Eval(EvalKind.max_mana))
+                else:
+                    evaluated = Eval(EvalKind.mana)
+
+                # evaluated > target
+                return self.gen_greater_expression(evaluated, target, player_selector)
+            case TokenKind.command_expr_mana_below:
+                self.i += 1
+                num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
+                assert(num.value!=None)
+                target = NumberExpression(num.value)
+
+                if num.kind == TokenKind.percent:
+                    evaluated = DivideExpression(Eval(EvalKind.mana), Eval(EvalKind.max_mana))
+                else:
+                    evaluated = Eval(EvalKind.mana)
+
+                # target > evaluated
+                return self.gen_greater_expression(target, evaluated, player_selector)
+            case TokenKind.command_expr_mana:
+                self.i += 1
+                num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
+                assert(num.value!=None)
+                target = NumberExpression(num.value)
+
+                if num.kind == TokenKind.percent:
+                    evaluated = DivideExpression(Eval(EvalKind.mana), Eval(EvalKind.max_mana))
+                else:
+                    evaluated = Eval(EvalKind.mana)
+
+                # target == evaluated
+                return self.gen_equivalent_expression(target, evaluated, player_selector)
+            case TokenKind.command_expr_bagcount_above:
+                self.i += 1
+                num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
+                assert(num.value!=None)
+                target = NumberExpression(num.value)
+
+                if num.kind == TokenKind.percent:
+                    evaluated = DivideExpression(Eval(EvalKind.bagcount), Eval(EvalKind.max_bagcount))
+                else:
+                    evaluated = Eval(EvalKind.bagcount)
+
+                # evaluated_value > target_value
+                return self.gen_greater_expression(evaluated, target, player_selector)
+            case TokenKind.command_expr_bagcount_below:
+                self.i += 1
+                num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
+                assert(num.value!=None)
+                target = NumberExpression(num.value)
+                
+                if num.kind == TokenKind.percent:
+                    evaluated = DivideExpression(Eval(EvalKind.bagcount), Eval(EvalKind.max_bagcount))
+                else:
+                    evaluated = Eval(EvalKind.bagcount)
+
+                # target > evaluated
+                return self.gen_greater_expression(target, evaluated, player_selector)
+            case TokenKind.command_expr_bagcount:
+                self.i += 1
+                num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
+                assert(num.value!=None)
+                target = NumberExpression(num.value)
+
+                if num.kind == TokenKind.percent:
+                    evaluated = DivideExpression(Eval(EvalKind.bagcount), Eval(EvalKind.max_bagcount))
+                else:
+                    evaluated = Eval(EvalKind.bagcount)
+
+                # target == evaluated
+                return self.gen_equivalent_expression(target, evaluated, player_selector)
+            case TokenKind.command_expr_gold_above:
+                self.i += 1
+                num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
+                assert(num.value!=None)
+                target = NumberExpression(num.value)
+
+                if num.kind == TokenKind.percent:
+                    evaluated = DivideExpression(Eval(EvalKind.gold), Eval(EvalKind.max_gold))
+                else:
+                    evaluated = Eval(EvalKind.gold)
+
+                # evaluated_value > target_value
+                return self.gen_greater_expression(evaluated, target, player_selector)
+            case TokenKind.command_expr_gold_below:
+                self.i += 1
+                num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
+                assert(num.value!=None)
+                target = NumberExpression(num.value)
+                
+                if num.kind == TokenKind.percent:
+                    evaluated = DivideExpression(Eval(EvalKind.gold), Eval(EvalKind.max_gold))
+                else:
+                    evaluated = Eval(EvalKind.gold)
+
+                # target > evaluated
+                return self.gen_greater_expression(target, evaluated, player_selector)
+            case TokenKind.command_expr_gold:
+                self.i += 1
+                num = self.expect_consume_any([TokenKind.number, TokenKind.percent])
+                assert(num.value!=None)
+                target = NumberExpression(num.value)
+
+                if num.kind == TokenKind.percent:
+                    evaluated = DivideExpression(Eval(EvalKind.gold), Eval(EvalKind.max_gold))
+                else:
+                    evaluated = Eval(EvalKind.gold)
+
+                # target == evaluated
+                return self.gen_equivalent_expression(target, evaluated, player_selector)
+            case TokenKind.command_expr_playercount:
+                result.kind = CommandKind.expr
+                self.i += 1
+                num = self.parse_expression()
+                result.data = [ExprKind.playercount, num]
+            case TokenKind.command_expr_window_disabled:
+                result.kind = CommandKind.expr
+                self.i += 1
+                result.data = [ExprKind.window_disabled, self.parse_window_path()]
+            case TokenKind.command_expr_same_place:
+                result.kind = CommandKind.expr
+                self.i += 1
+                players = self.parse_player_selector()
+                result.data = [ExprKind.same_place, players]
+            case TokenKind.command_expr_tracking_quest:
+                result.kind = CommandKind.expr
+                self.i += 1
+                text: str = self.expect_consume(TokenKind.string).value # type: ignore
+                result.data = [ExprKind.tracking_quest, text.lower()]
+            case TokenKind.command_expr_tracking_goal:
+                result.kind = CommandKind.expr
+                self.i += 1
+                text: str = self.expect_consume(TokenKind.string).value # type: ignore
+                result.data = [ExprKind.tracking_goal, text.lower()]
+
             case _:
                 return self.parse_unary_expression()
+
+        return CommandExpression(result)
 
     def parse_negation_expression(self) -> Expression:
         kinds = [TokenKind.keyword_not]
@@ -419,12 +712,10 @@ class Parser:
                 self.i += 1
                 self.end_line()
             case TokenKind.command_log:
-                result.kind = CommandKind.log
                 self.i += 1
-                if self.tokens[self.i].kind == TokenKind.identifier and self.tokens[self.i].literal == "window":
-                    self.i += 1
-                    result.data = [LogKind.window, self.parse_window_path()]
-                else:
+                kind = self.tokens[self.i].kind
+                result.kind = CommandKind.log
+                def print_literal():
                     result.data = [LogKind.literal]
                     while self.tokens[self.i].kind != TokenKind.END_LINE:
                         tok = self.tokens[self.i]
@@ -432,6 +723,29 @@ class Parser:
                             tok.kind = TokenKind.identifier
                         result.data.append(tok)
                         self.i += 1
+                match kind:
+                    case TokenKind.identifier:
+                        if self.tokens[self.i].literal == "window":
+                            self.i += 1
+                            result.data = [LogKind.window, self.parse_window_path()]
+                        else:
+                            print_literal()
+                    case TokenKind.command_expr_bagcount:
+                        self.i += 1
+                        result.data = [LogKind.bagcount]
+                    case TokenKind.command_expr_mana:
+                        self.i += 1
+                        result.data = [LogKind.mana]
+                    case TokenKind.command_expr_health:
+                        self.i += 1
+                        result.data = [LogKind.health]
+                    case TokenKind.command_expr_gold:
+                        self.i += 1
+                        result.data = [LogKind.gold]
+                    case TokenKind.string:
+                        print_literal()
+                    case _:
+                        print_literal()
                 self.end_line()
             case TokenKind.command_teleport:
                 result.kind = CommandKind.teleport
@@ -555,33 +869,6 @@ class Parser:
                 result.data = [self.expect_consume(TokenKind.string).value]
                 self.end_line()
 
-            case TokenKind.command_expr_window_visible:
-                result.kind = CommandKind.expr
-                self.i += 1
-                result.data = [ExprKind.window_visible, self.parse_window_path()]
-            case TokenKind.command_expr_in_zone:
-                result.kind = CommandKind.expr
-                self.i += 1
-                result.data = [ExprKind.in_zone, self.parse_zone_path()]
-            case TokenKind.command_expr_same_zone:
-                result.kind = CommandKind.expr
-                self.i += 1
-                result.data = [ExprKind.same_zone]
-            case TokenKind.command_expr_playercount:
-                result.kind = CommandKind.expr
-                self.i += 1
-                num = self.parse_expression()
-                result.data = [ExprKind.playercount, num]
-            case TokenKind.command_expr_tracking_quest:
-                result.kind = CommandKind.expr
-                self.i += 1
-                text: str = self.expect_consume(TokenKind.string).value # type: ignore
-                result.data = [ExprKind.tracking_quest, text.lower()]
-            case TokenKind.command_expr_tracking_goal:
-                result.kind = CommandKind.expr
-                self.i += 1
-                text: str = self.expect_consume(TokenKind.string).value # type: ignore
-                result.data = [ExprKind.tracking_goal, text.lower()]
             case _:
                 self.err(self.tokens[self.i], "Unhandled command token")
         return result
@@ -659,12 +946,52 @@ class Parser:
             stmt = self.parse_stmt()
             result.append(stmt)
         return result
+def add_indent(string, indent):
+    for _ in range(indent):
+        string += '    '
+    return string;
 
+def print_cmd(input_str:str):
+    final_string = ""
+    indent = 0
+    idx = 0
+
+    while idx < len(input_str):
+        ch = input_str[idx]
+        if ch == '{':
+            indent += 1
+            final_string += f'{ch}\n'
+            final_string = add_indent(final_string, indent)
+        elif ch == '}':
+            if idx < len(input_str)-1 and (ch=='}' and input_str[idx+1] == ';'):
+                indent -= 1
+                final_string += '\n'
+                final_string = add_indent(final_string, indent)
+                final_string += f'{ch}'
+                final_string += f'{input_str[idx+1]}\n'
+                idx+=1
+                final_string = add_indent(final_string, indent)
+            else:
+                indent -= 1
+                final_string += '\n'
+                final_string = add_indent(final_string, indent)
+                final_string += f'{ch}\n'
+                final_string = add_indent(final_string, indent)
+        elif ch == ';':
+            final_string += f'{ch}\n'
+            final_string = add_indent(final_string, indent)
+        else:
+            final_string += ch
+
+        idx+=1
+    print(final_string)
 
 if __name__ == "__main__":
     from .tokenizer import Tokenizer
     from pathlib import Path
 
-    toks = Tokenizer().tokenize(Path("testbot.txt").read_text())
+    toks = Tokenizer().tokenize(Path("./deimoslang/testbot.txt").read_text())
     parser = Parser(toks)
-    print(parser.parse())
+    parsed = (parser.parse())
+    for parse in parsed:
+        print_cmd(str(parse))

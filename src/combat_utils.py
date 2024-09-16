@@ -9,7 +9,7 @@ import re
 
 
 symbol_to_effect_type = {
-    'Afterlife': SpellEffects.after_life,
+    'Afterlife': SpellEffects.afterlife,
     'DamageOverTime': SpellEffects.damage_over_time,
     'HealOverTime': SpellEffects.heal_over_time,
     'DeferredDamage': SpellEffects.deferred_damage,

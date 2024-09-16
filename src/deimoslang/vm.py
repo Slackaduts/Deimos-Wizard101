@@ -1,6 +1,7 @@
 import asyncio
 
-from wizwalker import Client, XYZ, Keycode
+from wizwalker import Client, XYZ, Keycode, Primitive
+from wizwalker.memory import DynamicClientObject
 from wizwalker.memory.memory_objects.quest_data import QuestData, GoalData
 from wizwalker.extensions.wizsprinter import SprintyClient
 from wizwalker.extensions.wizsprinter.wiz_sprinter import upgrade_clients
@@ -109,6 +110,34 @@ class VM:
                     if not await is_visible_by_path(client, expression.command.data[1]):
                         return False
                 return True
+            case ExprKind.window_disabled:
+                path = expression.command.data[1]
+                for client in clients:
+                    root = client.root_window
+                    window = await get_window_from_path(root, path)
+                    if window == False:
+                        return False
+                    elif not await window.is_control_grayed():
+                        return False
+                return True
+            case ExprKind.same_place:
+                other_clients = self._select_players(expression.command.data[1])
+                data = [await c.client_object.global_id_full() for c in other_clients]
+                target = len(data)
+                for client in clients:
+                    entities = await client.get_base_entity_list()
+                    found = 0
+                    for entity in entities:
+                        idx = 0
+                        while idx < len(data):
+                            entity_gid = await entity.global_id_full()
+                            if data[idx]==entity_gid:
+                                found += 1
+                            idx+=1
+                    if found != target:
+                        return False
+                return True
+
             case ExprKind.in_zone:
                 for client in clients:
                     zone = await client.zone_name()
@@ -145,6 +174,29 @@ class VM:
                     if text != expected_text:
                         return False
                 return True
+            case ExprKind.loading:
+                for client in clients:
+                    if not await client.is_loading():
+                        return False
+                return True
+            case ExprKind.in_combat:
+                for client in clients:
+                    if not await client.in_battle():
+                        return False
+                return True
+            case ExprKind.has_dialogue:
+                for client in clients:
+                    if not await client.is_in_dialog():
+                        return False
+                return True
+            case ExprKind.has_xyz:
+                target_pos: XYZ = await self.eval(expression.command.data[1]) # type: ignore
+                for client in clients:
+                    client_pos = await client.body.position()
+                    if abs(target_pos - client_pos) > 1:
+                        return False
+                return True
+
             case _:
                 raise VMError(f"Unimplemented expression: {expression}")
 
@@ -175,8 +227,50 @@ class VM:
                 if key not in Keycode.__members__:
                     raise VMError(f"Unknown key code: {key}")
                 return Keycode[expression.key]
+            case EquivalentExpression():
+                left = await self.eval(expression.lhs, client)
+                right = await self.eval(expression.rhs, client)
+                return left == right
+            case DivideExpression():
+                left = await self.eval(expression.lhs, client)
+                right = await self.eval(expression.rhs, client)
+                return (left / right) # type: ignore
+            case GreaterExpression():
+                left = await self.eval(expression.lhs, client)
+                right = await self.eval(expression.rhs, client)
+                return (left > right) #type: ignore
+            case Eval():
+                assert(client != None)
+                return await self._eval_expression(expression.kind, client)
+            case SelectorGroup():
+                players = self._select_players(expression.players)
+                expr = expression.expr
+                for player in players:
+                    if not await self.eval(expr, player):
+                        return False
+                return True
             case _:
                 raise VMError(f"Unimplemented expression type: {expression}")
+
+    async def _eval_expression(self, kind:EvalKind, client: Client):
+        match kind:
+            case EvalKind.health:
+                return await client.stats.current_hitpoints()
+            case EvalKind.max_health:
+                return await client.stats.max_hitpoints()
+            case EvalKind.mana:
+                return await client.stats.current_mana()
+            case EvalKind.max_mana:
+                return await client.stats.max_mana()
+            case EvalKind.bagcount:
+                return (await client.backpack_space())[0]
+            case EvalKind.max_bagcount:
+                return (await client.backpack_space())[1]
+            case EvalKind.gold:
+                return await client.stats.current_gold()
+            case EvalKind.max_gold:
+                return await client.stats.base_gold_pouch()
+
 
     async def exec_deimos_call(self, instruction: Instruction):
         assert instruction.kind == InstructionKind.deimos_call
@@ -387,18 +481,9 @@ class VM:
 
             case InstructionKind.call:
                 self._callstack.append(self._ip + 1)
-                j = self._ip
-                label = instruction.data
-                # TODO: Less hacky solution. This scans upwards looking for labels
-                while True:
-                    j -= 1
-                    if j < 0:
-                        raise VMError(f"Unable to find label: {label}")
-                    x = self.program[j]
-                    if x.kind != InstructionKind.label or x.data != label:
-                        continue
-                    break
-                self._ip = j
+                jump = instruction.data  
+                self._ip += jump # type: ignore
+
             case InstructionKind.ret:
                 self._ip = self._callstack.pop()
 
@@ -435,6 +520,34 @@ class VM:
                         window_str = await window.maybe_text()
                         logger.debug(f"{client.title} - {window_str}")
                 self._ip += 1
+            case InstructionKind.log_bagcount:
+                assert type(instruction.data) == list
+                clients: list[SprintyClient] = self._select_players(instruction.data[0])
+                for client in clients:
+                    bag_space = await client.backpack_space()
+                    logger.debug(f'{client.title} - {bag_space[0]}/{bag_space[1]}')
+                self._ip += 1
+            case InstructionKind.log_health:
+                assert type(instruction.data) == list
+                clients: list[SprintyClient] = self._select_players(instruction.data[0])
+                for client in clients:
+                    logger.debug(f'{client.title} - {await client.stats.current_hitpoints()}/{await client.stats.max_hitpoints()}')
+                self._ip += 1
+
+            case InstructionKind.log_mana:
+                assert type(instruction.data) == list
+                clients: list[SprintyClient] = self._select_players(instruction.data[0])
+                for client in clients:
+                    logger.debug(f'{client.title} - {await client.stats.current_mana()}/{await client.stats.max_mana()}')
+                self._ip += 1
+
+            case InstructionKind.log_gold:
+                assert type(instruction.data) == list
+                clients: list[SprintyClient] = self._select_players(instruction.data[0])
+                for client in clients:
+                    logger.debug(f'{client.title} - {await client.stats.current_gold()}/{await client.stats.base_gold_pouch()}')
+                self._ip += 1
+
             case InstructionKind.label | InstructionKind.nop:
                 self._ip += 1
 

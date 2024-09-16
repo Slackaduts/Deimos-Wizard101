@@ -5,11 +5,15 @@ from typing import Any
 class TokenizerError(Exception):
     pass
 
+class Percent(float):
+    pass
+
 
 class TokenKind(Enum):
     player_num = auto()
     string = auto()
     number = auto()
+    percent = auto()
     path = auto() # A/B/C
 
     keyword_block = auto()
@@ -60,6 +64,25 @@ class TokenKind(Enum):
     command_expr_playercount = auto()
     command_expr_tracking_quest = auto()
     command_expr_tracking_goal = auto()
+    command_expr_loading = auto()
+    command_expr_in_combat = auto()
+    command_expr_has_dialogue = auto()
+    command_expr_has_xyz = auto()
+    command_expr_health_below = auto()
+    command_expr_health_above = auto()
+    command_expr_health = auto()
+    command_expr_bagcount = auto()
+    command_expr_bagcount_above = auto()
+    command_expr_bagcount_below = auto()
+    command_expr_mana = auto()
+    command_expr_mana_above = auto()
+    command_expr_mana_below = auto()
+    command_expr_in_range = auto()
+    command_expr_gold = auto()
+    command_expr_gold_above = auto()
+    command_expr_gold_below = auto()
+    command_expr_window_disabled = auto()
+    command_expr_same_place = auto()
 
     colon = auto() # :
     comma = auto()
@@ -233,11 +256,17 @@ class Tokenizer:
 
                             if len(full) == 0:
                                 pass
-                            elif all([x.isnumeric() or x == "." or x == "e" or x == "-" for x in full]):
-                                try:
-                                    put_simple(TokenKind.number, full, float(full))
-                                except ValueError:
-                                    err("Unable to convert to number", i)
+                            elif all([x.isnumeric() or x in ".e-%" for x in full]):
+                                if '%' in full:
+                                    try:
+                                        put_simple(TokenKind.percent, full, Percent(float(full[:-1])/100))
+                                    except ValueError:
+                                        err("Unable to convert to percent", i)
+                                else:
+                                    try:
+                                        put_simple(TokenKind.number, full, float(full))
+                                    except ValueError:
+                                        err("Unable to convert to number", i)
                             elif "/" in full:
                                 if full.endswith("/"):
                                     err("Invalid path", i)
@@ -335,7 +364,42 @@ class Tokenizer:
                                         put_simple(TokenKind.command_expr_tracking_quest, full)
                                     case "trackinggoal":
                                         put_simple(TokenKind.command_expr_tracking_goal, full)
-
+                                    case "loading":
+                                        put_simple(TokenKind.command_expr_loading, full)
+                                    case "incombat":
+                                        put_simple(TokenKind.command_expr_in_combat, full)
+                                    case "hasdialogue":
+                                        put_simple(TokenKind.command_expr_has_dialogue, full)
+                                    case "hasxyz":
+                                        put_simple(TokenKind.command_expr_has_xyz, full)
+                                    case "healthbelow":
+                                        put_simple(TokenKind.command_expr_health_below, full)
+                                    case "healthabove":
+                                        put_simple(TokenKind.command_expr_health_above, full)
+                                    case "health":
+                                        put_simple(TokenKind.command_expr_health, full)
+                                    case "manabelow":
+                                        put_simple(TokenKind.command_expr_mana_below, full)
+                                    case "manaabove":
+                                        put_simple(TokenKind.command_expr_mana_above, full)
+                                    case "mana":
+                                        put_simple(TokenKind.command_expr_mana, full)
+                                    case "bagcount":
+                                        put_simple(TokenKind.command_expr_bagcount, full)
+                                    case "bagcountbelow":
+                                        put_simple(TokenKind.command_expr_bagcount_below, full)
+                                    case "bagcountabove":
+                                        put_simple(TokenKind.command_expr_bagcount_above, full)
+                                    case "gold":
+                                        put_simple(TokenKind.command_expr_gold, full)
+                                    case "goldabove":
+                                        put_simple(TokenKind.command_expr_gold_above, full)
+                                    case "goldbelow":
+                                        put_simple(TokenKind.command_expr_gold_below, full)
+                                    case "windowdisabled":
+                                        put_simple(TokenKind.command_expr_window_disabled, full)
+                                    case "sameplace":
+                                        put_simple(TokenKind.command_expr_same_place, full)
                                     case _:
                                         put_simple(TokenKind.identifier, full)
                             i = j
