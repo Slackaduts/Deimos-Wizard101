@@ -117,10 +117,9 @@ class VM:
                     window = await get_window_from_path(root, path)
                     if window == False:
                         return False
-                    elif await window.read_value_from_offset(688, Primitive.bool):
-                        return True
-                    else:
+                    elif not await window.is_control_grayed():
                         return False
+                return True
             case ExprKind.same_place:
                 other_clients = self._select_players(expression.command.data[1])
                 data = [await c.client_object.global_id_full() for c in other_clients]
